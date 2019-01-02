@@ -1,12 +1,28 @@
 package main
 
 import (
-	"cmd/version"
+	"bufio"
+	"fmt"
+	"os"
 
-	"cmd/menu"
+	Logo "unicorn/functions/Logo"
 )
 
+type userData struct {
+	username string
+}
+
+func initMenu() (username string) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Enter your Name: ")
+	text, _ := reader.ReadString('\n')
+	fmt.Printf("Welcome %s\n", text)
+	return text
+}
+
 func main() {
-	menu.Execute()
-	version.Execute()
+	Logo.initLogo()
+	s := userData{initMenu()}
+	fmt.Println(s.username)
+
 }
