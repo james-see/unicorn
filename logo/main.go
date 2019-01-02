@@ -1,4 +1,4 @@
-package Logo
+package main
 
 import "fmt"
 
@@ -25,4 +25,8 @@ func initLogo() {
 	fmt.Println("        \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500         ")
 	fmt.Println("                                                        ")
 
+}
+
+func main() {
+	initLogo()
 }

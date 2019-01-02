@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	Logo "unicorn/functions/Logo"
+	logo "./logo"
 )
 
 type userData struct {
@@ -21,7 +21,7 @@ func initMenu() (username string) {
 }
 
 func main() {
-	Logo.initLogo()
+	logo.initLogo()
 	s := userData{initMenu()}
 	fmt.Println(s.username)
 
