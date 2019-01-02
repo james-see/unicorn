@@ -1,8 +1,9 @@
-package main
+package logo
 
 import "fmt"
 
-func initLogo() {
+// InitLogo ...
+func InitLogo() {
 	fmt.Println()
 	fmt.Println()
 	fmt.Println("               \\                                        ")
@@ -28,5 +29,5 @@ func initLogo() {
 }
 
 func main() {
-	initLogo()
+	InitLogo()
 }
