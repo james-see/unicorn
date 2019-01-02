@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	logo "github.com/jamesacampbell/unicorn/logo"
+	menu "github.com/jamesacampbell/unicorn/menu"
 )
 
 type userData struct {
@@ -21,8 +23,12 @@ func initMenu() (username string) {
 }
 
 func main() {
-	logo.InitLogo()
+	// init with the Cyan unicorn logo b*tch
+	c := color.New(color.FgCyan)
+	logo.InitLogo(c)
+	// get the username
 	s := userData{initMenu()}
-	fmt.Println(s.username)
+	// display the intro menu
+	menu.DisplayMenu(s.username)
 
 }
