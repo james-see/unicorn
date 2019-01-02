@@ -1,11 +1,13 @@
 {
     "name": "Areeba",
     "description": "Unicycle billboards",
-    "valuation": 10,
-    "Gross Burn Rate": 4,
-    "Activation Rate": 10000,
-    "Daily Active Visitors": 100,
+    "category": "Advertising",
+    "Valuation": 10,
+    "Gross Monthly Burn Rate": 4,
+    "Monthly Activation Rate": 10,
+    "Monthly Active Visitors": 1000,
     "Monthly Sales": 100,
-    "Cost per unit": 10,
-    "Sale Price": 20
+    "Cost": 500,
+    "Sale Price": 2000,
+    "Percent Margin Per Unit": 10
 }

@@ -39,7 +39,11 @@ func main() {
 	for i := 1; i <= 2; i++ {
 		fmt.Printf("Company %d:", i)
 		menu.DisplayStartups(s.username, pot, i)
-		fmt.Print("Press 'Enter' to see next company...")
+		if i == 2 {
+			fmt.Print("Press 'Enter' to finish round")
+		} else {
+			fmt.Print("Press 'Enter' to see next company...")
+		}
 		bufio.NewReader(os.Stdin).ReadBytes('\n')
 		clear.ClearIt()
 	}

@@ -1,11 +1,13 @@
 {
     "name": "Coveta",
     "description": "Umbrellas for pets",
+    "category": "Consumer Goods",
     "valuation": 10,
     "Gross Burn Rate": 4,
-    "Activation Rate": 10000,
-    "Daily Active Visitors": 100,
+    "Monthly Activation Rate": 10000,
+    "Monthly Active Visitors": 100,
     "Monthly Sales": 100,
-    "Cost per unit": 10,
-    "Sale Price": 20
+    "Cost": 10,
+    "Sale Price": 20,
+    "Percent Margin Per Unit": 10
 }
