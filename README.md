@@ -29,3 +29,7 @@ You start out as a VC with $250,000 USD. Your goal is to invest and make as much
 ## Future Plans
 
 Game mode - run as a startup, your goal is to become a Unicorn and exit.
+
+## Demo
+
+![unicorn-demo 2019-01-02 16_21_43](https://user-images.githubusercontent.com/616585/50613136-95163300-0eaa-11e9-9e0b-a4ed7c57bc71.gif)
