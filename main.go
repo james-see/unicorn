@@ -6,9 +6,12 @@ import (
 	"os"
 
 	"github.com/fatih/color"
+	clear "github.com/jamesacampbell/unicorn/clear"
 	logo "github.com/jamesacampbell/unicorn/logo"
 	menu "github.com/jamesacampbell/unicorn/menu"
 )
+
+var pot int64
 
 type userData struct {
 	username string
@@ -24,11 +27,20 @@ func initMenu() (username string) {
 
 func main() {
 	// init with the Cyan unicorn logo b*tch
-	c := color.New(color.FgCyan)
+	c := color.New(color.FgCyan).Add(color.Bold)
 	logo.InitLogo(c)
 	// get the username
 	s := userData{initMenu()}
 	// display the intro menu
-	menu.DisplayMenu(s.username)
-
+	clear.ClearIt()
+	pot = 250000
+	menu.DisplayMenu(s.username, pot)
+	clear.ClearIt()
+	for i := 1; i <= 2; i++ {
+		fmt.Printf("Company %d:", i)
+		menu.DisplayStartups(s.username, pot, i)
+		fmt.Print("Press 'Enter' to see next company...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		clear.ClearIt()
+	}
 }
