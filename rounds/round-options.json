@@ -1,0 +1,11 @@
+{
+    [{
+            "event": "The company hit $10,000 in MRR",
+            "change": 1.5
+        },
+        {
+            "event": "The company had a scandal in the press",
+            "change": -1
+        }
+    ]
+}

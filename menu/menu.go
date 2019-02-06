@@ -6,14 +6,24 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 
 	clear "github.com/jamesacampbell/unicorn/clear"
 )
 
 // StartupData ...
 type StartupData struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name                   string `json:"name"`
+	Description            string `json:"description"`
+	Category               string `json:"category"`
+	Valuation              int    `json:"valuation"`
+	GrossBurnRate          int    `json:"grossburnrate"`
+	MonthlyActivationRate  int    `json:"Monthly Activation Rate"`
+	MonthlyWebsiteVisitors int    `json:"Monthly Active Visitors"`
+	MonthlySales           int    `json:"Monthly Sales"`
+	Cost                   int    `json:"Cost"`
+	SalePrice              int    `json:"Sale Price"`
+	PercentMargin          int    `json:"Percent Margin Per Unit"`
 }
 
 // DisplayMenu ...
@@ -50,5 +60,13 @@ func loadJSONData(companyid int) StartupData {
 func DisplayStartups(username string, pot int64, companyid int) {
 	t := loadJSONData(companyid)
 	fmt.Println(t.Name)
+	s := reflect.ValueOf(&t).Elem()
+	typeOfT := s.Type()
+
+	for i := 0; i < s.NumField(); i++ {
+		f := s.Field(i)
+		fmt.Printf("%s %v\n",
+			typeOfT.Field(i).Name, f.Interface())
+	}
 	return
 }

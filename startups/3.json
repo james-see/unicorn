@@ -1,0 +1,13 @@
+{
+    "name": "Frugers",
+    "description": "IoT enabled Finger puppets",
+    "category": "Consumer Goods",
+    "valuation": 12,
+    "Gross Burn Rate": 4,
+    "Monthly Activation Rate": 120,
+    "Monthly Active Visitors": 300,
+    "Monthly Sales": 60,
+    "Cost": 20,
+    "Sale Price": 50,
+    "Percent Margin Per Unit": 35
+}

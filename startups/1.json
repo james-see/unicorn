@@ -2,12 +2,12 @@
     "name": "Areeba",
     "description": "Unicycle billboards",
     "category": "Advertising",
-    "Valuation": 10,
-    "Gross Monthly Burn Rate": 4,
+    "Valuation": 5,
+    "Gross Monthly Burn Rate": 5,
     "Monthly Activation Rate": 10,
     "Monthly Active Visitors": 1000,
     "Monthly Sales": 100,
     "Cost": 500,
     "Sale Price": 2000,
-    "Percent Margin Per Unit": 10
+    "Percent Margin Per Unit": 25
 }

@@ -4,10 +4,10 @@
     "category": "Consumer Goods",
     "valuation": 10,
     "Gross Burn Rate": 4,
-    "Monthly Activation Rate": 10000,
-    "Monthly Active Visitors": 100,
-    "Monthly Sales": 100,
-    "Cost": 10,
-    "Sale Price": 20,
+    "Monthly Activation Rate": 100,
+    "Monthly Active Visitors": 10,
+    "Monthly Sales": 50,
+    "Cost": 5,
+    "Sale Price": 15,
     "Percent Margin Per Unit": 10
 }
