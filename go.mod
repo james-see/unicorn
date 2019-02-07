@@ -6,4 +6,5 @@ require (
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	golang.org/x/sys v0.0.0-20190102155601-82a175fd1598 // indirect
+	gopkg.in/yaml.v2 v2.2.2
 )
