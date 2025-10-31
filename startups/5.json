@@ -1,0 +1,13 @@
+{
+    "name": "GreenCycle",
+    "description": "Sustainable packaging for e-commerce",
+    "category": "CleanTech",
+    "valuation": 15,
+    "grossburnrate": 6,
+    "Monthly Activation Rate": 80,
+    "Monthly Active Visitors": 2000,
+    "Monthly Sales": 200,
+    "Cost": 100,
+    "Sale Price": 300,
+    "Percent Margin Per Unit": 30
+}

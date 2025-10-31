@@ -1,5 +1,7 @@
 module github.com/jamesacampbell/unicorn
 
+go 1.22.2
+
 require (
 	github.com/buger/goterm v0.0.0-20181115115552-c206103e1f37
 	github.com/fatih/color v1.7.0
