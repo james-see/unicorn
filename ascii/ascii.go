@@ -37,7 +37,7 @@ const (
 // News header ASCII art
 const NewsHeader = `
 ╔══════════════════════════════════════════════════════════╗
-║                    📰 COMPANY NEWS 📰                    ║
+║                    📰 COMPANY NEWS 📰                     ║
 ╚══════════════════════════════════════════════════════════╝
 `
 
@@ -65,22 +65,22 @@ const GameOverHeader = `
 // Leaderboard header
 const LeaderboardHeader = `
 ╔══════════════════════════════════════════════════════════╗
-║                  🏆 LEADERBOARDS 🏆                      ║
+║                  🏆 LEADERBOARDS 🏆                       ║
 ╚══════════════════════════════════════════════════════════╝
 `
 
 // Achievements header
 const AchievementsHeader = `
 ╔══════════════════════════════════════════════════════════╗
-║                ⭐ ACHIEVEMENTS ⭐                        ║
+║                ⭐ ACHIEVEMENTS ⭐                         ║
 ╚══════════════════════════════════════════════════════════╝
 `
 
 // ASCII art for section headers
 func GetSectionHeader(title string) string {
-	return "\n" + strings.Repeat("═", 60) + "\n" + 
-		   centerText(title, 60) + "\n" + 
-		   strings.Repeat("═", 60)
+	return "\n" + strings.Repeat("═", 60) + "\n" +
+		centerText(title, 60) + "\n" +
+		strings.Repeat("═", 60)
 }
 
 func centerText(text string, width int) string {
@@ -91,4 +91,3 @@ func centerText(text string, width int) string {
 	padding := (width - textLen) / 2
 	return strings.Repeat(" ", padding) + text
 }
-
