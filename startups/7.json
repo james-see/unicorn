@@ -1,0 +1,13 @@
+{
+    "name": "RoboChef",
+    "description": "Automated restaurant kitchen robots",
+    "category": "Robotics",
+    "valuation": 40,
+    "grossburnrate": 12,
+    "Monthly Activation Rate": 30,
+    "Monthly Active Visitors": 500,
+    "Monthly Sales": 20,
+    "Cost": 50000,
+    "Sale Price": 120000,
+    "Percent Margin Per Unit": 35
+}

@@ -1,0 +1,13 @@
+{
+    "name": "MusicGen",
+    "description": "AI-generated royalty-free music",
+    "category": "Creative",
+    "valuation": 16,
+    "grossburnrate": 6,
+    "Monthly Activation Rate": 400,
+    "Monthly Active Visitors": 30000,
+    "Monthly Sales": 600,
+    "Cost": 2,
+    "Sale Price": 10,
+    "Percent Margin Per Unit": 75
+}

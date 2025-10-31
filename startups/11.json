@@ -1,0 +1,13 @@
+{
+    "name": "NanoMed",
+    "description": "Nanotechnology for drug delivery",
+    "category": "BioTech",
+    "valuation": 35,
+    "grossburnrate": 15,
+    "Monthly Activation Rate": 50,
+    "Monthly Active Visitors": 800,
+    "Monthly Sales": 30,
+    "Cost": 100000,
+    "Sale Price": 250000,
+    "Percent Margin Per Unit": 45
+}
