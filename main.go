@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	achievements "github.com/jamesacampbell/unicorn/achievements"
 	// analytics "github.com/jamesacampbell/unicorn/analytics"
 	clear "github.com/jamesacampbell/unicorn/clear"
 	db "github.com/jamesacampbell/unicorn/database"
@@ -303,8 +304,9 @@ func displayMainMenu() string {
 	yellow.Println("\n1. New Game")
 	yellow.Println("2. Leaderboards")
 	yellow.Println("3. Player Statistics")
-	yellow.Println("4. Help & Info")
-	yellow.Println("5. Quit")
+	yellow.Println("4. Achievements")
+	yellow.Println("5. Help & Info")
+	yellow.Println("6. Quit")
 	
 	fmt.Print("\nEnter your choice: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -406,8 +408,117 @@ func playNewGame() {
 		color.Green("\n? Score saved to leaderboard!")
 	}
 	
+	// Check for achievements
+	checkAndUnlockAchievements(gs)
+	
 	fmt.Print("\nPress 'Enter' to return to main menu...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func checkAndUnlockAchievements(gs *game.GameState) {
+	// Get player's previously unlocked achievements
+	previouslyUnlocked, err := db.GetPlayerAchievements(gs.PlayerName)
+	if err != nil {
+		previouslyUnlocked = []string{}
+	}
+	
+	// Get player stats
+	stats, _ := db.GetPlayerStats(gs.PlayerName)
+	winStreak, _ := db.GetWinStreak(gs.PlayerName)
+	
+	// Count sectors and get investment details
+	sectors := make(map[string]bool)
+	positiveCount := 0
+	negativeCount := 0
+	totalInvested := int64(0)
+	
+	for _, inv := range gs.Portfolio.Investments {
+		totalInvested += inv.AmountInvested
+		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
+		if value > inv.AmountInvested {
+			positiveCount++
+		} else if value < inv.AmountInvested {
+			negativeCount++
+		}
+		
+		// Find sector
+		for _, startup := range gs.AvailableStartups {
+			if startup.Name == inv.CompanyName {
+				sectors[startup.Category] = true
+				break
+			}
+		}
+	}
+	
+	sectorsInvested := []string{}
+	for sector := range sectors {
+		sectorsInvested = append(sectorsInvested, sector)
+	}
+	
+	netWorth, roi, successfulExits := gs.GetFinalScore()
+	
+	// Build game stats for achievement checking
+	gameStats := achievements.GameStats{
+		FinalNetWorth:       netWorth,
+		ROI:                 roi,
+		SuccessfulExits:     successfulExits,
+		TurnsPlayed:         gs.Portfolio.Turn - 1,
+		Difficulty:          gs.Difficulty.Name,
+		InvestmentCount:     len(gs.Portfolio.Investments),
+		SectorsInvested:     sectorsInvested,
+		TotalInvested:       totalInvested,
+		PositiveInvestments: positiveCount,
+		NegativeInvestments: negativeCount,
+		TotalGames:          stats.TotalGames,
+		TotalWins:           int(stats.WinRate * float64(stats.TotalGames) / 100.0),
+		WinStreak:           winStreak,
+		BestNetWorth:        stats.BestNetWorth,
+		TotalExits:          stats.TotalExits,
+	}
+	
+	// Check for new achievements
+	newAchievements := achievements.CheckAchievements(gameStats, previouslyUnlocked)
+	
+	// Save and display new achievements
+	if len(newAchievements) > 0 {
+		cyan := color.New(color.FgCyan, color.Bold)
+		yellow := color.New(color.FgYellow)
+		
+		fmt.Println("\n" + strings.Repeat("?", 60))
+		cyan.Println("           ?? NEW ACHIEVEMENTS UNLOCKED! ??")
+		fmt.Println(strings.Repeat("?", 60))
+		
+		for _, ach := range newAchievements {
+			// Save to database
+			db.UnlockAchievement(gs.PlayerName, ach.ID)
+			
+			// Display
+			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
+			fmt.Printf("\n%s  ", ach.Icon)
+			rarityColor.Printf("%s", ach.Name)
+			fmt.Printf(" [%s]\n", ach.Rarity)
+			yellow.Printf("   %s\n", ach.Description)
+			fmt.Printf("   +%d points\n", ach.Points)
+		}
+		
+		// Calculate new career level
+		totalPoints := 0
+		allUnlocked, _ := db.GetPlayerAchievements(gs.PlayerName)
+		for _, id := range allUnlocked {
+			if ach, exists := achievements.AllAchievements[id]; exists {
+				totalPoints += ach.Points
+			}
+		}
+		
+		level, title, _ := achievements.CalculateCareerLevel(totalPoints)
+		
+		fmt.Println("\n" + strings.Repeat("?", 60))
+		fmt.Printf("Career Level: ")
+		yellow.Printf("%d - %s", level, title)
+		fmt.Printf(" | Total Points: ")
+		yellow.Printf("%d\n", totalPoints)
+		fmt.Println(strings.Repeat("?", 60))
+	}
 }
 
 func displayLeaderboards() {
@@ -671,6 +782,188 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func displayAchievementsMenu() {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	
+	cyan.Println("\n" + strings.Repeat("?", 60))
+	cyan.Println("                    ?? ACHIEVEMENTS ??")
+	cyan.Println(strings.Repeat("?", 60))
+	
+	fmt.Println("\n1. View My Achievements")
+	fmt.Println("2. Browse All Achievements")
+	fmt.Println("3. Leaderboard (Most Achievements)")
+	fmt.Println("4. Back to Main Menu")
+	
+	fmt.Print("\nEnter your choice: ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	clear.ClearIt()
+	
+	switch choice {
+	case "1":
+		viewPlayerAchievements()
+	case "2":
+		browseAllAchievements()
+	case "3":
+		displayAchievementLeaderboard()
+	case "4":
+		return
+	}
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	displayAchievementsMenu()
+}
+
+func viewPlayerAchievements() {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	fmt.Print("\nEnter player name: ")
+	reader := bufio.NewReader(os.Stdin)
+	playerName, _ := reader.ReadString('\n')
+	playerName = strings.TrimSpace(playerName)
+	
+	if playerName == "" {
+		color.Red("Invalid player name!")
+		return
+	}
+	
+	unlocked, err := db.GetPlayerAchievements(playerName)
+	if err != nil {
+		color.Red("Error loading achievements: %v", err)
+		return
+	}
+	
+	clear.ClearIt()
+	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Printf("     ACHIEVEMENTS FOR: %s\n", strings.ToUpper(playerName))
+	cyan.Println(strings.Repeat("?", 70))
+	
+	// Calculate stats
+	totalAchievements := len(achievements.AllAchievements)
+	unlockedCount := len(unlocked)
+	progress := float64(unlockedCount) / float64(totalAchievements) * 100
+	
+	// Calculate total points
+	totalPoints := 0
+	for _, id := range unlocked {
+		if ach, exists := achievements.AllAchievements[id]; exists {
+			totalPoints += ach.Points
+		}
+	}
+	
+	// Get career level
+	level, title, nextLevelPoints := achievements.CalculateCareerLevel(totalPoints)
+	
+	green := color.New(color.FgGreen, color.Bold)
+	fmt.Printf("\n?? Progress: %d/%d (%.1f%%)\n", unlockedCount, totalAchievements, progress)
+	fmt.Printf("? Total Points: ")
+	green.Printf("%d\n", totalPoints)
+	fmt.Printf("???  Career Level: ")
+	yellow.Printf("%d - %s\n", level, title)
+	if level < 10 {
+		fmt.Printf("?? Next Level: %d points needed\n", nextLevelPoints-totalPoints)
+	}
+	
+	if unlockedCount == 0 {
+		yellow.Println("\nNo achievements unlocked yet. Keep playing!")
+		return
+	}
+	
+	// Group by category
+	categories := map[string][]achievements.Achievement{
+		achievements.CategoryWealth:      {},
+		achievements.CategoryPerformance: {},
+		achievements.CategoryStrategy:    {},
+		achievements.CategoryCareer:      {},
+		achievements.CategoryChallenge:   {},
+		achievements.CategorySpecial:     {},
+	}
+	
+	unlockedMap := make(map[string]bool)
+	for _, id := range unlocked {
+		unlockedMap[id] = true
+	}
+	
+	for id, ach := range achievements.AllAchievements {
+		if unlockedMap[id] {
+			categories[ach.Category] = append(categories[ach.Category], ach)
+		}
+	}
+	
+	// Display by category
+	for _, category := range []string{
+		achievements.CategoryWealth,
+		achievements.CategoryPerformance,
+		achievements.CategoryStrategy,
+		achievements.CategoryCareer,
+		achievements.CategoryChallenge,
+		achievements.CategorySpecial,
+	} {
+		achs := categories[category]
+		if len(achs) == 0 {
+			continue
+		}
+		
+		fmt.Printf("\n%s:\n", category)
+		for _, ach := range achs {
+			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
+			fmt.Printf("  %s ", ach.Icon)
+			rarityColor.Printf("%s", ach.Name)
+			fmt.Printf(" - %s (+%d pts)\n", ach.Description, ach.Points)
+		}
+	}
+}
+
+func browseAllAchievements() {
+	cyan := color.New(color.FgCyan, color.Bold)
+	
+	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("                  ALL ACHIEVEMENTS")
+	cyan.Println(strings.Repeat("?", 70))
+	
+	// Group by category
+	for _, category := range []string{
+		achievements.CategoryWealth,
+		achievements.CategoryPerformance,
+		achievements.CategoryStrategy,
+		achievements.CategoryCareer,
+		achievements.CategoryChallenge,
+		achievements.CategorySpecial,
+	} {
+		achs := achievements.GetAchievementsByCategory(category)
+		if len(achs) == 0 {
+			continue
+		}
+		
+		yellow := color.New(color.FgYellow, color.Bold)
+		yellow.Printf("\n%s:\n", category)
+		
+		for _, ach := range achs {
+			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
+			fmt.Printf("  %s ", ach.Icon)
+			rarityColor.Printf("%s", ach.Name)
+			fmt.Printf(" [%s] - %s (+%d pts)\n", ach.Rarity, ach.Description, ach.Points)
+		}
+	}
+	
+	fmt.Printf("\n\nTotal Achievements: %d\n", len(achievements.AllAchievements))
+}
+
+func displayAchievementLeaderboard() {
+	cyan := color.New(color.FgCyan, color.Bold)
+	
+	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("            ACHIEVEMENT LEADERBOARD (Coming Soon)")
+	cyan.Println(strings.Repeat("?", 70))
+	
+	color.Yellow("\nThis feature will show players with the most achievements!")
 }
 
 func displayHelpGuide() {

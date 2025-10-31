@@ -1,5 +1,106 @@
 # Changelog
 
+## Phase 4 - Achievements & Career Progression (2025-10-31)
+
+### Major Features Added
+
+#### ?? Achievements System
+- **35+ Achievements** across 6 categories:
+  - Wealth (5): First Profit, Millionaire, Multi-Millionaire, Deca-Millionaire, Mega Rich
+  - Performance (5): Break Even, Double Up, Great Investor, Elite VC, Unicorn Hunter
+  - Strategy (6): Diversified, Sector Master, All In, Sector Specialist, Exit Master, Perfect Portfolio
+  - Career (6): First Steps, Persistent, Veteran, Master Investor, Hot Streak, On Fire
+  - Challenge (7): Easy Money, Rising Star, Battle Tested, Expert Survivor, Easy Domination, Expert Legend, Speed Runner
+  - Special (6+): Lucky Seven, Minimalist, Tech Enthusiast, Clean Investor, Risk Taker, Cautious Investor
+- **Rarity System:** Common, Rare, Epic, Legendary
+- **Point Values:** 5-100 points per achievement
+- **Hidden Achievements:** Discover special achievements through gameplay
+
+#### ??? Career Progression
+- **11 Career Levels:**
+  - Level 0: Intern (0 pts)
+  - Level 1: Analyst (25 pts)
+  - Level 2: Associate (75 pts)
+  - Level 3: Senior Associate (150 pts)
+  - Level 4: Principal (250 pts)
+  - Level 5: Partner (400 pts)
+  - Level 6: Senior Partner (600 pts)
+  - Level 7: Managing Partner (850 pts)
+  - Level 8: Elite VC (1150 pts)
+  - Level 9: Master Investor (1500 pts)
+  - Level 10: Legendary Investor (2000 pts)
+- **Point-Based Progression:** Accumulate points to level up
+- **Progress Tracking:** See how many points needed for next level
+
+#### ?? Database Integration
+- **New Table:** `player_achievements`
+  - Stores player name, achievement ID, unlock timestamp
+  - Unique constraint prevents duplicates
+  - Indexed for fast lookups
+- **New Functions:**
+  - `UnlockAchievement()` - Save achievement
+  - `GetPlayerAchievements()` - Retrieve all unlocked
+  - `GetPlayerAchievementCount()` - Count achievements
+  - `GetWinStreak()` - Track consecutive wins
+
+#### ?? Real-time Notifications
+- **After-Game Display:**
+  - Banner announcing new achievements
+  - Icon, name, rarity for each
+  - Description of accomplishment
+  - Points earned
+  - Updated career level display
+  - Total achievement points
+- **Color-Coded:**
+  - White (Common), Cyan (Rare), Magenta (Epic), Yellow (Legendary)
+
+#### ?? Achievements Menu
+- **Main Menu Option 4:** Achievements
+- **Sub-Menu:**
+  - View My Achievements - Personal progress
+  - Browse All Achievements - See what's possible
+  - Leaderboard (Coming Soon) - Top achievers
+- **Personal View:**
+  - Progress percentage (X/35)
+  - Total points earned
+  - Current career level & title
+  - Points to next level
+  - Grouped by category
+
+### Technical Changes
+
+#### New Files
+- `achievements/achievements.go` - Complete achievements system (564 lines)
+- `PHASE4_SUMMARY.md` - Phase 4 documentation
+
+#### Modified Files
+- `database/database.go` - Achievement tracking functions
+- `main.go` - Achievements menu, notifications, checking logic
+- `README.md` - Updated with Phase 4 features
+- `CHANGELOG.md` - This update
+
+#### New Dependencies
+None - Pure Go implementation
+
+### Achievement Stats
+- **Total Achievements:** 35+
+- **Categories:** 6
+- **Rarity Levels:** 4
+- **Point Range:** 5-100
+- **Career Levels:** 11
+- **Max Career Points:** 2000+
+
+### Game Flow Updates
+```
+Before:
+Play ? Score ? Repeat
+
+After:
+Play ? Score ? ?? Achievements! ? Level Up ? Repeat
+```
+
+---
+
 ## Phase 3 - Content Expansion & Analytics (2025-10-31)
 
 ### Major Features Added
@@ -192,7 +293,7 @@
 
 ## Build Information
 
-**Current Version:** Phase 3
+**Current Version:** Phase 4
 **Go Version:** 1.x+
 **Platform:** Linux/macOS/Windows
 **Database:** SQLite 3
@@ -200,6 +301,8 @@
 **Companies:** 20
 **Events:** 60
 **Sectors:** 12+
+**Achievements:** 35+
+**Career Levels:** 11
 
 ## How to Build
 

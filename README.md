@@ -88,6 +88,16 @@ Choose from companies across 12+ sectors:
 - Persistent leaderboards
 - Career statistics
 
+### 🏆 Achievements & Progression (NEW!)
+- **35+ Achievements** across 6 categories
+- **Career Levels:** 11 levels from Intern to Legendary Investor
+- **Point System:** Earn 5-100 points per achievement
+- **Rarity Tiers:** Common, Rare, Epic, Legendary
+- **Win Streaks:** Track consecutive victories
+- **Auto-Unlock:** Achievements awarded automatically after each game
+- **Persistent Progress:** Never lose your achievements
+- **Special Achievements:** Hidden achievements to discover
+
 ## How to Play
 
 ```bash
@@ -101,12 +111,23 @@ go build -o unicorn
 # 1. New Game - Start a new investment game
 # 2. Leaderboards - View top scores
 # 3. Player Statistics - Check your career stats
-# 4. Help & Info - Complete game guide (NEW!)
-# 5. Quit
+# 4. Achievements - View achievements & career level (NEW!)
+# 5. Help & Info - Complete game guide
+# 6. Quit
 ```
 
-## What's New in Phase 3
+## What's New
 
+### Phase 4 - Achievements & Progression! (LATEST)
+✅ **35+ Achievements** across 6 categories (Wealth, Performance, Strategy, Career, Challenge, Special)
+✅ **11 Career Levels** from Intern to Legendary Investor
+✅ **Point-Based Progression** - Earn points, level up, unlock titles
+✅ **Achievement Tracking** - Persistent database, never lose progress
+✅ **Real-time Notifications** - See new achievements after each game
+✅ **Rarity System** - Common, Rare, Epic, Legendary achievements
+✅ **Win Streak Tracking** - Build momentum with consecutive wins
+
+### Phase 3 - Content Expansion & Analytics
 ✅ **20 Startup Companies** (doubled!)
 ✅ **60 Random Events** (doubled!)
 ✅ **Advanced Analytics System** with sector breakdown
@@ -115,7 +136,6 @@ go build -o unicorn
 
 ## Future Plans
 
-**Phase 4:** Achievements system, challenge modes, career progression
 **Long-term:** Game mode where you run a startup trying to become a Unicorn
 
 ## Demo
