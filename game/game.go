@@ -135,7 +135,7 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 func (gs *GameState) LoadStartups() {
 	gs.AvailableStartups = []Startup{}
 	
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= 20; i++ {
 		var startup Startup
 		jsonFile, err := os.Open(fmt.Sprintf("startups/%d.json", i))
 		if err != nil {

@@ -1,5 +1,72 @@
 # Changelog
 
+## Phase 3 - Content Expansion & Analytics (2025-10-31)
+
+### Major Features Added
+
+#### ?? Content Doubled
+- **20 Startup Companies** (up from 10)
+- 10 new companies across new sectors:
+  - NanoMed (BioTech), CloudForge (CloudTech)
+  - FoodLoop (CleanTech), GameStream (Gaming)
+  - LegalAI (LegalTech), UrbanFarm (AgriTech)
+  - DroneDeliver (Logistics), MusicGen (Creative)
+  - SmartHome (IoT), QuantumSecure (Security)
+- **60 Random Events** (up from 30)
+- 30 new events covering:
+  - Series B funding rounds
+  - Product recalls and breakthroughs
+  - Strategic alliances
+  - Security vulnerabilities
+  - Market disruptions
+  - Regulatory changes
+
+#### ?? Advanced Analytics System
+- **Portfolio Analytics Package** (`analytics/analytics.go`)
+- Comprehensive performance tracking:
+  - Total invested vs. current value
+  - Best/worst performer identification
+  - Positive/negative investment ratio
+- **Sector Performance Breakdown**
+  - ROI by industry sector
+  - Investment distribution
+  - Sector rankings
+  - Per-sector statistics
+- Automatically displayed after each game
+
+#### ?? Help & Information Menu
+- Complete in-game guide
+- Game overview and mechanics
+- Company metrics explanation
+- Scoring system details
+- Difficulty breakdowns
+- Strategy tips
+- All companies listed
+- Event categories explained
+
+### Technical Changes
+
+#### New Files
+- `startups/11.json` through `startups/20.json` - 10 new companies
+- `analytics/analytics.go` - Analytics engine (350+ lines)
+- `PHASE3_SUMMARY.md` - Phase 3 documentation
+
+#### Modified Files
+- `game/game.go` - Load 20 companies (up from 10)
+- `rounds/round-options.json` - 60 events (up from 30)
+- `main.go` - Added help menu option and function
+- `README.md` - Updated feature list
+- `CHANGELOG.md` - This update
+
+### Content Stats
+- **Companies:** 10 ? 20 (100% increase)
+- **Events:** 30 ? 60 (100% increase)
+- **Sectors:** 8 ? 12+ (50% increase)
+- **Valuation Range:** $8M - $45M
+- **Event Impact Range:** 0.5x - 3.2x
+
+---
+
 ## Phase 2 - Persistence & Competition (2025-10-31)
 
 ### Major Features Added
@@ -105,14 +172,6 @@
 
 ## Future Roadmap
 
-### Phase 3 - Content Expansion (Planned)
-- [ ] Expand to 20+ startup companies
-- [ ] Add 50+ diverse events
-- [ ] Company metrics visualization
-- [ ] Sector performance tracking
-- [ ] Economic cycle indicators
-- [ ] Enhanced risk/growth calculations
-
 ### Phase 4 - Achievements & Polish (Planned)
 - [ ] Achievement system
 - [ ] Career progression
@@ -133,11 +192,14 @@
 
 ## Build Information
 
-**Current Version:** Phase 2
+**Current Version:** Phase 3
 **Go Version:** 1.x+
 **Platform:** Linux/macOS/Windows
 **Database:** SQLite 3
 **Build Size:** ~7MB
+**Companies:** 20
+**Events:** 60
+**Sectors:** 12+
 
 ## How to Build
 

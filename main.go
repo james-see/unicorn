@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	// analytics "github.com/jamesacampbell/unicorn/analytics"
 	clear "github.com/jamesacampbell/unicorn/clear"
 	db "github.com/jamesacampbell/unicorn/database"
 	game "github.com/jamesacampbell/unicorn/game"
@@ -302,7 +303,8 @@ func displayMainMenu() string {
 	yellow.Println("\n1. New Game")
 	yellow.Println("2. Leaderboards")
 	yellow.Println("3. Player Statistics")
-	yellow.Println("4. Quit")
+	yellow.Println("4. Help & Info")
+	yellow.Println("5. Quit")
 	
 	fmt.Print("\nEnter your choice: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -669,4 +671,75 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func displayHelpGuide() {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("                    ?? HELP & INFORMATION ??")
+	cyan.Println(strings.Repeat("?", 70))
+	
+	yellow.Println("\n?? GAME OVERVIEW")
+	fmt.Println("You're a VC investor with limited capital. Invest in 20 startups")
+	fmt.Println("and watch your portfolio grow (or shrink) over 10 years.")
+	
+	yellow.Println("\n?? HOW TO PLAY")
+	fmt.Println("1. Select difficulty (Easy/Medium/Hard/Expert)")
+	fmt.Println("2. Review 20 available companies with metrics")
+	fmt.Println("3. Invest your capital across multiple startups")
+	fmt.Println("4. Watch events unfold each turn (1 turn = 1 month)")
+	fmt.Println("5. After 90-120 turns, see your final score")
+	
+	yellow.Println("\n?? COMPANY METRICS")
+	fmt.Println("? Risk Score: Low/Medium/High - chance of failure")
+	fmt.Println("? Growth Potential: Projected growth trajectory")
+	fmt.Println("? Valuation: Current company worth (in millions)")
+	fmt.Println("? Category: Industry sector (FinTech, BioTech, etc.)")
+	
+	yellow.Println("\n?? SCORING")
+	fmt.Println("? Net Worth: Cash + Portfolio Value")
+	fmt.Println("? ROI: Return on Investment percentage")
+	fmt.Println("? Successful Exits: Companies that 5x or more")
+	fmt.Println("? Rating: Based on ROI (Unicorn Hunter = 1000%+)")
+	
+	yellow.Println("\n?? DIFFICULTY LEVELS")
+	fmt.Println("? Easy: $500k, 20% events, 3% volatility")
+	fmt.Println("? Medium: $250k, 30% events, 5% volatility")
+	fmt.Println("? Hard: $150k, 40% events, 7% volatility")
+	fmt.Println("? Expert: $100k, 50% events, 10% volatility, 90 turns")
+	
+	yellow.Println("\n?? ANALYTICS")
+	fmt.Println("After each game, view detailed portfolio analytics:")
+	fmt.Println("? Best/Worst performers")
+	fmt.Println("? Sector breakdown")
+	fmt.Println("? Win/loss ratio")
+	fmt.Println("? Investment distribution")
+	
+	yellow.Println("\n?? AVAILABLE COMPANIES")
+	fmt.Println("20 diverse startups across 12+ sectors:")
+	fmt.Println("FinTech ? BioTech ? CleanTech ? HealthTech ? EdTech")
+	fmt.Println("Robotics ? Security ? Gaming ? LegalTech ? AgriTech")
+	fmt.Println("Logistics ? IoT ? Creative ? CloudTech ? and more!")
+	
+	yellow.Println("\n?? RANDOM EVENTS")
+	fmt.Println("60+ possible events can affect your companies:")
+	fmt.Println("? Funding rounds (Series A/B, IPO)")
+	fmt.Println("? Product launches (success/failure)")
+	fmt.Println("? Partnerships & acquisitions")
+	fmt.Println("? Scandals & regulatory issues")
+	fmt.Println("? Market conditions & competition")
+	
+	yellow.Println("\n?? STRATEGY TIPS")
+	fmt.Println("? Diversify: Don't put everything in one company")
+	fmt.Println("? Balance: Mix high-risk and low-risk investments")
+	fmt.Println("? Sectors: Different industries perform differently")
+	fmt.Println("? Research: Read company metrics carefully")
+	fmt.Println("? Patience: Some companies take time to grow")
+	
+	cyan.Println("\n" + strings.Repeat("?", 70))
+	fmt.Print("\nPress 'Enter' to return to menu...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }

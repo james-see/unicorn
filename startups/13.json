@@ -1,0 +1,13 @@
+{
+    "name": "FoodLoop",
+    "description": "Food waste to fertilizer conversion",
+    "category": "CleanTech",
+    "valuation": 14,
+    "grossburnrate": 6,
+    "Monthly Activation Rate": 90,
+    "Monthly Active Visitors": 1500,
+    "Monthly Sales": 180,
+    "Cost": 200,
+    "Sale Price": 500,
+    "Percent Margin Per Unit": 38
+}

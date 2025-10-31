@@ -1,0 +1,13 @@
+{
+    "name": "GameStream",
+    "description": "Cloud gaming platform for mobile",
+    "category": "Gaming",
+    "valuation": 45,
+    "grossburnrate": 18,
+    "Monthly Activation Rate": 800,
+    "Monthly Active Visitors": 100000,
+    "Monthly Sales": 500,
+    "Cost": 10,
+    "Sale Price": 30,
+    "Percent Margin Per Unit": 65
+}

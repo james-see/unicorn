@@ -1,0 +1,13 @@
+{
+    "name": "DroneDeliver",
+    "description": "Last-mile delivery drones",
+    "category": "Logistics",
+    "valuation": 38,
+    "grossburnrate": 14,
+    "Monthly Activation Rate": 70,
+    "Monthly Active Visitors": 2000,
+    "Monthly Sales": 100,
+    "Cost": 25000,
+    "Sale Price": 60000,
+    "Percent Margin Per Unit": 40
+}

@@ -1,0 +1,13 @@
+{
+    "name": "QuantumSecure",
+    "description": "Quantum-resistant encryption services",
+    "category": "Security",
+    "valuation": 42,
+    "grossburnrate": 16,
+    "Monthly Activation Rate": 60,
+    "Monthly Active Visitors": 1200,
+    "Monthly Sales": 40,
+    "Cost": 50000,
+    "Sale Price": 150000,
+    "Percent Margin Per Unit": 58
+}

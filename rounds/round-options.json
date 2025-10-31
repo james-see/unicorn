@@ -118,6 +118,126 @@
         {
             "event": "Breakthrough technology - industry first!",
             "change": 2.1
+        },
+        {
+            "event": "Raised Series B at 3x valuation",
+            "change": 3.2
+        },
+        {
+            "event": "Major security vulnerability discovered",
+            "change": 0.55
+        },
+        {
+            "event": "Viral marketing campaign exceeded expectations",
+            "change": 1.9
+        },
+        {
+            "event": "Government contract awarded",
+            "change": 2.4
+        },
+        {
+            "event": "Product recall due to defects",
+            "change": 0.6
+        },
+        {
+            "event": "Formed strategic alliance with industry leader",
+            "change": 1.8
+        },
+        {
+            "event": "Major competitor went bankrupt - market opportunity",
+            "change": 1.7
+        },
+        {
+            "event": "Cybersecurity attack disrupted operations",
+            "change": 0.65
+        },
+        {
+            "event": "Launched revolutionary new feature",
+            "change": 1.6
+        },
+        {
+            "event": "Top talent poached by competitor",
+            "change": 0.85
+        },
+        {
+            "event": "Secured exclusive distribution deal",
+            "change": 1.5
+        },
+        {
+            "event": "Failed to meet quarterly revenue targets",
+            "change": 0.75
+        },
+        {
+            "event": "Positive review from major industry analyst",
+            "change": 1.4
+        },
+        {
+            "event": "Supply costs increased significantly",
+            "change": 0.8
+        },
+        {
+            "event": "New competitor entered market with lower prices",
+            "change": 0.7
+        },
+        {
+            "event": "Customer retention rate improved dramatically",
+            "change": 1.5
+        },
+        {
+            "event": "Expanded team with key executive hires",
+            "change": 1.3
+        },
+        {
+            "event": "Trade war tariffs impacted costs",
+            "change": 0.85
+        },
+        {
+            "event": "Beta program exceeded user growth targets",
+            "change": 1.6
+        },
+        {
+            "event": "Major platform (Apple/Google) featured the product",
+            "change": 2.0
+        },
+        {
+            "event": "Whistleblower allegations surfaced",
+            "change": 0.6
+        },
+        {
+            "event": "Signed first enterprise customer",
+            "change": 1.7
+        },
+        {
+            "event": "Economic downturn affected market demand",
+            "change": 0.75
+        },
+        {
+            "event": "Product achieved carbon neutral certification",
+            "change": 1.3
+        },
+        {
+            "event": "Key supplier went out of business",
+            "change": 0.7
+        },
+        {
+            "event": "Breakthrough in R&D reduced costs by 40%",
+            "change": 1.9
+        },
+        {
+            "event": "Negative viral video damaged brand",
+            "change": 0.65
+        },
+        {
+            "event": "Partnership with university research lab",
+            "change": 1.4
+        },
+        {
+            "event": "Lost patent infringement case",
+            "change": 0.5
+        },
+        {
+            "event": "Reached 1 million users milestone",
+            "change": 1.8
         }
     ]
 }

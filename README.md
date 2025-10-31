@@ -33,11 +33,12 @@ You start out as a VC with $250,000 USD. Your goal is to invest and make as much
 ## Features
 
 ### 🎮 Core Gameplay
-- **Investment Mechanics:** Invest any amount in 10 different startups
+- **Investment Mechanics:** Invest any amount in 20 different startups (NEW!)
 - **Portfolio Tracking:** Real-time valuation of all your investments
 - **Turn-Based System:** 90-120 turns depending on difficulty
-- **Random Events:** 30+ events that impact company valuations
+- **Random Events:** 60+ events that impact company valuations (NEW!)
 - **Performance Ratings:** From "Unicorn Hunter" (1000%+ ROI) to "Lost Money"
+- **Advanced Analytics:** Sector breakdown, best/worst performers (NEW!)
 
 ### 🏆 Difficulty Levels (NEW!)
 - **Easy:** $500k starting cash, 20% event chance, 3% volatility
@@ -52,14 +53,22 @@ You start out as a VC with $250,000 USD. Your goal is to invest and make as much
 - **SQLite Database:** All scores saved locally
 - **Difficulty Filters:** Separate leaderboards for each difficulty
 
-### 🏢 10 Diverse Startups
-Choose from companies across multiple sectors:
+### 🏢 20 Diverse Startups (NEW!)
+Choose from companies across 12+ sectors:
 - **FinTech:** AI-powered trading platforms
-- **CleanTech:** Sustainable packaging solutions
+- **BioTech:** Nanotechnology drug delivery  
+- **CleanTech:** Sustainable packaging, food waste conversion
 - **HealthTech:** VR meditation apps
 - **EdTech:** TikTok-style education
 - **Robotics:** Automated kitchen systems
-- **Security:** Blockchain cybersecurity
+- **Security:** Blockchain & quantum-resistant encryption
+- **Gaming:** Cloud gaming platforms
+- **LegalTech:** AI legal document automation
+- **AgriTech:** Vertical farming kits
+- **Logistics:** Last-mile delivery drones
+- **IoT:** Smart home control hubs
+- **Creative:** AI-generated music
+- **CloudTech:** Infrastructure optimization
 - **Social Media:** Pet social networks
 - **Advertising:** Unicycle billboards
 - **Consumer Goods:** IoT finger puppets, pet umbrellas
@@ -92,13 +101,21 @@ go build -o unicorn
 # 1. New Game - Start a new investment game
 # 2. Leaderboards - View top scores
 # 3. Player Statistics - Check your career stats
-# 4. Quit
+# 4. Help & Info - Complete game guide (NEW!)
+# 5. Quit
 ```
+
+## What's New in Phase 3
+
+✅ **20 Startup Companies** (doubled!)
+✅ **60 Random Events** (doubled!)
+✅ **Advanced Analytics System** with sector breakdown
+✅ **Help & Information Menu** with complete guide
+✅ **12+ Industry Sectors** for strategic diversification
 
 ## Future Plans
 
-**Phase 3:** More companies (20+), more events (50+), better analytics
-**Phase 4:** Achievements system, career progression
+**Phase 4:** Achievements system, challenge modes, career progression
 **Long-term:** Game mode where you run a startup trying to become a Unicorn
 
 ## Demo
