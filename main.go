@@ -53,6 +53,25 @@ func loadConfig() gameData {
 	return gd
 }
 
+func askForAutomatedMode() bool {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	cyan.Println("\n" + strings.Repeat("?", 60))
+	cyan.Println("                 GAME MODE SELECTION")
+	cyan.Println(strings.Repeat("?", 60))
+	
+	yellow.Println("\n1. Manual Mode (Press Enter each turn)")
+	yellow.Println("2. Automated Mode (1 second per turn)")
+	
+	fmt.Print("\nEnter your choice (1-2, default 1): ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	return choice == "2"
+}
+
 func displayWelcome(username string, difficulty game.Difficulty) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
@@ -160,7 +179,7 @@ func investmentPhase(gs *game.GameState) {
 	}
 }
 
-func playTurn(gs *game.GameState) {
+func playTurn(gs *game.GameState, autoMode bool) {
 	clear.ClearIt()
 	yellow := color.New(color.FgYellow, color.Bold)
 	yellow.Printf("\n?? MONTH %d of %d\n", gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
@@ -200,8 +219,12 @@ func playTurn(gs *game.GameState) {
 	
 	fmt.Printf("\n?? Net Worth: $%s\n", formatMoney(gs.Portfolio.NetWorth))
 	
-	fmt.Print("\nPress 'Enter' to continue to next month...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	if autoMode {
+		time.Sleep(1 * time.Second)
+	} else {
+		fmt.Print("\nPress 'Enter' to continue to next month...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+	}
 }
 
 func displayFinalScore(gs *game.GameState) {
@@ -283,6 +306,10 @@ func main() {
 		case "3":
 			displayPlayerStats()
 		case "4":
+			displayAchievementsMenu()
+		case "5":
+			displayHelpGuide()
+		case "6":
 			fmt.Println("\nThanks for playing! ??")
 			return
 		default:
@@ -372,6 +399,10 @@ func playNewGame() {
 	difficulty := selectDifficulty()
 	clear.ClearIt()
 	
+	// Ask for automated mode
+	autoMode := askForAutomatedMode()
+	clear.ClearIt()
+	
 	// Display welcome and rules
 	displayWelcome(username, difficulty)
 	
@@ -383,7 +414,7 @@ func playNewGame() {
 	
 	// Main game loop
 	for !gs.IsGameOver() {
-		playTurn(gs)
+		playTurn(gs, autoMode)
 	}
 	
 	// Show final score

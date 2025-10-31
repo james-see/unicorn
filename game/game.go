@@ -17,6 +17,8 @@ type Investment struct {
 	InitialValuation int64
 	CurrentValuation int64
 	MonthsHeld       int
+	Category         string
+	NegativeNewsSent bool // Track if we've already sent negative news for this investment
 }
 
 // Portfolio tracks all player investments
@@ -208,6 +210,8 @@ func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
 		InitialValuation: startup.Valuation,
 		CurrentValuation: startup.Valuation,
 		MonthsHeld:       0,
+		Category:         startup.Category,
+		NegativeNewsSent: false,
 	}
 	
 	gs.Portfolio.Investments = append(gs.Portfolio.Investments, investment)
@@ -225,6 +229,8 @@ func (gs *GameState) ProcessTurn() []string {
 	for i := range gs.Portfolio.Investments {
 		inv := &gs.Portfolio.Investments[i]
 		inv.MonthsHeld++
+		
+		wasAboveInitial := inv.CurrentValuation >= inv.InitialValuation
 		
 		// Random chance of an event happening (based on difficulty)
 		if rand.Float64() < gs.Difficulty.EventFrequency && len(gs.EventPool) > 0 {
@@ -248,6 +254,14 @@ func (gs *GameState) ProcessTurn() []string {
 			// Natural growth/decline (random walk) - volatility based on difficulty
 			change := (rand.Float64()*2 - 1) * gs.Difficulty.Volatility
 			inv.CurrentValuation = int64(float64(inv.CurrentValuation) * (1 + change))
+		}
+		
+		// Check if investment just went negative and generate news
+		nowBelowInitial := inv.CurrentValuation < inv.InitialValuation
+		if wasAboveInitial && nowBelowInitial && !inv.NegativeNewsSent {
+			inv.NegativeNewsSent = true
+			news := gs.generateNegativeNews(inv)
+			messages = append(messages, news)
 		}
 	}
 	
@@ -344,4 +358,131 @@ func (gs *GameState) calculateGrowthPotential(s *Startup) float64 {
 	}
 	
 	return growth
+}
+
+// generateNegativeNews creates contextual news when a startup goes negative
+func (gs *GameState) generateNegativeNews(inv *Investment) string {
+	category := inv.Category
+	reasons := []string{}
+	
+	// Category-specific reasons
+	switch category {
+	case "FinTech", "Financial":
+		reasons = []string{
+			"Regulatory scrutiny increased compliance costs",
+			"Customer trust eroded after security concerns",
+			"Competition from established banks intensified",
+			"Regulatory changes impacted revenue model",
+			"Market saturation slowed customer acquisition",
+		}
+	case "BioTech", "HealthTech":
+		reasons = []string{
+			"Clinical trial delays extended timeline to market",
+			"Regulatory approval process took longer than expected",
+			"Competitor launched similar product first",
+			"Funding challenges slowed R&D progress",
+			"Partnership negotiations fell through",
+		}
+	case "CleanTech", "GreenTech":
+		reasons = []string{
+			"Policy changes reduced government incentives",
+			"Raw material costs increased unexpectedly",
+			"Market adoption slower than projected",
+			"Infrastructure challenges delayed deployment",
+			"Competition from cheaper alternatives increased",
+		}
+	case "EdTech":
+		reasons = []string{
+			"School budget cuts reduced institutional sales",
+			"Market saturation slowed growth",
+			"User retention below expectations",
+			"Competition from free platforms increased",
+			"Content development costs exceeded projections",
+		}
+	case "Robotics", "Hardware":
+		reasons = []string{
+			"Supply chain disruptions delayed production",
+			"Manufacturing costs exceeded estimates",
+			"Technical hurdles extended development timeline",
+			"Market demand weaker than anticipated",
+			"Component shortages affected scalability",
+		}
+	case "Security", "Cybersecurity":
+		reasons = []string{
+			"High-profile breach damaged reputation",
+			"Market crowded with well-funded competitors",
+			"Enterprise sales cycles longer than expected",
+			"Feature gap compared to established players",
+			"Integration challenges slowed adoption",
+		}
+	case "Gaming", "Entertainment":
+		reasons = []string{
+			"User acquisition costs exceeded revenue",
+			"Retention rates below industry benchmarks",
+			"Platform changes affected distribution",
+			"Competition from AAA studios intensified",
+			"Development costs overran budget",
+		}
+	case "LegalTech":
+		reasons = []string{
+			"Law firm adoption slower than projected",
+			"Integration complexity deterred clients",
+			"Regulatory barriers in some jurisdictions",
+			"Competition from established legal software",
+			"Customer acquisition costs too high",
+		}
+	case "AgriTech":
+		reasons = []string{
+			"Farmer adoption slower than expected",
+			"Seasonal factors affected sales cycles",
+			"Hardware costs challenged unit economics",
+			"Regulatory approvals delayed market entry",
+			"Distribution challenges in rural markets",
+		}
+	case "Logistics", "Supply Chain":
+		reasons = []string{
+			"Fuel costs reduced profit margins",
+			"Market volatility affected demand",
+			"Competition from established logistics players",
+			"Infrastructure investment required more capital",
+			"Regulatory compliance costs increased",
+		}
+	case "IoT", "Internet of Things":
+		reasons = []string{
+			"Interoperability standards fragmented market",
+			"Security concerns slowed enterprise adoption",
+			"Hardware costs challenged scalability",
+			"Integration complexity deterred customers",
+			"Platform competition intensified",
+		}
+	case "CloudTech", "SaaS":
+		reasons = []string{
+			"Customer churn exceeded projections",
+			"Market saturation slowed growth",
+			"Competition from enterprise giants intensified",
+			"Sales cycles longer than expected",
+			"Feature development lagged competitors",
+		}
+	case "Advertising", "Marketing":
+		reasons = []string{
+			"Ad spend budgets decreased",
+			"Platform policy changes affected targeting",
+			"Market saturation increased competition",
+			"Customer acquisition costs rose",
+			"ROI metrics failed to meet expectations",
+		}
+	default:
+		reasons = []string{
+			"Market conditions deteriorated",
+			"Customer acquisition slower than projected",
+			"Competition intensified unexpectedly",
+			"Operational costs exceeded revenue",
+			"Key partnerships failed to materialize",
+		}
+	}
+	
+	// Select random reason
+	reason := reasons[rand.Intn(len(reasons))]
+	
+	return fmt.Sprintf("?? %s: Valuation dropped below initial investment. %s", inv.CompanyName, reason)
 }
