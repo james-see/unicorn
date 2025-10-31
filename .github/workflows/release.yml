@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            name: linux-amd64
+          - goos: linux
+            goarch: arm64
+            name: linux-arm64
+          - goos: windows
+            goarch: amd64
+            name: windows-amd64
+          - goos: darwin
+            goarch: amd64
+            name: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            name: darwin-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.2'
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          output_name="unicorn-${{ matrix.name }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            output_name="${output_name}.exe"
+          fi
+          go build -o "${output_name}" -ldflags="-s -w" .
+          echo "BINARY_NAME=${output_name}" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unicorn-${{ matrix.name }}
+          path: ${{ env.BINARY_NAME }}
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          pattern: unicorn-*
+          merge-multiple: true
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "IS_TAG=true" >> $GITHUB_OUTPUT
+          else
+            VERSION="dev-${GITHUB_SHA::8}"
+            echo "IS_TAG=false" >> $GITHUB_OUTPUT
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Using version: ${VERSION}"
+
+      - name: Create dev tag if needed
+        if: steps.version.outputs.IS_TAG == 'false'
+        run: |
+          TAG_NAME="${{ steps.version.outputs.VERSION }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG_NAME}" -m "Dev release ${TAG_NAME}" || true
+          git push origin "${TAG_NAME}" || true
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Get tag message or recent commits
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            NOTES=$(git tag -l --format='%(contents)' "$TAG_NAME" 2>/dev/null || echo "")
+            if [ -z "$NOTES" ]; then
+              # Fallback to recent commits if no tag message
+              NOTES=$(git log --pretty=format:"- %s (%h)" -10)
+            fi
+          else
+            # Use recent commits for dev releases
+            NOTES=$(git log --pretty=format:"- %s (%h)" -10)
+          fi
+          echo "${NOTES}" > release_notes.txt
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "${NOTES}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body: |
+            ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+
+            ## Downloads
+
+            - `unicorn-linux-amd64` - Linux x86_64
+            - `unicorn-linux-arm64` - Linux ARM64
+            - `unicorn-windows-amd64.exe` - Windows x86_64
+            - `unicorn-darwin-amd64` - macOS Intel
+            - `unicorn-darwin-arm64` - macOS Apple Silicon
+          files: |
+            artifacts/unicorn-linux-amd64
+            artifacts/unicorn-linux-arm64
+            artifacts/unicorn-windows-amd64.exe
+            artifacts/unicorn-darwin-amd64
+            artifacts/unicorn-darwin-arm64
+          draft: false
+          prerelease: ${{ steps.version.outputs.IS_TAG == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
