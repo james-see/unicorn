@@ -52,25 +52,76 @@ type GameEvent struct {
 	Description string  `json:"description"`
 }
 
-// GameState holds the entire game state
-type GameState struct {
-	PlayerName string
-	Portfolio  Portfolio
-	AvailableStartups []Startup
-	EventPool  []GameEvent
+// Difficulty represents game difficulty level
+type Difficulty struct {
+	Name              string
+	StartingCash      int64
+	EventFrequency    float64 // 0-1, chance of event per turn
+	Volatility        float64 // 0-1, market volatility
+	MaxTurns          int
+	Description       string
 }
 
-// NewGame initializes a new game
-func NewGame(playerName string, startingCash int64) *GameState {
+// GameState holds the entire game state
+type GameState struct {
+	PlayerName        string
+	Portfolio         Portfolio
+	AvailableStartups []Startup
+	EventPool         []GameEvent
+	Difficulty        Difficulty
+}
+
+// Predefined difficulty levels
+var (
+	EasyDifficulty = Difficulty{
+		Name:           "Easy",
+		StartingCash:   500000,
+		EventFrequency: 0.20, // 20% chance
+		Volatility:     0.03, // 3% volatility
+		MaxTurns:       120,
+		Description:    "More cash, lower volatility, fewer bad events",
+	}
+	
+	MediumDifficulty = Difficulty{
+		Name:           "Medium",
+		StartingCash:   250000,
+		EventFrequency: 0.30, // 30% chance
+		Volatility:     0.05, // 5% volatility
+		MaxTurns:       120,
+		Description:    "Standard experience - balanced challenge",
+	}
+	
+	HardDifficulty = Difficulty{
+		Name:           "Hard",
+		StartingCash:   150000,
+		EventFrequency: 0.40, // 40% chance
+		Volatility:     0.07, // 7% volatility
+		MaxTurns:       120,
+		Description:    "Less cash, higher volatility, more events",
+	}
+	
+	ExpertDifficulty = Difficulty{
+		Name:           "Expert",
+		StartingCash:   100000,
+		EventFrequency: 0.50, // 50% chance
+		Volatility:     0.10, // 10% volatility
+		MaxTurns:       90,   // Only 7.5 years!
+		Description:    "Brutal - minimal cash, extreme volatility, shorter time",
+	}
+)
+
+// NewGame initializes a new game with specified difficulty
+func NewGame(playerName string, difficulty Difficulty) *GameState {
 	rand.Seed(time.Now().UnixNano())
 	
 	gs := &GameState{
 		PlayerName: playerName,
+		Difficulty: difficulty,
 		Portfolio: Portfolio{
-			Cash:     startingCash,
-			NetWorth: startingCash,
+			Cash:     difficulty.StartingCash,
+			NetWorth: difficulty.StartingCash,
 			Turn:     1,
-			MaxTurns: 120, // 10 years
+			MaxTurns: difficulty.MaxTurns,
 		},
 	}
 	
@@ -175,8 +226,8 @@ func (gs *GameState) ProcessTurn() []string {
 		inv := &gs.Portfolio.Investments[i]
 		inv.MonthsHeld++
 		
-		// Random chance of an event happening
-		if rand.Float64() < 0.3 && len(gs.EventPool) > 0 { // 30% chance per turn
+		// Random chance of an event happening (based on difficulty)
+		if rand.Float64() < gs.Difficulty.EventFrequency && len(gs.EventPool) > 0 {
 			event := gs.EventPool[rand.Intn(len(gs.EventPool))]
 			
 			oldVal := inv.CurrentValuation
@@ -194,9 +245,8 @@ func (gs *GameState) ProcessTurn() []string {
 				messages = append(messages, fmt.Sprintf("? %s: %s ($%d)", inv.CompanyName, event.Event, change))
 			}
 		} else {
-			// Natural growth/decline (random walk)
-			volatility := 0.05 // 5% volatility
-			change := (rand.Float64()*2 - 1) * volatility
+			// Natural growth/decline (random walk) - volatility based on difficulty
+			change := (rand.Float64()*2 - 1) * gs.Difficulty.Volatility
 			inv.CurrentValuation = int64(float64(inv.CurrentValuation) * (1 + change))
 		}
 	}
@@ -239,9 +289,8 @@ func (gs *GameState) IsGameOver() bool {
 func (gs *GameState) GetFinalScore() (netWorth int64, roi float64, successfulExits int) {
 	netWorth = gs.Portfolio.NetWorth
 	
-	// Calculate ROI
-	startingCash := int64(250000) // from config
-	roi = ((float64(netWorth) - float64(startingCash)) / float64(startingCash)) * 100.0
+	// Calculate ROI based on starting cash for this difficulty
+	roi = ((float64(netWorth) - float64(gs.Difficulty.StartingCash)) / float64(gs.Difficulty.StartingCash)) * 100.0
 	
 	// Count successful exits (investments that 5x'd or more)
 	successfulExits = 0

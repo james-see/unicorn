@@ -10,11 +10,31 @@ go build -o unicorn
 ./unicorn
 ```
 
-## How to Play
+## Main Menu
 
-1. **Enter your name** when prompted
+When you start the game, you'll see:
+```
+?? UNICORN - MAIN MENU ??
 
-2. **Review the 10 available startups** - each shows:
+1. New Game
+2. Leaderboards
+3. Player Statistics
+4. Quit
+```
+
+## How to Play a New Game
+
+1. **Select "1. New Game"** from main menu
+
+2. **Enter your name** when prompted
+
+3. **Choose difficulty** (1-4):
+   - Easy: $500k starting cash, gentler volatility
+   - Medium: $250k starting cash, balanced
+   - Hard: $150k starting cash, more volatile
+   - Expert: $100k starting cash, extreme volatility, only 7.5 years!
+
+4. **Review the 10 available startups** - each shows:
    - Company name and description
    - Valuation (in millions)
    - Risk level (Low/Medium/High)
@@ -33,11 +53,49 @@ go build -o unicorn
    - Portfolio value updates automatically
    - Green = profit, Red = loss
 
-5. **Final score after 120 turns:**
+5. **Final score after 90-120 turns (depends on difficulty):**
    - Final net worth
    - ROI percentage
    - Performance rating
    - Detailed portfolio breakdown
+   - **Score automatically saved to leaderboard!**
+
+6. **Return to main menu** to:
+   - Play again with different difficulty
+   - View leaderboards
+   - Check your statistics
+
+## Leaderboards (Option 2)
+
+View top scores in multiple ways:
+- **By Net Worth (All)** - Highest total wealth
+- **By ROI (All)** - Best return percentage
+- **Easy/Medium/Hard/Expert** - Difficulty-specific boards
+- **Recent Games** - Last 10 games played
+
+Features:
+- ?????? Color-coded rankings
+- Shows: Player, Net Worth, ROI, Exits, Difficulty
+- Top 10 for each category
+
+## Player Statistics (Option 3)
+
+Check career performance:
+- ?? Total games played
+- ?? Best net worth ever
+- ?? Best ROI percentage
+- ?? Total successful exits
+- ?? Average net worth
+- ?? Win rate (% positive ROI)
+
+## Difficulty Comparison
+
+| Level | Cash | Event % | Volatility | Turns | Best For |
+|-------|------|---------|-----------|-------|----------|
+| Easy | $500k | 20% | 3% | 120 | Learning |
+| Medium | $250k | 30% | 5% | 120 | Standard |
+| Hard | $150k | 40% | 7% | 120 | Challenge |
+| Expert | $100k | 50% | 10% | 90 | Masters |
 
 ## Pro Tips
 
@@ -64,11 +122,37 @@ go build -o unicorn
 - Spread across different sectors
 - Target 200-300% ROI
 
-## Win Conditions
+## Performance Ratings
 
-?? **1000%+ ROI** = UNICORN HUNTER (turn $250k into $2.75M+)
-?? **500%+ ROI** = Elite VC ($1.5M+)
-? **200%+ ROI** = Great Investor ($750k+)
-?? **50%+ ROI** = Solid Performance ($375k+)
+?? **1000%+ ROI** = UNICORN HUNTER - Legendary!
+?? **500%+ ROI** = Elite VC - Outstanding!
+? **200%+ ROI** = Great Investor - Excellent!
+?? **50%+ ROI** = Solid Performance - Good!
+?? **0%+ ROI** = Break Even - Not Bad
+?? **Negative ROI** = Lost Money - Try Again
+
+## Competitive Play
+
+**Beat Your Own Records:**
+- Try to top your personal best
+- Improve your win rate
+- Master all difficulty levels
+
+**Compete on Leaderboards:**
+- Get #1 net worth in your difficulty
+- Highest ROI across all players
+- Most successful exits
+
+**Challenge Yourself:**
+- Start on Easy, work up to Expert
+- Try to win with minimal investments
+- Diversify vs. focused strategy
+
+## Data Persistence
+
+- All scores saved to `unicorn_scores.db`
+- Database created automatically on first run
+- Portable - can backup or share
+- Never expires - build your legacy!
 
 Good luck! ??

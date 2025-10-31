@@ -7,9 +7,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	clear "github.com/jamesacampbell/unicorn/clear"
+	db "github.com/jamesacampbell/unicorn/database"
 	game "github.com/jamesacampbell/unicorn/game"
 	logo "github.com/jamesacampbell/unicorn/logo"
 	yaml "gopkg.in/yaml.v2"
@@ -49,10 +51,19 @@ func loadConfig() gameData {
 	return gd
 }
 
-func displayWelcome(username string, startingCash int64) {
-	fmt.Printf("\n%s, you have $%s to invest over the next 10 years.\n", username, formatMoney(startingCash))
-	fmt.Println("Each turn = 1 month. You have 120 turns to build your fortune.")
-	fmt.Println("Choose your investments wisely - events will affect valuations!")
+func displayWelcome(username string, difficulty game.Difficulty) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	cyan.Printf("\n%s, welcome to your investment journey!\n", username)
+	fmt.Printf("\nDifficulty: ")
+	yellow.Printf("%s\n", difficulty.Name)
+	fmt.Printf("Starting Cash: $%s\n", formatMoney(difficulty.StartingCash))
+	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
+	
+	fmt.Println("\nEach turn = 1 month. Choose your investments wisely!")
+	fmt.Println("Random events will affect valuations throughout the game.")
+	
 	fmt.Print("\nPress 'Enter' to see available startups...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
@@ -244,20 +255,124 @@ func displayFinalScore(gs *game.GameState) {
 }
 
 func main() {
+	// Initialize database
+	err := db.InitDB("unicorn_scores.db")
+	if err != nil {
+		fmt.Printf("Warning: Could not initialize database: %v\n", err)
+		fmt.Println("Scores will not be saved.")
+		time.Sleep(2 * time.Second)
+	}
+	defer db.CloseDB()
+	
 	// Init with the unicorn logo
-	config := loadConfig()
 	c := color.New(color.FgCyan).Add(color.Bold)
 	logo.InitLogo(c)
 	
+	// Main menu loop
+	for {
+		choice := displayMainMenu()
+		clear.ClearIt()
+		
+		switch choice {
+		case "1":
+			playNewGame()
+		case "2":
+			displayLeaderboards()
+		case "3":
+			displayPlayerStats()
+		case "4":
+			fmt.Println("\nThanks for playing! ??")
+			return
+		default:
+			color.Red("Invalid choice!")
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+func displayMainMenu() string {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	cyan.Println("\n" + strings.Repeat("?", 50))
+	cyan.Println("           ?? UNICORN - MAIN MENU ??")
+	cyan.Println(strings.Repeat("?", 50))
+	
+	yellow.Println("\n1. New Game")
+	yellow.Println("2. Leaderboards")
+	yellow.Println("3. Player Statistics")
+	yellow.Println("4. Quit")
+	
+	fmt.Print("\nEnter your choice: ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	return strings.TrimSpace(choice)
+}
+
+func selectDifficulty() game.Difficulty {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+	red := color.New(color.FgRed)
+	magenta := color.New(color.FgMagenta)
+	
+	cyan.Println("\n" + strings.Repeat("?", 60))
+	cyan.Println("                 SELECT DIFFICULTY")
+	cyan.Println(strings.Repeat("?", 60))
+	
+	green.Printf("\n1. Easy")
+	fmt.Printf(" - %s\n", game.EasyDifficulty.Description)
+	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n", 
+		formatMoney(game.EasyDifficulty.StartingCash), game.EasyDifficulty.MaxTurns)
+	
+	yellow.Printf("\n2. Medium")
+	fmt.Printf(" - %s\n", game.MediumDifficulty.Description)
+	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n", 
+		formatMoney(game.MediumDifficulty.StartingCash), game.MediumDifficulty.MaxTurns)
+	
+	red.Printf("\n3. Hard")
+	fmt.Printf(" - %s\n", game.HardDifficulty.Description)
+	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n", 
+		formatMoney(game.HardDifficulty.StartingCash), game.HardDifficulty.MaxTurns)
+	
+	magenta.Printf("\n4. Expert")
+	fmt.Printf(" - %s\n", game.ExpertDifficulty.Description)
+	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n", 
+		formatMoney(game.ExpertDifficulty.StartingCash), game.ExpertDifficulty.MaxTurns)
+	
+	fmt.Print("\nEnter your choice (1-4): ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	switch choice {
+	case "1":
+		return game.EasyDifficulty
+	case "3":
+		return game.HardDifficulty
+	case "4":
+		return game.ExpertDifficulty
+	default:
+		return game.MediumDifficulty
+	}
+}
+
+func playNewGame() {
 	// Get username
 	username := initMenu()
 	clear.ClearIt()
 	
+	// Select difficulty
+	difficulty := selectDifficulty()
+	clear.ClearIt()
+	
 	// Display welcome and rules
-	displayWelcome(username, config.Pot)
+	displayWelcome(username, difficulty)
 	
 	// Initialize game
-	gs := game.NewGame(username, config.Pot)
+	gs := game.NewGame(username, difficulty)
 	
 	// Investment phase at start
 	investmentPhase(gs)
@@ -269,6 +384,241 @@ func main() {
 	
 	// Show final score
 	displayFinalScore(gs)
+	
+	// Save score to database
+	netWorth, roi, successfulExits := gs.GetFinalScore()
+	score := db.GameScore{
+		PlayerName:      gs.PlayerName,
+		FinalNetWorth:   netWorth,
+		ROI:             roi,
+		SuccessfulExits: successfulExits,
+		TurnsPlayed:     gs.Portfolio.Turn - 1,
+		Difficulty:      gs.Difficulty.Name,
+		PlayedAt:        time.Now(),
+	}
+	
+	err := db.SaveGameScore(score)
+	if err != nil {
+		color.Yellow("\nWarning: Could not save score: %v", err)
+	} else {
+		color.Green("\n? Score saved to leaderboard!")
+	}
+	
+	fmt.Print("\nPress 'Enter' to return to main menu...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func displayLeaderboards() {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	
+	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("                       ?? LEADERBOARDS ??")
+	cyan.Println(strings.Repeat("?", 70))
+	
+	fmt.Println("\n1. By Net Worth (All Difficulties)")
+	fmt.Println("2. By ROI (All Difficulties)")
+	fmt.Println("3. Easy Difficulty")
+	fmt.Println("4. Medium Difficulty")
+	fmt.Println("5. Hard Difficulty")
+	fmt.Println("6. Expert Difficulty")
+	fmt.Println("7. Recent Games")
+	fmt.Println("8. Back to Main Menu")
+	
+	fmt.Print("\nEnter your choice: ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	clear.ClearIt()
+	
+	switch choice {
+	case "1":
+		showTopScores("net_worth", "all")
+	case "2":
+		showTopScores("roi", "all")
+	case "3":
+		showTopScores("net_worth", "Easy")
+	case "4":
+		showTopScores("net_worth", "Medium")
+	case "5":
+		showTopScores("net_worth", "Hard")
+	case "6":
+		showTopScores("net_worth", "Expert")
+	case "7":
+		showRecentGames()
+	case "8":
+		return
+	}
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	displayLeaderboards()
+}
+
+func showTopScores(sortBy string, difficulty string) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	var scores []db.GameScore
+	var err error
+	var title string
+	
+	if sortBy == "roi" {
+		scores, err = db.GetTopScoresByROI(10, difficulty)
+		title = "TOP 10 BY ROI"
+	} else {
+		scores, err = db.GetTopScoresByNetWorth(10, difficulty)
+		title = "TOP 10 BY NET WORTH"
+	}
+	
+	if difficulty != "all" && difficulty != "" {
+		title += fmt.Sprintf(" (%s)", strings.ToUpper(difficulty))
+	}
+	
+	if err != nil {
+		color.Red("Error loading leaderboard: %v", err)
+		return
+	}
+	
+	cyan.Println("\n" + strings.Repeat("?", 90))
+	cyan.Printf("%-40s\n", title)
+	cyan.Println(strings.Repeat("?", 90))
+	
+	if len(scores) == 0 {
+		yellow.Println("\nNo games played yet! Be the first!")
+		return
+	}
+	
+	fmt.Printf("\n%-5s %-20s %-15s %-15s %-10s %-12s\n", 
+		"RANK", "PLAYER", "NET WORTH", "ROI", "EXITS", "DIFFICULTY")
+	fmt.Println(strings.Repeat("-", 90))
+	
+	for i, score := range scores {
+		rankColor := color.New(color.FgWhite)
+		if i == 0 {
+			rankColor = color.New(color.FgYellow, color.Bold)
+		} else if i == 1 {
+			rankColor = color.New(color.FgCyan)
+		} else if i == 2 {
+			rankColor = color.New(color.FgGreen)
+		}
+		
+		roiColor := color.New(color.FgGreen)
+		if score.ROI < 0 {
+			roiColor = color.New(color.FgRed)
+		}
+		
+		rankColor.Printf("%-5d ", i+1)
+		fmt.Printf("%-20s ", truncateString(score.PlayerName, 20))
+		fmt.Printf("$%-14s ", formatMoney(score.FinalNetWorth))
+		roiColor.Printf("%-15s ", fmt.Sprintf("%.1f%%", score.ROI))
+		fmt.Printf("%-10d ", score.SuccessfulExits)
+		fmt.Printf("%-12s\n", score.Difficulty)
+	}
+}
+
+func showRecentGames() {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	scores, err := db.GetRecentGames(10)
+	if err != nil {
+		color.Red("Error loading recent games: %v", err)
+		return
+	}
+	
+	cyan.Println("\n" + strings.Repeat("?", 90))
+	cyan.Println("                           RECENT GAMES")
+	cyan.Println(strings.Repeat("?", 90))
+	
+	if len(scores) == 0 {
+		yellow.Println("\nNo games played yet!")
+		return
+	}
+	
+	fmt.Printf("\n%-20s %-15s %-15s %-12s %-20s\n", 
+		"PLAYER", "NET WORTH", "ROI", "DIFFICULTY", "DATE")
+	fmt.Println(strings.Repeat("-", 90))
+	
+	for _, score := range scores {
+		roiColor := color.New(color.FgGreen)
+		if score.ROI < 0 {
+			roiColor = color.New(color.FgRed)
+		}
+		
+		fmt.Printf("%-20s ", truncateString(score.PlayerName, 20))
+		fmt.Printf("$%-14s ", formatMoney(score.FinalNetWorth))
+		roiColor.Printf("%-15s ", fmt.Sprintf("%.1f%%", score.ROI))
+		fmt.Printf("%-12s ", score.Difficulty)
+		fmt.Printf("%-20s\n", score.PlayedAt.Format("2006-01-02 15:04"))
+	}
+}
+
+func displayPlayerStats() {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	
+	cyan.Println("\n" + strings.Repeat("?", 50))
+	cyan.Println("              PLAYER STATISTICS")
+	cyan.Println(strings.Repeat("?", 50))
+	
+	fmt.Print("\nEnter player name: ")
+	reader := bufio.NewReader(os.Stdin)
+	playerName, _ := reader.ReadString('\n')
+	playerName = strings.TrimSpace(playerName)
+	
+	if playerName == "" {
+		color.Red("Invalid player name!")
+		time.Sleep(1 * time.Second)
+		return
+	}
+	
+	stats, err := db.GetPlayerStats(playerName)
+	if err != nil {
+		color.Red("Error loading stats: %v", err)
+		time.Sleep(2 * time.Second)
+		return
+	}
+	
+	if stats.TotalGames == 0 {
+		color.Yellow("\nNo games found for player: %s", playerName)
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return
+	}
+	
+	clear.ClearIt()
+	cyan.Println("\n" + strings.Repeat("?", 50))
+	cyan.Printf("    STATS FOR: %s\n", strings.ToUpper(playerName))
+	cyan.Println(strings.Repeat("?", 50))
+	
+	green := color.New(color.FgGreen, color.Bold)
+	
+	fmt.Printf("\n?? Total Games Played: ")
+	green.Printf("%d\n", stats.TotalGames)
+	
+	fmt.Printf("?? Best Net Worth: ")
+	green.Printf("$%s\n", formatMoney(stats.BestNetWorth))
+	
+	fmt.Printf("?? Best ROI: ")
+	green.Printf("%.2f%%\n", stats.BestROI)
+	
+	fmt.Printf("?? Total Successful Exits: ")
+	green.Printf("%d\n", stats.TotalExits)
+	
+	fmt.Printf("?? Average Net Worth: ")
+	green.Printf("$%.0f\n", stats.AverageNetWorth)
+	
+	fmt.Printf("?? Win Rate (Positive ROI): ")
+	if stats.WinRate >= 50 {
+		green.Printf("%.1f%%\n", stats.WinRate)
+	} else {
+		color.New(color.FgYellow).Printf("%.1f%%\n", stats.WinRate)
+	}
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 // Helper functions
@@ -312,4 +662,11 @@ func abs(n int64) int64 {
 		return -n
 	}
 	return n
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }
