@@ -246,9 +246,9 @@ func (gs *GameState) ProcessTurn() []string {
 			
 			change := inv.CurrentValuation - oldVal
 			if change > 0 {
-				messages = append(messages, fmt.Sprintf("? %s: %s (+$%d)", inv.CompanyName, event.Event, change))
+				messages = append(messages, fmt.Sprintf("📰 %s: %s (+$%d)", inv.CompanyName, event.Event, change))
 			} else {
-				messages = append(messages, fmt.Sprintf("? %s: %s ($%d)", inv.CompanyName, event.Event, change))
+				messages = append(messages, fmt.Sprintf("📰 %s: %s ($%d)", inv.CompanyName, event.Event, change))
 			}
 		} else {
 			// Natural growth/decline (random walk) - volatility based on difficulty
@@ -484,5 +484,5 @@ func (gs *GameState) generateNegativeNews(inv *Investment) string {
 	// Select random reason
 	reason := reasons[rand.Intn(len(reasons))]
 	
-	return fmt.Sprintf("?? %s: Valuation dropped below initial investment. %s", inv.CompanyName, reason)
+	return fmt.Sprintf("📰 %s: Valuation dropped below initial investment. %s", inv.CompanyName, reason)
 }

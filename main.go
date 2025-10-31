@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatih/color"
 	achievements "github.com/jamesacampbell/unicorn/achievements"
+	ascii "github.com/jamesacampbell/unicorn/ascii"
 	// analytics "github.com/jamesacampbell/unicorn/analytics"
 	clear "github.com/jamesacampbell/unicorn/clear"
 	db "github.com/jamesacampbell/unicorn/database"
@@ -129,7 +130,9 @@ func displayStartup(s game.Startup, index int) {
 func investmentPhase(gs *game.GameState) {
 	clear.ClearIt()
 	green := color.New(color.FgGreen, color.Bold)
-	green.Printf("\n?? INVESTMENT PHASE - Turn %d/%d\n", gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
+	cyan := color.New(color.FgCyan, color.Bold)
+	cyan.Print(ascii.InvestmentHeader)
+	green.Printf("\nTurn %d/%d\n", gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
 	fmt.Printf("Cash Available: $%s\n", formatMoney(gs.Portfolio.Cash))
 	fmt.Printf("Portfolio Value: $%s\n", formatMoney(gs.GetPortfolioValue()))
 	fmt.Printf("Net Worth: $%s\n", formatMoney(gs.Portfolio.NetWorth))
@@ -173,7 +176,7 @@ func investmentPhase(gs *game.GameState) {
 		if err != nil {
 			color.Red("Error: %v", err)
 		} else {
-			color.Green("? Investment successful!")
+			color.Green("%s Investment successful!", ascii.Check)
 			fmt.Printf("Cash remaining: $%s\n", formatMoney(gs.Portfolio.Cash))
 		}
 	}
@@ -182,21 +185,20 @@ func investmentPhase(gs *game.GameState) {
 func playTurn(gs *game.GameState, autoMode bool) {
 	clear.ClearIt()
 	yellow := color.New(color.FgYellow, color.Bold)
-	yellow.Printf("\n?? MONTH %d of %d\n", gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
 	
 	messages := gs.ProcessTurn()
 	
 	if len(messages) > 0 {
-		fmt.Println("\n" + strings.Repeat("=", 50))
-		fmt.Println("COMPANY NEWS:")
+		cyan.Print(ascii.NewsHeader)
 		for _, msg := range messages {
 			fmt.Println(msg)
 		}
-		fmt.Println(strings.Repeat("=", 50))
 	}
 	
 	// Show portfolio status
-	fmt.Println("\n?? YOUR PORTFOLIO:")
+	cyan.Print(ascii.PortfolioHeader)
 	if len(gs.Portfolio.Investments) == 0 {
 		fmt.Println("   No investments yet")
 	} else {
@@ -217,7 +219,7 @@ func playTurn(gs *game.GameState, autoMode bool) {
 		}
 	}
 	
-	fmt.Printf("\n?? Net Worth: $%s\n", formatMoney(gs.Portfolio.NetWorth))
+	fmt.Printf("\n%s Net Worth: $%s\n", ascii.Money, formatMoney(gs.Portfolio.NetWorth))
 	
 	if autoMode {
 		time.Sleep(1 * time.Second)
@@ -231,52 +233,58 @@ func displayFinalScore(gs *game.GameState) {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("=", 50))
-	cyan.Println("           ?? GAME OVER - FINAL RESULTS ??")
-	cyan.Println(strings.Repeat("=", 50))
+	cyan.Print(ascii.GameOverHeader)
 	
 	netWorth, roi, successfulExits := gs.GetFinalScore()
 	
-	fmt.Printf("\n?? Player: %s\n", gs.PlayerName)
-	fmt.Printf("?? Turns Played: %d\n\n", gs.Portfolio.Turn-1)
+	fmt.Printf("\n%s Player: %s\n", ascii.Star, gs.PlayerName)
+	fmt.Printf("%s Turns Played: %d\n\n", ascii.Calendar, gs.Portfolio.Turn-1)
 	
 	green := color.New(color.FgGreen, color.Bold)
-	green.Printf("?? Final Net Worth: $%s\n", formatMoney(netWorth))
+	green.Printf("%s Final Net Worth: $%s\n", ascii.Money, formatMoney(netWorth))
 	
 	roiColor := color.New(color.FgGreen)
 	if roi < 0 {
 		roiColor = color.New(color.FgRed)
 	}
-	roiColor.Printf("?? Return on Investment: %.2f%%\n", roi)
-	fmt.Printf("?? Successful Exits (5x+): %d\n", successfulExits)
+	roiColor.Printf("%s Return on Investment: %.2f%%\n", ascii.Chart, roi)
+	fmt.Printf("%s Successful Exits (5x+): %d\n", ascii.Rocket, successfulExits)
 	
-	fmt.Println("\n?? FINAL PORTFOLIO:")
+	fmt.Println("\n" + strings.Repeat("═", 50))
+	fmt.Println("FINAL PORTFOLIO:")
 	for _, inv := range gs.Portfolio.Investments {
 		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
-		fmt.Printf("   %s: $%s ? $%s\n", 
+		fmt.Printf("   %s: $%s → $%s\n", 
 			inv.CompanyName, formatMoney(inv.AmountInvested), formatMoney(value))
 	}
 	
 	// Performance rating
-	fmt.Println("\n" + strings.Repeat("=", 50))
+	fmt.Println("\n" + strings.Repeat("═", 50))
 	var rating string
+	var icon string
 	if roi >= 1000 {
-		rating = "?? UNICORN HUNTER - Legendary!"
+		rating = "UNICORN HUNTER - Legendary!"
+		icon = ascii.Crown
 	} else if roi >= 500 {
-		rating = "?? Elite VC - Outstanding!"
+		rating = "Elite VC - Outstanding!"
+		icon = ascii.Trophy
 	} else if roi >= 200 {
-		rating = "? Great Investor - Excellent!"
+		rating = "Great Investor - Excellent!"
+		icon = ascii.Star
 	} else if roi >= 50 {
-		rating = "?? Solid Performance - Good!"
+		rating = "Solid Performance - Good!"
+		icon = ascii.Check
 	} else if roi >= 0 {
-		rating = "?? Break Even - Not Bad"
+		rating = "Break Even - Not Bad"
+		icon = "="
 	} else {
-		rating = "?? Lost Money - Better Luck Next Time"
+		rating = "Lost Money - Better Luck Next Time"
+		icon = ascii.Warning
 	}
 	
 	yellow := color.New(color.FgYellow, color.Bold)
-	yellow.Printf("Rating: %s\n", rating)
-	fmt.Println(strings.Repeat("=", 50) + "\n")
+	yellow.Printf("Rating: %s %s\n", icon, rating)
+	fmt.Println(strings.Repeat("═", 50) + "\n")
 }
 
 func main() {
@@ -288,10 +296,6 @@ func main() {
 		time.Sleep(2 * time.Second)
 	}
 	defer db.CloseDB()
-	
-	// Init with the unicorn logo
-	c := color.New(color.FgCyan).Add(color.Bold)
-	logo.InitLogo(c)
 	
 	// Main menu loop
 	for {
@@ -310,7 +314,7 @@ func main() {
 		case "5":
 			displayHelpGuide()
 		case "6":
-			fmt.Println("\nThanks for playing! ??")
+			fmt.Println("\nThanks for playing! " + ascii.Star2)
 			return
 		default:
 			color.Red("Invalid choice!")
@@ -321,11 +325,15 @@ func main() {
 
 func displayMainMenu() string {
 	clear.ClearIt()
+	
+	// Display unicorn logo
 	cyan := color.New(color.FgCyan, color.Bold)
+	logo.InitLogo(cyan)
+	
 	yellow := color.New(color.FgYellow)
 	
 	cyan.Println("\n" + strings.Repeat("=", 50))
-	cyan.Println("           ?? UNICORN - MAIN MENU ??")
+	cyan.Println("           ★ UNICORN - MAIN MENU ★")
 	cyan.Println(strings.Repeat("=", 50))
 	
 	yellow.Println("\n1. New Game")
@@ -432,12 +440,12 @@ func playNewGame() {
 		PlayedAt:        time.Now(),
 	}
 	
-	err := db.SaveGameScore(score)
-	if err != nil {
-		color.Yellow("\nWarning: Could not save score: %v", err)
-	} else {
-		color.Green("\n? Score saved to leaderboard!")
-	}
+		err := db.SaveGameScore(score)
+		if err != nil {
+			color.Yellow("\nWarning: Could not save score: %v", err)
+		} else {
+			color.Green("\n%s Score saved to leaderboard!", ascii.Check)
+		}
 	
 	// Check for achievements
 	checkAndUnlockAchievements(gs)
@@ -515,9 +523,9 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		cyan := color.New(color.FgCyan, color.Bold)
 		yellow := color.New(color.FgYellow)
 		
-		fmt.Println("\n" + strings.Repeat("=", 60))
-		cyan.Println("           ?? NEW ACHIEVEMENTS UNLOCKED! ??")
-		fmt.Println(strings.Repeat("=", 60))
+		fmt.Println("\n" + strings.Repeat("═", 60))
+		cyan.Printf("     %s NEW ACHIEVEMENTS UNLOCKED! %s\n", ascii.Star, ascii.Star)
+		fmt.Println(strings.Repeat("═", 60))
 		
 		for _, ach := range newAchievements {
 			// Save to database
@@ -556,9 +564,7 @@ func displayLeaderboards() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("=", 70))
-	cyan.Println("                       ?? LEADERBOARDS ??")
-	cyan.Println(strings.Repeat("=", 70))
+	cyan.Print(ascii.LeaderboardHeader)
 	
 	fmt.Println("\n1. By Net Worth (All Difficulties)")
 	fmt.Println("2. By ROI (All Difficulties)")
@@ -703,9 +709,9 @@ func displayPlayerStats() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("=", 50))
-	cyan.Println("              PLAYER STATISTICS")
-	cyan.Println(strings.Repeat("=", 50))
+	cyan.Println("\n" + strings.Repeat("═", 50))
+	cyan.Println("           PLAYER STATISTICS")
+	cyan.Println(strings.Repeat("═", 50))
 	
 	fmt.Print("\nEnter player name: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -739,22 +745,22 @@ func displayPlayerStats() {
 	
 	green := color.New(color.FgGreen, color.Bold)
 	
-	fmt.Printf("\n?? Total Games Played: ")
+	fmt.Printf("\n%s Total Games Played: ", ascii.Chart)
 	green.Printf("%d\n", stats.TotalGames)
 	
-	fmt.Printf("?? Best Net Worth: ")
+	fmt.Printf("%s Best Net Worth: ", ascii.Money)
 	green.Printf("$%s\n", formatMoney(stats.BestNetWorth))
 	
-	fmt.Printf("?? Best ROI: ")
+	fmt.Printf("%s Best ROI: ", ascii.Chart)
 	green.Printf("%.2f%%\n", stats.BestROI)
 	
-	fmt.Printf("?? Total Successful Exits: ")
+	fmt.Printf("%s Total Successful Exits: ", ascii.Rocket)
 	green.Printf("%d\n", stats.TotalExits)
 	
-	fmt.Printf("?? Average Net Worth: ")
+	fmt.Printf("%s Average Net Worth: ", ascii.Coin)
 	green.Printf("$%.0f\n", stats.AverageNetWorth)
 	
-	fmt.Printf("?? Win Rate (Positive ROI): ")
+	fmt.Printf("%s Win Rate (Positive ROI): ", ascii.Trophy)
 	if stats.WinRate >= 50 {
 		green.Printf("%.1f%%\n", stats.WinRate)
 	} else {
@@ -819,9 +825,7 @@ func displayAchievementsMenu() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("=", 60))
-	cyan.Println("                    ?? ACHIEVEMENTS ??")
-	cyan.Println(strings.Repeat("=", 60))
+	cyan.Print(ascii.AchievementsHeader)
 	
 	fmt.Println("\n1. View My Achievements")
 	fmt.Println("2. Browse All Achievements")
@@ -893,13 +897,13 @@ func viewPlayerAchievements() {
 	level, title, nextLevelPoints := achievements.CalculateCareerLevel(totalPoints)
 	
 	green := color.New(color.FgGreen, color.Bold)
-	fmt.Printf("\n?? Progress: %d/%d (%.1f%%)\n", unlockedCount, totalAchievements, progress)
-	fmt.Printf("? Total Points: ")
+	fmt.Printf("\n%s Progress: %d/%d (%.1f%%)\n", ascii.Chart, unlockedCount, totalAchievements, progress)
+	fmt.Printf("%s Total Points: ", ascii.Coin)
 	green.Printf("%d\n", totalPoints)
-	fmt.Printf("???  Career Level: ")
+	fmt.Printf("%s Career Level: ", ascii.Level)
 	yellow.Printf("%d - %s\n", level, title)
 	if level < 10 {
-		fmt.Printf("?? Next Level: %d points needed\n", nextLevelPoints-totalPoints)
+		fmt.Printf("%s Next Level: %d points needed\n", ascii.Target, nextLevelPoints-totalPoints)
 	}
 	
 	if unlockedCount == 0 {
@@ -1002,66 +1006,66 @@ func displayHelpGuide() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	
-	cyan.Println("\n" + strings.Repeat("=", 70))
-	cyan.Println("                    ?? HELP & INFORMATION ??")
-	cyan.Println(strings.Repeat("=", 70))
+	cyan.Println("\n" + strings.Repeat("═", 70))
+	cyan.Println("              HELP & INFORMATION")
+	cyan.Println(strings.Repeat("═", 70))
 	
-	yellow.Println("\n?? GAME OVERVIEW")
+	yellow.Printf("\n%s GAME OVERVIEW\n", ascii.Lightbulb)
 	fmt.Println("You're a VC investor with limited capital. Invest in 20 startups")
 	fmt.Println("and watch your portfolio grow (or shrink) over 10 years.")
 	
-	yellow.Println("\n?? HOW TO PLAY")
+	yellow.Printf("\n%s HOW TO PLAY\n", ascii.Target)
 	fmt.Println("1. Select difficulty (Easy/Medium/Hard/Expert)")
 	fmt.Println("2. Review 20 available companies with metrics")
 	fmt.Println("3. Invest your capital across multiple startups")
 	fmt.Println("4. Watch events unfold each turn (1 turn = 1 month)")
 	fmt.Println("5. After 90-120 turns, see your final score")
 	
-	yellow.Println("\n?? COMPANY METRICS")
-	fmt.Println("? Risk Score: Low/Medium/High - chance of failure")
-	fmt.Println("? Growth Potential: Projected growth trajectory")
-	fmt.Println("? Valuation: Current company worth (in millions)")
-	fmt.Println("? Category: Industry sector (FinTech, BioTech, etc.)")
+	yellow.Printf("\n%s COMPANY METRICS\n", ascii.Building)
+	fmt.Printf("%s Risk Score: Low/Medium/High - chance of failure\n", ascii.Warning)
+	fmt.Printf("%s Growth Potential: Projected growth trajectory\n", ascii.Chart)
+	fmt.Printf("%s Valuation: Current company worth (in millions)\n", ascii.Money)
+	fmt.Printf("%s Category: Industry sector (FinTech, BioTech, etc.)\n", ascii.Star)
 	
-	yellow.Println("\n?? SCORING")
-	fmt.Println("? Net Worth: Cash + Portfolio Value")
-	fmt.Println("? ROI: Return on Investment percentage")
-	fmt.Println("? Successful Exits: Companies that 5x or more")
-	fmt.Println("? Rating: Based on ROI (Unicorn Hunter = 1000%+)")
+	yellow.Printf("\n%s SCORING\n", ascii.Trophy)
+	fmt.Printf("%s Net Worth: Cash + Portfolio Value\n", ascii.Money)
+	fmt.Printf("%s ROI: Return on Investment percentage\n", ascii.Chart)
+	fmt.Printf("%s Successful Exits: Companies that 5x or more\n", ascii.Rocket)
+	fmt.Printf("%s Rating: Based on ROI (Unicorn Hunter = 1000%%+)\n", ascii.Crown)
 	
-	yellow.Println("\n?? DIFFICULTY LEVELS")
-	fmt.Println("? Easy: $500k, 20% events, 3% volatility")
-	fmt.Println("? Medium: $250k, 30% events, 5% volatility")
-	fmt.Println("? Hard: $150k, 40% events, 7% volatility")
-	fmt.Println("? Expert: $100k, 50% events, 10% volatility, 90 turns")
+	yellow.Printf("\n%s DIFFICULTY LEVELS\n", ascii.Shield)
+	fmt.Printf("%s Easy: $500k, 20%% events, 3%% volatility\n", ascii.Check)
+	fmt.Printf("%s Medium: $250k, 30%% events, 5%% volatility\n", ascii.Star)
+	fmt.Printf("%s Hard: $150k, 40%% events, 7%% volatility\n", ascii.Warning)
+	fmt.Printf("%s Expert: $100k, 50%% events, 10%% volatility, 90 turns\n", ascii.Zap)
 	
-	yellow.Println("\n?? ANALYTICS")
+	yellow.Printf("\n%s ANALYTICS\n", ascii.Chart)
 	fmt.Println("After each game, view detailed portfolio analytics:")
-	fmt.Println("? Best/Worst performers")
-	fmt.Println("? Sector breakdown")
-	fmt.Println("? Win/loss ratio")
-	fmt.Println("? Investment distribution")
+	fmt.Printf("%s Best/Worst performers\n", ascii.Medal)
+	fmt.Printf("%s Sector breakdown\n", ascii.Building)
+	fmt.Printf("%s Win/loss ratio\n", ascii.Trophy)
+	fmt.Printf("%s Investment distribution\n", ascii.Portfolio)
 	
-	yellow.Println("\n?? AVAILABLE COMPANIES")
+	yellow.Printf("\n%s AVAILABLE COMPANIES\n", ascii.Building)
 	fmt.Println("20 diverse startups across 12+ sectors:")
-	fmt.Println("FinTech ? BioTech ? CleanTech ? HealthTech ? EdTech")
-	fmt.Println("Robotics ? Security ? Gaming ? LegalTech ? AgriTech")
-	fmt.Println("Logistics ? IoT ? Creative ? CloudTech ? and more!")
+	fmt.Println("FinTech • BioTech • CleanTech • HealthTech • EdTech")
+	fmt.Println("Robotics • Security • Gaming • LegalTech • AgriTech")
+	fmt.Println("Logistics • IoT • Creative • CloudTech • and more!")
 	
-	yellow.Println("\n?? RANDOM EVENTS")
+	yellow.Printf("\n%s RANDOM EVENTS\n", ascii.News)
 	fmt.Println("60+ possible events can affect your companies:")
-	fmt.Println("? Funding rounds (Series A/B, IPO)")
-	fmt.Println("? Product launches (success/failure)")
-	fmt.Println("? Partnerships & acquisitions")
-	fmt.Println("? Scandals & regulatory issues")
-	fmt.Println("? Market conditions & competition")
+	fmt.Printf("%s Funding rounds (Series A/B, IPO)\n", ascii.Money)
+	fmt.Printf("%s Product launches (success/failure)\n", ascii.Rocket)
+	fmt.Printf("%s Partnerships & acquisitions\n", ascii.Building)
+	fmt.Printf("%s Scandals & regulatory issues\n", ascii.Warning)
+	fmt.Printf("%s Market conditions & competition\n", ascii.Chart)
 	
-	yellow.Println("\n?? STRATEGY TIPS")
-	fmt.Println("? Diversify: Don't put everything in one company")
-	fmt.Println("? Balance: Mix high-risk and low-risk investments")
-	fmt.Println("? Sectors: Different industries perform differently")
-	fmt.Println("? Research: Read company metrics carefully")
-	fmt.Println("? Patience: Some companies take time to grow")
+	yellow.Printf("\n%s STRATEGY TIPS\n", ascii.Lightbulb)
+	fmt.Printf("%s Diversify: Don't put everything in one company\n", ascii.Portfolio)
+	fmt.Printf("%s Balance: Mix high-risk and low-risk investments\n", ascii.Shield)
+	fmt.Printf("%s Sectors: Different industries perform differently\n", ascii.Building)
+	fmt.Printf("%s Research: Read company metrics carefully\n", ascii.Star)
+	fmt.Printf("%s Patience: Some companies take time to grow\n", ascii.Calendar)
 	
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	fmt.Print("\nPress 'Enter' to return to menu...")
