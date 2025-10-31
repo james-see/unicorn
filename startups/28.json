@@ -1,0 +1,14 @@
+{
+    "name": "MarsColony",
+    "description": "Space colonization technology - extremely speculative",
+    "category": "Robotics",
+    "valuation": 150,
+    "grossburnrate": 60,
+    "Monthly Activation Rate": 2,
+    "Monthly Active Visitors": 200,
+    "Monthly Sales": 1,
+    "Cost": 100000,
+    "Sale Price": 2000000,
+    "Percent Margin Per Unit": 90
+}
+

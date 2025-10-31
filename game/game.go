@@ -133,11 +133,13 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 	return gs
 }
 
-// LoadStartups loads all startup companies from JSON files
+// LoadStartups loads 15 randomly selected startup companies from 30 available JSON files
 func (gs *GameState) LoadStartups() {
 	gs.AvailableStartups = []Startup{}
+	allStartups := []Startup{}
 	
-	for i := 1; i <= 20; i++ {
+	// Load all 30 startups
+	for i := 1; i <= 30; i++ {
 		var startup Startup
 		jsonFile, err := os.Open(fmt.Sprintf("startups/%d.json", i))
 		if err != nil {
@@ -159,7 +161,18 @@ func (gs *GameState) LoadStartups() {
 		startup.RiskScore = gs.calculateRiskScore(&startup)
 		startup.GrowthPotential = gs.calculateGrowthPotential(&startup)
 		
-		gs.AvailableStartups = append(gs.AvailableStartups, startup)
+		allStartups = append(allStartups, startup)
+	}
+	
+	// Randomly select 15 from the 30 startups
+	if len(allStartups) > 15 {
+		// Shuffle and take first 15
+		rand.Shuffle(len(allStartups), func(i, j int) {
+			allStartups[i], allStartups[j] = allStartups[j], allStartups[i]
+		})
+		gs.AvailableStartups = allStartups[:15]
+	} else {
+		gs.AvailableStartups = allStartups
 	}
 }
 
@@ -321,19 +334,36 @@ func (gs *GameState) GetFinalScore() (netWorth int64, roi float64, successfulExi
 func (gs *GameState) calculateRiskScore(s *Startup) float64 {
 	risk := 0.5
 	
-	// High burn rate = higher risk
-	if s.GrossBurnRate > 10 {
+	// Very high burn rate = VERY HIGH risk
+	if s.GrossBurnRate > 40 {
+		risk += 0.4
+	} else if s.GrossBurnRate > 20 {
+		risk += 0.3
+	} else if s.GrossBurnRate > 10 {
 		risk += 0.2
+	} else if s.GrossBurnRate <= 3 {
+		// Low burn rate = lower risk
+		risk -= 0.2
 	}
 	
-	// Low sales = higher risk
-	if s.MonthlySales < 50 {
+	// Very low sales = VERY HIGH risk
+	if s.MonthlySales < 5 {
+		risk += 0.4
+	} else if s.MonthlySales < 20 {
+		risk += 0.3
+	} else if s.MonthlySales < 50 {
 		risk += 0.2
+	} else if s.MonthlySales > 300 {
+		// High sales = lower risk
+		risk -= 0.2
 	}
 	
 	// Ensure 0-1 range
 	if risk > 1.0 {
 		risk = 1.0
+	}
+	if risk < 0.0 {
+		risk = 0.0
 	}
 	
 	return risk
@@ -342,19 +372,39 @@ func (gs *GameState) calculateRiskScore(s *Startup) float64 {
 func (gs *GameState) calculateGrowthPotential(s *Startup) float64 {
 	growth := 0.5
 	
-	// High activation rate = good growth
-	if s.MonthlyActivationRate > 100 {
+	// Very high margins = VERY HIGH growth potential
+	if s.PercentMargin > 80 {
+		growth += 0.3
+	} else if s.PercentMargin > 60 {
+		growth += 0.25
+	} else if s.PercentMargin > 40 {
 		growth += 0.2
+	} else if s.PercentMargin > 25 {
+		growth += 0.1
 	}
 	
-	// Good margins = good growth
-	if s.PercentMargin > 25 {
+	// Very high valuation suggests high growth potential
+	if s.Valuation > 100000000 {
 		growth += 0.2
+	} else if s.Valuation > 50000000 {
+		growth += 0.15
+	} else if s.Valuation > 30000000 {
+		growth += 0.1
+	}
+	
+	// High activation rate = good growth
+	if s.MonthlyActivationRate > 150 {
+		growth += 0.15
+	} else if s.MonthlyActivationRate > 100 {
+		growth += 0.1
 	}
 	
 	// Ensure 0-1 range
 	if growth > 1.0 {
 		growth = 1.0
+	}
+	if growth < 0.0 {
+		growth = 0.0
 	}
 	
 	return growth

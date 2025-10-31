@@ -12,6 +12,7 @@ import (
 	"github.com/fatih/color"
 	achievements "github.com/jamesacampbell/unicorn/achievements"
 	ascii "github.com/jamesacampbell/unicorn/ascii"
+
 	// analytics "github.com/jamesacampbell/unicorn/analytics"
 	clear "github.com/jamesacampbell/unicorn/clear"
 	db "github.com/jamesacampbell/unicorn/database"
@@ -57,35 +58,35 @@ func loadConfig() gameData {
 func askForAutomatedMode() bool {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-	
+
 	cyan.Println("\n" + strings.Repeat("=", 60))
 	cyan.Println("                 GAME MODE SELECTION")
 	cyan.Println(strings.Repeat("=", 60))
-	
+
 	yellow.Println("\n1. Manual Mode (Press Enter each turn)")
 	yellow.Println("2. Automated Mode (1 second per turn)")
-	
+
 	fmt.Print("\nEnter your choice (1-2, default 1): ")
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
-	
+
 	return choice == "2"
 }
 
 func displayWelcome(username string, difficulty game.Difficulty) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-	
+
 	cyan.Printf("\n%s, welcome to your investment journey!\n", username)
 	fmt.Printf("\nDifficulty: ")
 	yellow.Printf("%s\n", difficulty.Name)
 	fmt.Printf("Starting Cash: $%s\n", formatMoney(difficulty.StartingCash))
 	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
-	
+
 	fmt.Println("\nEach turn = 1 month. Choose your investments wisely!")
 	fmt.Println("Random events will affect valuations throughout the game.")
-	
+
 	fmt.Print("\nPress 'Enter' to see available startups...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
@@ -93,7 +94,7 @@ func displayWelcome(username string, difficulty game.Difficulty) {
 func displayStartup(s game.Startup, index int) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-	
+
 	cyan.Printf("\n[%d] %s\n", index+1, s.Name)
 	fmt.Printf("    %s\n", s.Description)
 	yellow.Printf("    Category: %s\n", s.Category)
@@ -101,23 +102,32 @@ func displayStartup(s game.Startup, index int) {
 	fmt.Printf("    Monthly Sales: %d units\n", s.MonthlySales)
 	fmt.Printf("    Margin: %d%%\n", s.PercentMargin)
 	fmt.Printf("    Website Visitors: %s/month\n", formatNumber(s.MonthlyWebsiteVisitors))
-	
+
 	// Risk indicator
 	riskColor := color.New(color.FgGreen)
 	riskLabel := "Low"
-	if s.RiskScore > 0.6 {
+	if s.RiskScore > 0.85 {
+		riskColor = color.New(color.FgRed, color.Bold)
+		riskLabel = "VERY HIGH"
+	} else if s.RiskScore > 0.6 {
 		riskColor = color.New(color.FgRed)
 		riskLabel = "High"
 	} else if s.RiskScore > 0.4 {
 		riskColor = color.New(color.FgYellow)
 		riskLabel = "Medium"
+	} else if s.RiskScore < 0.3 {
+		riskColor = color.New(color.FgGreen, color.Bold)
+		riskLabel = "LOW"
 	}
 	riskColor.Printf("    Risk: %s", riskLabel)
-	
+
 	// Growth indicator
 	growthColor := color.New(color.FgGreen)
 	growthLabel := "High"
-	if s.GrowthPotential < 0.4 {
+	if s.GrowthPotential > 0.85 {
+		growthColor = color.New(color.FgGreen, color.Bold)
+		growthLabel = "VERY HIGH"
+	} else if s.GrowthPotential < 0.4 {
 		growthColor = color.New(color.FgRed)
 		growthLabel = "Low"
 	} else if s.GrowthPotential < 0.6 {
@@ -136,7 +146,15 @@ func investmentPhase(gs *game.GameState) {
 	fmt.Printf("Cash Available: $%s\n", formatMoney(gs.Portfolio.Cash))
 	fmt.Printf("Portfolio Value: $%s\n", formatMoney(gs.GetPortfolioValue()))
 	fmt.Printf("Net Worth: $%s\n", formatMoney(gs.Portfolio.NetWorth))
-	
+
+	// Calculate and display total company valuation
+	totalValuation := int64(0)
+	for _, startup := range gs.AvailableStartups {
+		totalValuation += startup.Valuation
+	}
+	yellow := color.New(color.FgYellow)
+	yellow.Printf("Total Company Valuation: $%s\n", formatMoney(totalValuation))
+
 	// Show available startups
 	fmt.Println("\n" + strings.Repeat("=", 50))
 	fmt.Println("AVAILABLE STARTUPS:")
@@ -144,34 +162,34 @@ func investmentPhase(gs *game.GameState) {
 		displayStartup(startup, i)
 	}
 	fmt.Println(strings.Repeat("=", 50))
-	
+
 	reader := bufio.NewReader(os.Stdin)
-	
+
 	for {
 		fmt.Printf("\nEnter company number (1-%d) to invest, or 'done' to continue: ", len(gs.AvailableStartups))
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
-		
+
 		if input == "done" || input == "" {
 			break
 		}
-		
+
 		companyNum, err := strconv.Atoi(input)
 		if err != nil || companyNum < 1 || companyNum > len(gs.AvailableStartups) {
 			color.Red("Invalid company number!")
 			continue
 		}
-		
+
 		fmt.Printf("Enter investment amount ($): ")
 		amountStr, _ := reader.ReadString('\n')
 		amountStr = strings.TrimSpace(amountStr)
 		amount, err := strconv.ParseInt(amountStr, 10, 64)
-		
+
 		if err != nil {
 			color.Red("Invalid amount!")
 			continue
 		}
-		
+
 		err = gs.MakeInvestment(companyNum-1, amount)
 		if err != nil {
 			color.Red("Error: %v", err)
@@ -183,25 +201,30 @@ func investmentPhase(gs *game.GameState) {
 }
 
 func playTurn(gs *game.GameState, autoMode bool) {
-	clear.ClearIt()
 	yellow := color.New(color.FgYellow, color.Bold)
 	cyan := color.New(color.FgCyan, color.Bold)
+
+	// Print separator line instead of clearing screen
+	fmt.Println(strings.Repeat("=", 70))
 	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
-	
+
 	messages := gs.ProcessTurn()
-	
+
 	if len(messages) > 0 {
 		cyan.Print(ascii.NewsHeader)
 		for _, msg := range messages {
 			fmt.Println(msg)
 		}
+		fmt.Println() // Add spacing after news
 	}
-	
+
 	// Show portfolio status
 	cyan.Print(ascii.PortfolioHeader)
 	if len(gs.Portfolio.Investments) == 0 {
 		fmt.Println("   No investments yet")
 	} else {
+		// Calculate total company valuation
+		totalCompanyValuation := int64(0)
 		for _, inv := range gs.Portfolio.Investments {
 			value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
 			profit := value - inv.AmountInvested
@@ -211,17 +234,26 @@ func playTurn(gs *game.GameState, autoMode bool) {
 				profitColor = color.New(color.FgRed)
 				profitSign = ""
 			}
-			
-			fmt.Printf("   %s: $%s invested, %.2f%% equity\n", 
+
+			fmt.Printf("   %s: $%s invested, %.2f%% equity\n",
 				inv.CompanyName, formatMoney(inv.AmountInvested), inv.EquityPercent)
 			fmt.Printf("      Current Value: $%s ", formatMoney(value))
 			profitColor.Printf("(%s$%s)\n", profitSign, formatMoney(abs(profit)))
+
+			totalCompanyValuation += inv.CurrentValuation
 		}
+
+		// Display total company valuation
+		yellow.Printf("\n   Total Company Valuation: $%s\n", formatMoney(totalCompanyValuation))
 	}
-	
+
 	fmt.Printf("\n%s Net Worth: $%s\n", ascii.Money, formatMoney(gs.Portfolio.NetWorth))
-	
-	if autoMode {
+
+	// Always wait for user input when there are news messages, otherwise use auto mode logic
+	if len(messages) > 0 {
+		fmt.Print("\nPress 'Enter' to continue to next month...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+	} else if autoMode {
 		time.Sleep(1 * time.Second)
 	} else {
 		fmt.Print("\nPress 'Enter' to continue to next month...")
@@ -232,32 +264,32 @@ func playTurn(gs *game.GameState, autoMode bool) {
 func displayFinalScore(gs *game.GameState) {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
-	
+
 	cyan.Print(ascii.GameOverHeader)
-	
+
 	netWorth, roi, successfulExits := gs.GetFinalScore()
-	
+
 	fmt.Printf("\n%s Player: %s\n", ascii.Star, gs.PlayerName)
 	fmt.Printf("%s Turns Played: %d\n\n", ascii.Calendar, gs.Portfolio.Turn-1)
-	
+
 	green := color.New(color.FgGreen, color.Bold)
 	green.Printf("%s Final Net Worth: $%s\n", ascii.Money, formatMoney(netWorth))
-	
+
 	roiColor := color.New(color.FgGreen)
 	if roi < 0 {
 		roiColor = color.New(color.FgRed)
 	}
 	roiColor.Printf("%s Return on Investment: %.2f%%\n", ascii.Chart, roi)
 	fmt.Printf("%s Successful Exits (5x+): %d\n", ascii.Rocket, successfulExits)
-	
+
 	fmt.Println("\n" + strings.Repeat("═", 50))
 	fmt.Println("FINAL PORTFOLIO:")
 	for _, inv := range gs.Portfolio.Investments {
 		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
-		fmt.Printf("   %s: $%s → $%s\n", 
+		fmt.Printf("   %s: $%s → $%s\n",
 			inv.CompanyName, formatMoney(inv.AmountInvested), formatMoney(value))
 	}
-	
+
 	// Performance rating
 	fmt.Println("\n" + strings.Repeat("═", 50))
 	var rating string
@@ -281,7 +313,7 @@ func displayFinalScore(gs *game.GameState) {
 		rating = "Lost Money - Better Luck Next Time"
 		icon = ascii.Warning
 	}
-	
+
 	yellow := color.New(color.FgYellow, color.Bold)
 	yellow.Printf("Rating: %s %s\n", icon, rating)
 	fmt.Println(strings.Repeat("═", 50) + "\n")
@@ -296,12 +328,12 @@ func main() {
 		time.Sleep(2 * time.Second)
 	}
 	defer db.CloseDB()
-	
+
 	// Main menu loop
 	for {
 		choice := displayMainMenu()
 		clear.ClearIt()
-		
+
 		switch choice {
 		case "1":
 			playNewGame()
@@ -325,24 +357,24 @@ func main() {
 
 func displayMainMenu() string {
 	clear.ClearIt()
-	
+
 	// Display unicorn logo
 	cyan := color.New(color.FgCyan, color.Bold)
 	logo.InitLogo(cyan)
-	
+
 	yellow := color.New(color.FgYellow)
-	
+
 	cyan.Println("\n" + strings.Repeat("=", 50))
 	cyan.Println("           ★ UNICORN - MAIN MENU ★")
 	cyan.Println(strings.Repeat("=", 50))
-	
+
 	yellow.Println("\n1. New Game")
 	yellow.Println("2. Leaderboards")
 	yellow.Println("3. Player Statistics")
 	yellow.Println("4. Achievements")
 	yellow.Println("5. Help & Info")
 	yellow.Println("6. Quit")
-	
+
 	fmt.Print("\nEnter your choice: ")
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
@@ -356,36 +388,36 @@ func selectDifficulty() game.Difficulty {
 	yellow := color.New(color.FgYellow)
 	red := color.New(color.FgRed)
 	magenta := color.New(color.FgMagenta)
-	
+
 	cyan.Println("\n" + strings.Repeat("=", 60))
 	cyan.Println("                 SELECT DIFFICULTY")
 	cyan.Println(strings.Repeat("=", 60))
-	
+
 	green.Printf("\n1. Easy")
 	fmt.Printf(" - %s\n", game.EasyDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n", 
+	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
 		formatMoney(game.EasyDifficulty.StartingCash), game.EasyDifficulty.MaxTurns)
-	
+
 	yellow.Printf("\n2. Medium")
 	fmt.Printf(" - %s\n", game.MediumDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n", 
+	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
 		formatMoney(game.MediumDifficulty.StartingCash), game.MediumDifficulty.MaxTurns)
-	
+
 	red.Printf("\n3. Hard")
 	fmt.Printf(" - %s\n", game.HardDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n", 
+	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
 		formatMoney(game.HardDifficulty.StartingCash), game.HardDifficulty.MaxTurns)
-	
+
 	magenta.Printf("\n4. Expert")
 	fmt.Printf(" - %s\n", game.ExpertDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n", 
+	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
 		formatMoney(game.ExpertDifficulty.StartingCash), game.ExpertDifficulty.MaxTurns)
-	
+
 	fmt.Print("\nEnter your choice (1-4): ")
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
-	
+
 	switch choice {
 	case "1":
 		return game.EasyDifficulty
@@ -402,32 +434,32 @@ func playNewGame() {
 	// Get username
 	username := initMenu()
 	clear.ClearIt()
-	
+
 	// Select difficulty
 	difficulty := selectDifficulty()
 	clear.ClearIt()
-	
+
 	// Ask for automated mode
 	autoMode := askForAutomatedMode()
 	clear.ClearIt()
-	
+
 	// Display welcome and rules
 	displayWelcome(username, difficulty)
-	
+
 	// Initialize game
 	gs := game.NewGame(username, difficulty)
-	
+
 	// Investment phase at start
 	investmentPhase(gs)
-	
+
 	// Main game loop
 	for !gs.IsGameOver() {
 		playTurn(gs, autoMode)
 	}
-	
+
 	// Show final score
 	displayFinalScore(gs)
-	
+
 	// Save score to database
 	netWorth, roi, successfulExits := gs.GetFinalScore()
 	score := db.GameScore{
@@ -439,17 +471,17 @@ func playNewGame() {
 		Difficulty:      gs.Difficulty.Name,
 		PlayedAt:        time.Now(),
 	}
-	
-		err := db.SaveGameScore(score)
-		if err != nil {
-			color.Yellow("\nWarning: Could not save score: %v", err)
-		} else {
-			color.Green("\n%s Score saved to leaderboard!", ascii.Check)
-		}
-	
+
+	err := db.SaveGameScore(score)
+	if err != nil {
+		color.Yellow("\nWarning: Could not save score: %v", err)
+	} else {
+		color.Green("\n%s Score saved to leaderboard!", ascii.Check)
+	}
+
 	// Check for achievements
 	checkAndUnlockAchievements(gs)
-	
+
 	fmt.Print("\nPress 'Enter' to return to main menu...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
@@ -460,17 +492,17 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 	if err != nil {
 		previouslyUnlocked = []string{}
 	}
-	
+
 	// Get player stats
 	stats, _ := db.GetPlayerStats(gs.PlayerName)
 	winStreak, _ := db.GetWinStreak(gs.PlayerName)
-	
+
 	// Count sectors and get investment details
 	sectors := make(map[string]bool)
 	positiveCount := 0
 	negativeCount := 0
 	totalInvested := int64(0)
-	
+
 	for _, inv := range gs.Portfolio.Investments {
 		totalInvested += inv.AmountInvested
 		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
@@ -479,7 +511,7 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		} else if value < inv.AmountInvested {
 			negativeCount++
 		}
-		
+
 		// Find sector
 		for _, startup := range gs.AvailableStartups {
 			if startup.Name == inv.CompanyName {
@@ -488,14 +520,14 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 			}
 		}
 	}
-	
+
 	sectorsInvested := []string{}
 	for sector := range sectors {
 		sectorsInvested = append(sectorsInvested, sector)
 	}
-	
+
 	netWorth, roi, successfulExits := gs.GetFinalScore()
-	
+
 	// Build game stats for achievement checking
 	gameStats := achievements.GameStats{
 		FinalNetWorth:       netWorth,
@@ -514,23 +546,23 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		BestNetWorth:        stats.BestNetWorth,
 		TotalExits:          stats.TotalExits,
 	}
-	
+
 	// Check for new achievements
 	newAchievements := achievements.CheckAchievements(gameStats, previouslyUnlocked)
-	
+
 	// Save and display new achievements
 	if len(newAchievements) > 0 {
 		cyan := color.New(color.FgCyan, color.Bold)
 		yellow := color.New(color.FgYellow)
-		
+
 		fmt.Println("\n" + strings.Repeat("═", 60))
 		cyan.Printf("     %s NEW ACHIEVEMENTS UNLOCKED! %s\n", ascii.Star, ascii.Star)
 		fmt.Println(strings.Repeat("═", 60))
-		
+
 		for _, ach := range newAchievements {
 			// Save to database
 			db.UnlockAchievement(gs.PlayerName, ach.ID)
-			
+
 			// Display
 			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
 			fmt.Printf("\n%s  ", ach.Icon)
@@ -539,7 +571,7 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 			yellow.Printf("   %s\n", ach.Description)
 			fmt.Printf("   +%d points\n", ach.Points)
 		}
-		
+
 		// Calculate new career level
 		totalPoints := 0
 		allUnlocked, _ := db.GetPlayerAchievements(gs.PlayerName)
@@ -548,9 +580,9 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 				totalPoints += ach.Points
 			}
 		}
-		
+
 		level, title, _ := achievements.CalculateCareerLevel(totalPoints)
-		
+
 		fmt.Println("\n" + strings.Repeat("=", 60))
 		fmt.Printf("Career Level: ")
 		yellow.Printf("%d - %s", level, title)
@@ -563,9 +595,9 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 func displayLeaderboards() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
-	
+
 	cyan.Print(ascii.LeaderboardHeader)
-	
+
 	fmt.Println("\n1. By Net Worth (All Difficulties)")
 	fmt.Println("2. By ROI (All Difficulties)")
 	fmt.Println("3. Easy Difficulty")
@@ -574,14 +606,14 @@ func displayLeaderboards() {
 	fmt.Println("6. Expert Difficulty")
 	fmt.Println("7. Recent Games")
 	fmt.Println("8. Back to Main Menu")
-	
+
 	fmt.Print("\nEnter your choice: ")
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
-	
+
 	clear.ClearIt()
-	
+
 	switch choice {
 	case "1":
 		showTopScores("net_worth", "all")
@@ -600,7 +632,7 @@ func displayLeaderboards() {
 	case "8":
 		return
 	}
-	
+
 	fmt.Print("\nPress 'Enter' to continue...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 	displayLeaderboards()
@@ -609,11 +641,11 @@ func displayLeaderboards() {
 func showTopScores(sortBy string, difficulty string) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-	
+
 	var scores []db.GameScore
 	var err error
 	var title string
-	
+
 	if sortBy == "roi" {
 		scores, err = db.GetTopScoresByROI(10, difficulty)
 		title = "TOP 10 BY ROI"
@@ -621,29 +653,29 @@ func showTopScores(sortBy string, difficulty string) {
 		scores, err = db.GetTopScoresByNetWorth(10, difficulty)
 		title = "TOP 10 BY NET WORTH"
 	}
-	
+
 	if difficulty != "all" && difficulty != "" {
 		title += fmt.Sprintf(" (%s)", strings.ToUpper(difficulty))
 	}
-	
+
 	if err != nil {
 		color.Red("Error loading leaderboard: %v", err)
 		return
 	}
-	
+
 	cyan.Println("\n" + strings.Repeat("=", 90))
 	cyan.Printf("%-40s\n", title)
 	cyan.Println(strings.Repeat("=", 90))
-	
+
 	if len(scores) == 0 {
 		yellow.Println("\nNo games played yet! Be the first!")
 		return
 	}
-	
-	fmt.Printf("\n%-5s %-20s %-15s %-15s %-10s %-12s\n", 
+
+	fmt.Printf("\n%-5s %-20s %-15s %-15s %-10s %-12s\n",
 		"RANK", "PLAYER", "NET WORTH", "ROI", "EXITS", "DIFFICULTY")
 	fmt.Println(strings.Repeat("-", 90))
-	
+
 	for i, score := range scores {
 		rankColor := color.New(color.FgWhite)
 		if i == 0 {
@@ -653,12 +685,12 @@ func showTopScores(sortBy string, difficulty string) {
 		} else if i == 2 {
 			rankColor = color.New(color.FgGreen)
 		}
-		
+
 		roiColor := color.New(color.FgGreen)
 		if score.ROI < 0 {
 			roiColor = color.New(color.FgRed)
 		}
-		
+
 		rankColor.Printf("%-5d ", i+1)
 		fmt.Printf("%-20s ", truncateString(score.PlayerName, 20))
 		fmt.Printf("$%-14s ", formatMoney(score.FinalNetWorth))
@@ -671,32 +703,32 @@ func showTopScores(sortBy string, difficulty string) {
 func showRecentGames() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-	
+
 	scores, err := db.GetRecentGames(10)
 	if err != nil {
 		color.Red("Error loading recent games: %v", err)
 		return
 	}
-	
+
 	cyan.Println("\n" + strings.Repeat("=", 90))
 	cyan.Println("                           RECENT GAMES")
 	cyan.Println(strings.Repeat("=", 90))
-	
+
 	if len(scores) == 0 {
 		yellow.Println("\nNo games played yet!")
 		return
 	}
-	
-	fmt.Printf("\n%-20s %-15s %-15s %-12s %-20s\n", 
+
+	fmt.Printf("\n%-20s %-15s %-15s %-12s %-20s\n",
 		"PLAYER", "NET WORTH", "ROI", "DIFFICULTY", "DATE")
 	fmt.Println(strings.Repeat("-", 90))
-	
+
 	for _, score := range scores {
 		roiColor := color.New(color.FgGreen)
 		if score.ROI < 0 {
 			roiColor = color.New(color.FgRed)
 		}
-		
+
 		fmt.Printf("%-20s ", truncateString(score.PlayerName, 20))
 		fmt.Printf("$%-14s ", formatMoney(score.FinalNetWorth))
 		roiColor.Printf("%-15s ", fmt.Sprintf("%.1f%%", score.ROI))
@@ -708,65 +740,65 @@ func showRecentGames() {
 func displayPlayerStats() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
-	
+
 	cyan.Println("\n" + strings.Repeat("═", 50))
 	cyan.Println("           PLAYER STATISTICS")
 	cyan.Println(strings.Repeat("═", 50))
-	
+
 	fmt.Print("\nEnter player name: ")
 	reader := bufio.NewReader(os.Stdin)
 	playerName, _ := reader.ReadString('\n')
 	playerName = strings.TrimSpace(playerName)
-	
+
 	if playerName == "" {
 		color.Red("Invalid player name!")
 		time.Sleep(1 * time.Second)
 		return
 	}
-	
+
 	stats, err := db.GetPlayerStats(playerName)
 	if err != nil {
 		color.Red("Error loading stats: %v", err)
 		time.Sleep(2 * time.Second)
 		return
 	}
-	
+
 	if stats.TotalGames == 0 {
 		color.Yellow("\nNo games found for player: %s", playerName)
 		fmt.Print("\nPress 'Enter' to continue...")
 		bufio.NewReader(os.Stdin).ReadBytes('\n')
 		return
 	}
-	
+
 	clear.ClearIt()
 	cyan.Println("\n" + strings.Repeat("=", 50))
 	cyan.Printf("    STATS FOR: %s\n", strings.ToUpper(playerName))
 	cyan.Println(strings.Repeat("=", 50))
-	
+
 	green := color.New(color.FgGreen, color.Bold)
-	
+
 	fmt.Printf("\n%s Total Games Played: ", ascii.Chart)
 	green.Printf("%d\n", stats.TotalGames)
-	
+
 	fmt.Printf("%s Best Net Worth: ", ascii.Money)
 	green.Printf("$%s\n", formatMoney(stats.BestNetWorth))
-	
+
 	fmt.Printf("%s Best ROI: ", ascii.Chart)
 	green.Printf("%.2f%%\n", stats.BestROI)
-	
+
 	fmt.Printf("%s Total Successful Exits: ", ascii.Rocket)
 	green.Printf("%d\n", stats.TotalExits)
-	
+
 	fmt.Printf("%s Average Net Worth: ", ascii.Coin)
 	green.Printf("$%.0f\n", stats.AverageNetWorth)
-	
+
 	fmt.Printf("%s Win Rate (Positive ROI): ", ascii.Trophy)
 	if stats.WinRate >= 50 {
 		green.Printf("%.1f%%\n", stats.WinRate)
 	} else {
 		color.New(color.FgYellow).Printf("%.1f%%\n", stats.WinRate)
 	}
-	
+
 	fmt.Print("\nPress 'Enter' to continue...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
@@ -777,9 +809,9 @@ func formatMoney(amount int64) string {
 	if abs < 0 {
 		abs = -abs
 	}
-	
+
 	s := strconv.FormatInt(abs, 10)
-	
+
 	// Add commas
 	n := len(s)
 	if n <= 3 {
@@ -788,7 +820,7 @@ func formatMoney(amount int64) string {
 		}
 		return s
 	}
-	
+
 	result := ""
 	for i, digit := range s {
 		if i > 0 && (n-i)%3 == 0 {
@@ -796,7 +828,7 @@ func formatMoney(amount int64) string {
 		}
 		result += string(digit)
 	}
-	
+
 	if amount < 0 {
 		return "-" + result
 	}
@@ -824,21 +856,21 @@ func truncateString(s string, maxLen int) string {
 func displayAchievementsMenu() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
-	
+
 	cyan.Print(ascii.AchievementsHeader)
-	
+
 	fmt.Println("\n1. View My Achievements")
 	fmt.Println("2. Browse All Achievements")
 	fmt.Println("3. Leaderboard (Most Achievements)")
 	fmt.Println("4. Back to Main Menu")
-	
+
 	fmt.Print("\nEnter your choice: ")
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
-	
+
 	clear.ClearIt()
-	
+
 	switch choice {
 	case "1":
 		viewPlayerAchievements()
@@ -849,7 +881,7 @@ func displayAchievementsMenu() {
 	case "4":
 		return
 	}
-	
+
 	fmt.Print("\nPress 'Enter' to continue...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 	displayAchievementsMenu()
@@ -858,33 +890,33 @@ func displayAchievementsMenu() {
 func viewPlayerAchievements() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-	
+
 	fmt.Print("\nEnter player name: ")
 	reader := bufio.NewReader(os.Stdin)
 	playerName, _ := reader.ReadString('\n')
 	playerName = strings.TrimSpace(playerName)
-	
+
 	if playerName == "" {
 		color.Red("Invalid player name!")
 		return
 	}
-	
+
 	unlocked, err := db.GetPlayerAchievements(playerName)
 	if err != nil {
 		color.Red("Error loading achievements: %v", err)
 		return
 	}
-	
+
 	clear.ClearIt()
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Printf("     ACHIEVEMENTS FOR: %s\n", strings.ToUpper(playerName))
 	cyan.Println(strings.Repeat("=", 70))
-	
+
 	// Calculate stats
 	totalAchievements := len(achievements.AllAchievements)
 	unlockedCount := len(unlocked)
 	progress := float64(unlockedCount) / float64(totalAchievements) * 100
-	
+
 	// Calculate total points
 	totalPoints := 0
 	for _, id := range unlocked {
@@ -892,10 +924,10 @@ func viewPlayerAchievements() {
 			totalPoints += ach.Points
 		}
 	}
-	
+
 	// Get career level
 	level, title, nextLevelPoints := achievements.CalculateCareerLevel(totalPoints)
-	
+
 	green := color.New(color.FgGreen, color.Bold)
 	fmt.Printf("\n%s Progress: %d/%d (%.1f%%)\n", ascii.Chart, unlockedCount, totalAchievements, progress)
 	fmt.Printf("%s Total Points: ", ascii.Coin)
@@ -905,12 +937,12 @@ func viewPlayerAchievements() {
 	if level < 10 {
 		fmt.Printf("%s Next Level: %d points needed\n", ascii.Target, nextLevelPoints-totalPoints)
 	}
-	
+
 	if unlockedCount == 0 {
 		yellow.Println("\nNo achievements unlocked yet. Keep playing!")
 		return
 	}
-	
+
 	// Group by category
 	categories := map[string][]achievements.Achievement{
 		achievements.CategoryWealth:      {},
@@ -920,18 +952,18 @@ func viewPlayerAchievements() {
 		achievements.CategoryChallenge:   {},
 		achievements.CategorySpecial:     {},
 	}
-	
+
 	unlockedMap := make(map[string]bool)
 	for _, id := range unlocked {
 		unlockedMap[id] = true
 	}
-	
+
 	for id, ach := range achievements.AllAchievements {
 		if unlockedMap[id] {
 			categories[ach.Category] = append(categories[ach.Category], ach)
 		}
 	}
-	
+
 	// Display by category
 	for _, category := range []string{
 		achievements.CategoryWealth,
@@ -945,7 +977,7 @@ func viewPlayerAchievements() {
 		if len(achs) == 0 {
 			continue
 		}
-		
+
 		fmt.Printf("\n%s:\n", category)
 		for _, ach := range achs {
 			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
@@ -958,11 +990,11 @@ func viewPlayerAchievements() {
 
 func browseAllAchievements() {
 	cyan := color.New(color.FgCyan, color.Bold)
-	
+
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Println("                  ALL ACHIEVEMENTS")
 	cyan.Println(strings.Repeat("=", 70))
-	
+
 	// Group by category
 	for _, category := range []string{
 		achievements.CategoryWealth,
@@ -976,10 +1008,10 @@ func browseAllAchievements() {
 		if len(achs) == 0 {
 			continue
 		}
-		
+
 		yellow := color.New(color.FgYellow, color.Bold)
 		yellow.Printf("\n%s:\n", category)
-		
+
 		for _, ach := range achs {
 			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
 			fmt.Printf("  %s ", ach.Icon)
@@ -987,17 +1019,17 @@ func browseAllAchievements() {
 			fmt.Printf(" [%s] - %s (+%d pts)\n", ach.Rarity, ach.Description, ach.Points)
 		}
 	}
-	
+
 	fmt.Printf("\n\nTotal Achievements: %d\n", len(achievements.AllAchievements))
 }
 
 func displayAchievementLeaderboard() {
 	cyan := color.New(color.FgCyan, color.Bold)
-	
+
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Println("            ACHIEVEMENT LEADERBOARD (Coming Soon)")
 	cyan.Println(strings.Repeat("=", 70))
-	
+
 	color.Yellow("\nThis feature will show players with the most achievements!")
 }
 
@@ -1005,53 +1037,56 @@ func displayHelpGuide() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-	
+
 	cyan.Println("\n" + strings.Repeat("═", 70))
 	cyan.Println("              HELP & INFORMATION")
 	cyan.Println(strings.Repeat("═", 70))
-	
+
 	yellow.Printf("\n%s GAME OVERVIEW\n", ascii.Lightbulb)
-	fmt.Println("You're a VC investor with limited capital. Invest in 20 startups")
-	fmt.Println("and watch your portfolio grow (or shrink) over 10 years.")
-	
+	fmt.Println("You're a VC investor with limited capital. Invest in 15 randomly")
+	fmt.Println("selected startups from a pool of 30 and watch your portfolio")
+	fmt.Println("grow (or shrink) over 10 years.")
+
 	yellow.Printf("\n%s HOW TO PLAY\n", ascii.Target)
 	fmt.Println("1. Select difficulty (Easy/Medium/Hard/Expert)")
-	fmt.Println("2. Review 20 available companies with metrics")
+	fmt.Println("2. Review 15 randomly selected companies (from 30 total)")
 	fmt.Println("3. Invest your capital across multiple startups")
 	fmt.Println("4. Watch events unfold each turn (1 turn = 1 month)")
 	fmt.Println("5. After 90-120 turns, see your final score")
-	
+
 	yellow.Printf("\n%s COMPANY METRICS\n", ascii.Building)
 	fmt.Printf("%s Risk Score: Low/Medium/High - chance of failure\n", ascii.Warning)
 	fmt.Printf("%s Growth Potential: Projected growth trajectory\n", ascii.Chart)
 	fmt.Printf("%s Valuation: Current company worth (in millions)\n", ascii.Money)
 	fmt.Printf("%s Category: Industry sector (FinTech, BioTech, etc.)\n", ascii.Star)
-	
+
 	yellow.Printf("\n%s SCORING\n", ascii.Trophy)
 	fmt.Printf("%s Net Worth: Cash + Portfolio Value\n", ascii.Money)
 	fmt.Printf("%s ROI: Return on Investment percentage\n", ascii.Chart)
 	fmt.Printf("%s Successful Exits: Companies that 5x or more\n", ascii.Rocket)
 	fmt.Printf("%s Rating: Based on ROI (Unicorn Hunter = 1000%%+)\n", ascii.Crown)
-	
+
 	yellow.Printf("\n%s DIFFICULTY LEVELS\n", ascii.Shield)
 	fmt.Printf("%s Easy: $500k, 20%% events, 3%% volatility\n", ascii.Check)
 	fmt.Printf("%s Medium: $250k, 30%% events, 5%% volatility\n", ascii.Star)
 	fmt.Printf("%s Hard: $150k, 40%% events, 7%% volatility\n", ascii.Warning)
 	fmt.Printf("%s Expert: $100k, 50%% events, 10%% volatility, 90 turns\n", ascii.Zap)
-	
+
 	yellow.Printf("\n%s ANALYTICS\n", ascii.Chart)
 	fmt.Println("After each game, view detailed portfolio analytics:")
 	fmt.Printf("%s Best/Worst performers\n", ascii.Medal)
 	fmt.Printf("%s Sector breakdown\n", ascii.Building)
 	fmt.Printf("%s Win/loss ratio\n", ascii.Trophy)
 	fmt.Printf("%s Investment distribution\n", ascii.Portfolio)
-	
+
 	yellow.Printf("\n%s AVAILABLE COMPANIES\n", ascii.Building)
-	fmt.Println("20 diverse startups across 12+ sectors:")
+	fmt.Println("30 diverse startups across 12+ sectors:")
+	fmt.Println("Each game randomly selects 15 companies from the pool.")
 	fmt.Println("FinTech • BioTech • CleanTech • HealthTech • EdTech")
 	fmt.Println("Robotics • Security • Gaming • LegalTech • AgriTech")
 	fmt.Println("Logistics • IoT • Creative • CloudTech • and more!")
-	
+	fmt.Println("Includes LOW risk stable companies and VERY HIGH risk moonshots!")
+
 	yellow.Printf("\n%s RANDOM EVENTS\n", ascii.News)
 	fmt.Println("60+ possible events can affect your companies:")
 	fmt.Printf("%s Funding rounds (Series A/B, IPO)\n", ascii.Money)
@@ -1059,14 +1094,14 @@ func displayHelpGuide() {
 	fmt.Printf("%s Partnerships & acquisitions\n", ascii.Building)
 	fmt.Printf("%s Scandals & regulatory issues\n", ascii.Warning)
 	fmt.Printf("%s Market conditions & competition\n", ascii.Chart)
-	
+
 	yellow.Printf("\n%s STRATEGY TIPS\n", ascii.Lightbulb)
 	fmt.Printf("%s Diversify: Don't put everything in one company\n", ascii.Portfolio)
 	fmt.Printf("%s Balance: Mix high-risk and low-risk investments\n", ascii.Shield)
 	fmt.Printf("%s Sectors: Different industries perform differently\n", ascii.Building)
 	fmt.Printf("%s Research: Read company metrics carefully\n", ascii.Star)
 	fmt.Printf("%s Patience: Some companies take time to grow\n", ascii.Calendar)
-	
+
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	fmt.Print("\nPress 'Enter' to return to menu...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
