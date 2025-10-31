@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🦄 Unicorn - VC Investment Game</title>
+    <meta name="description" content="Play as a VC and make bets on startups. Can you find the next unicorn?">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Flying Unicorns */
+        .unicorn {
+            position: fixed;
+            font-size: 2rem;
+            z-index: 1;
+            animation: float 20s infinite linear;
+            opacity: 0.7;
+        }
+
+        .unicorn:nth-child(1) { top: 10%; animation-duration: 15s; animation-delay: 0s; }
+        .unicorn:nth-child(2) { top: 30%; animation-duration: 20s; animation-delay: 2s; }
+        .unicorn:nth-child(3) { top: 50%; animation-duration: 18s; animation-delay: 4s; }
+        .unicorn:nth-child(4) { top: 70%; animation-duration: 22s; animation-delay: 1s; }
+        .unicorn:nth-child(5) { top: 20%; animation-duration: 25s; animation-delay: 3s; }
+        .unicorn:nth-child(6) { top: 60%; animation-duration: 16s; animation-delay: 5s; }
+
+        @keyframes float {
+            0% {
+                left: -100px;
+                transform: translateY(0) rotate(0deg);
+            }
+            50% {
+                transform: translateY(-30px) rotate(5deg);
+            }
+            100% {
+                left: calc(100% + 100px);
+                transform: translateY(0) rotate(0deg);
+            }
+        }
+
+        /* Sparkles */
+        .sparkle {
+            position: fixed;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            animation: sparkle 3s infinite;
+            z-index: 1;
+        }
+
+        @keyframes sparkle {
+            0%, 100% { 
+                opacity: 0;
+                transform: scale(0) rotate(0deg);
+            }
+            50% { 
+                opacity: 1;
+                transform: scale(1) rotate(180deg);
+            }
+        }
+
+        .sparkle:nth-child(7) { top: 15%; left: 20%; animation-delay: 0s; }
+        .sparkle:nth-child(8) { top: 35%; left: 40%; animation-delay: 1s; }
+        .sparkle:nth-child(9) { top: 55%; left: 60%; animation-delay: 2s; }
+        .sparkle:nth-child(10) { top: 75%; left: 80%; animation-delay: 1.5s; }
+        .sparkle:nth-child(11) { top: 25%; left: 70%; animation-delay: 0.5s; }
+        .sparkle:nth-child(12) { top: 65%; left: 30%; animation-delay: 2.5s; }
+
+        /* Content Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 3rem 0;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            font-size: 5rem;
+            line-height: 1;
+            margin-bottom: 1rem;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            margin-bottom: 1rem;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.3);
+            background: linear-gradient(45deg, #fff, #ffd700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tagline {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* Stats Bar */
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-badge {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: transform 0.3s ease, background 0.3s ease;
+            animation: fadeIn 1s ease-out;
+        }
+
+        .stat-badge:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Main Content Card */
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 3rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: fadeInUp 1s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card h2 {
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card p {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            opacity: 0.95;
+        }
+
+        /* Download Section */
+        .download-section {
+            text-align: center;
+            margin: 3rem 0;
+        }
+
+        .download-btn {
+            display: inline-block;
+            background: linear-gradient(45deg, #ffd700, #ffed4e);
+            color: #333;
+            padding: 1.5rem 3rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-size: 1.3rem;
+            font-weight: 700;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.4);
+            border: none;
+            cursor: pointer;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .download-btn:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(255, 215, 0, 0.6);
+            animation: none;
+        }
+
+        .platform-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .platform-btn {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.5rem;
+            border-radius: 30px;
+            text-decoration: none;
+            color: #fff;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .platform-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-3px);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Features Grid */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .feature {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+
+        .feature:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .feature h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature p {
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+
+        /* GitHub Link */
+        .github-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.75rem 1.5rem;
+            border-radius: 30px;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .github-link:hover {
+            background: rgba(0, 0, 0, 0.5);
+            transform: translateY(-3px);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            opacity: 0.8;
+        }
+
+        /* ASCII Art */
+        .ascii-art {
+            font-family: monospace;
+            font-size: 0.5rem;
+            line-height: 1;
+            white-space: pre;
+            color: #ffd700;
+            text-align: center;
+            margin: 2rem 0;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            .tagline { font-size: 1.2rem; }
+            .card { padding: 2rem; }
+            .logo { font-size: 3rem; }
+            .stats { gap: 1rem; }
+            .download-btn { padding: 1rem 2rem; font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Flying Unicorns -->
+    <div class="unicorn">🦄</div>
+    <div class="unicorn">🦄</div>
+    <div class="unicorn">🦄</div>
+    <div class="unicorn">🦄</div>
+    <div class="unicorn">🦄</div>
+    <div class="unicorn">🦄</div>
+    
+    <!-- Sparkles -->
+    <div class="sparkle"></div>
+    <div class="sparkle"></div>
+    <div class="sparkle"></div>
+    <div class="sparkle"></div>
+    <div class="sparkle"></div>
+    <div class="sparkle"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo">🦄</div>
+            <h1>UNICORN</h1>
+            <p class="tagline">Text-Based VC Investment Adventure</p>
+            
+            <div class="stats">
+                <a href="https://github.com/jamesacampbell/unicorn" target="_blank" class="stat-badge">
+                    ⭐ <strong>Star on GitHub</strong>
+                </a>
+                <div class="stat-badge">
+                    💰 <strong>35+ Achievements</strong>
+                </div>
+                <div class="stat-badge">
+                    🏢 <strong>20 Startups</strong>
+                </div>
+                <div class="stat-badge">
+                    🎮 <strong>60+ Events</strong>
+                </div>
+            </div>
+        </header>
+
+        <div class="card">
+            <h2>📈 What is Unicorn?</h2>
+            <p>
+                Start as a VC with $250,000 and invest in 20 different startups over 10 years (120 turns). 
+                Make strategic decisions, diversify your portfolio, and try to find the next unicorn! 
+                Will you become a Legendary Investor or lose it all?
+            </p>
+
+            <div class="ascii-art">               \
+                \\
+                 \%,     ,'     , ,.
+                  \%\,';/J,";";";;,,.
+     ~.------------\%;((`);)));`;;,.,-----------,~
+    ~~:           ,`;@)((;`,`((;(;;);;,`         :~~
+   ~~ :           ;`(@```))`~ ``; );(;));;,      : ~~
+  ~~  :            `X `(( `),    (;;);;;;`       :  ~~
+ ~~~~ :            / `) `` /;~   `;;;;;;;);,     :  ~~~~
+~~~~  :           / , ` ,/` /     (`;;(;;;;,     : ~~~~
+  ~~~ :          (o  /]_/` /     ,);;;`;;;;;`,,  : ~~~
+   ~~ :           `~` `~`  `      ``;,  ``;" ';, : ~~
+    ~~:                             `'   `'  `'  :~~
+     ~`-----------------------------------------`~</div>
+        </div>
+
+        <div class="card download-section">
+            <h2>🚀 Download Latest Release</h2>
+            <p style="margin-bottom: 2rem;">Get started with Unicorn and begin your VC adventure!</p>
+            
+            <a href="https://github.com/jamesacampbell/unicorn/releases/latest" class="download-btn">
+                ⬇️ Download Latest Release
+            </a>
+
+            <div class="platform-links">
+                <a href="https://github.com/jamesacampbell/unicorn/releases/latest/download/unicorn-darwin-amd64" class="platform-btn">
+                    🍎 macOS (Intel)
+                </a>
+                <a href="https://github.com/jamesacampbell/unicorn/releases/latest/download/unicorn-darwin-arm64" class="platform-btn">
+                    🍎 macOS (Apple Silicon)
+                </a>
+                <a href="https://github.com/jamesacampbell/unicorn/releases/latest/download/unicorn-linux-amd64" class="platform-btn">
+                    🐧 Linux
+                </a>
+                <a href="https://github.com/jamesacampbell/unicorn/releases/latest/download/unicorn-windows-amd64.exe" class="platform-btn">
+                    🪟 Windows
+                </a>
+            </div>
+
+            <p style="margin-top: 2rem; opacity: 0.8;">
+                Or build from source: <code style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 5px;">go get github.com/jamesacampbell/unicorn</code>
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>✨ Features</h2>
+            <div class="features">
+                <div class="feature">
+                    <h3>🎮 Core Gameplay</h3>
+                    <p>Invest in 20 startups, track your portfolio in real-time, and experience 60+ random events</p>
+                </div>
+                <div class="feature">
+                    <h3>🏆 Difficulty Levels</h3>
+                    <p>Choose from Easy, Medium, Hard, or Expert mode. Each with unique challenges and rewards</p>
+                </div>
+                <div class="feature">
+                    <h3>📊 Leaderboards</h3>
+                    <p>Compete globally! Track top 10 scores by net worth or ROI with difficulty filters</p>
+                </div>
+                <div class="feature">
+                    <h3>🎯 35+ Achievements</h3>
+                    <p>Unlock achievements across 6 categories from Common to Legendary rarity</p>
+                </div>
+                <div class="feature">
+                    <h3>📈 Career Progression</h3>
+                    <p>Level up from Intern to Legendary Investor with 11 career levels</p>
+                </div>
+                <div class="feature">
+                    <h3>🏢 Diverse Sectors</h3>
+                    <p>Invest across 12+ sectors: FinTech, BioTech, CleanTech, Gaming, and more</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🎯 How to Play</h2>
+            <p><strong>1.</strong> Download and run the game</p>
+            <p><strong>2.</strong> Choose your difficulty level</p>
+            <p><strong>3.</strong> Review 20 startup options with risk and growth indicators</p>
+            <p><strong>4.</strong> Make strategic investments across different sectors</p>
+            <p><strong>5.</strong> Watch your portfolio grow (or shrink!) over 120 turns</p>
+            <p><strong>6.</strong> Unlock achievements and climb the leaderboards</p>
+            <p><strong>7.</strong> Aim for 1000%+ ROI to earn the "Unicorn Hunter" title!</p>
+        </div>
+
+        <div class="card" style="text-align: center;">
+            <h2>💻 Open Source</h2>
+            <p style="margin-bottom: 2rem;">Unicorn is open source and built with Go. Contributions welcome!</p>
+            
+            <a href="https://github.com/jamesacampbell/unicorn" target="_blank" class="github-link">
+                <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                </svg>
+                View on GitHub
+            </a>
+
+            <p style="margin-top: 2rem; opacity: 0.8;">
+                Made with ❤️ by <a href="https://github.com/jamesacampbell" style="color: #ffd700; text-decoration: none; font-weight: 600;" target="_blank">@jamesacampbell</a>
+            </p>
+        </div>
+
+        <footer>
+            <p>© 2019-2025 Unicorn Game • Licensed under MIT</p>
+            <p style="margin-top: 1rem;">Play • Invest • Build Your Empire 🚀</p>
+        </footer>
+    </div>
+</body>
+</html>
+
