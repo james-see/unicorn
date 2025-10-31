@@ -178,7 +178,7 @@ func GenerateASCIIChart(values map[string]float64, width int) string {
 			barLength = 0
 		}
 		
-		bar := strings.Repeat("?", barLength)
+		bar := strings.Repeat("=", barLength)
 		chart.WriteString(fmt.Sprintf("%-15s %s %.1f%%\n", key, bar, value))
 	}
 	
@@ -190,7 +190,7 @@ func GetPortfolioSummary(analytics *PortfolioAnalytics) string {
 	var summary strings.Builder
 	
 	summary.WriteString("\n?? PORTFOLIO ANALYTICS\n")
-	summary.WriteString(strings.Repeat("?", 50) + "\n\n")
+	summary.WriteString(strings.Repeat("=", 50) + "\n\n")
 	
 	summary.WriteString(fmt.Sprintf("Total Invested:     $%s\n", formatMoney(analytics.TotalInvested)))
 	summary.WriteString(fmt.Sprintf("Current Value:      $%s\n", formatMoney(analytics.CurrentValue)))
@@ -229,7 +229,7 @@ func GetSectorBreakdown(analytics *PortfolioAnalytics) string {
 	var breakdown strings.Builder
 	
 	breakdown.WriteString("\n?? SECTOR BREAKDOWN\n")
-	breakdown.WriteString(strings.Repeat("?", 50) + "\n\n")
+	breakdown.WriteString(strings.Repeat("=", 50) + "\n\n")
 	
 	sectors := GetTopSectors(analytics)
 	

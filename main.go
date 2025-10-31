@@ -57,9 +57,9 @@ func askForAutomatedMode() bool {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	
-	cyan.Println("\n" + strings.Repeat("?", 60))
+	cyan.Println("\n" + strings.Repeat("=", 60))
 	cyan.Println("                 GAME MODE SELECTION")
-	cyan.Println(strings.Repeat("?", 60))
+	cyan.Println(strings.Repeat("=", 60))
 	
 	yellow.Println("\n1. Manual Mode (Press Enter each turn)")
 	yellow.Println("2. Automated Mode (1 second per turn)")
@@ -135,12 +135,12 @@ func investmentPhase(gs *game.GameState) {
 	fmt.Printf("Net Worth: $%s\n", formatMoney(gs.Portfolio.NetWorth))
 	
 	// Show available startups
-	fmt.Println("\n????????????????????????????????????????????")
+	fmt.Println("\n" + strings.Repeat("=", 50))
 	fmt.Println("AVAILABLE STARTUPS:")
 	for i, startup := range gs.AvailableStartups {
 		displayStartup(startup, i)
 	}
-	fmt.Println("????????????????????????????????????????????")
+	fmt.Println(strings.Repeat("=", 50))
 	
 	reader := bufio.NewReader(os.Stdin)
 	
@@ -187,12 +187,12 @@ func playTurn(gs *game.GameState, autoMode bool) {
 	messages := gs.ProcessTurn()
 	
 	if len(messages) > 0 {
-		fmt.Println("\n????????????????????????????????????????????")
+		fmt.Println("\n" + strings.Repeat("=", 50))
 		fmt.Println("COMPANY NEWS:")
 		for _, msg := range messages {
 			fmt.Println(msg)
 		}
-		fmt.Println("????????????????????????????????????????????")
+		fmt.Println(strings.Repeat("=", 50))
 	}
 	
 	// Show portfolio status
@@ -231,9 +231,9 @@ func displayFinalScore(gs *game.GameState) {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("?", 50))
+	cyan.Println("\n" + strings.Repeat("=", 50))
 	cyan.Println("           ?? GAME OVER - FINAL RESULTS ??")
-	cyan.Println(strings.Repeat("?", 50))
+	cyan.Println(strings.Repeat("=", 50))
 	
 	netWorth, roi, successfulExits := gs.GetFinalScore()
 	
@@ -258,7 +258,7 @@ func displayFinalScore(gs *game.GameState) {
 	}
 	
 	// Performance rating
-	fmt.Println("\n" + strings.Repeat("?", 50))
+	fmt.Println("\n" + strings.Repeat("=", 50))
 	var rating string
 	if roi >= 1000 {
 		rating = "?? UNICORN HUNTER - Legendary!"
@@ -276,7 +276,7 @@ func displayFinalScore(gs *game.GameState) {
 	
 	yellow := color.New(color.FgYellow, color.Bold)
 	yellow.Printf("Rating: %s\n", rating)
-	fmt.Println(strings.Repeat("?", 50) + "\n")
+	fmt.Println(strings.Repeat("=", 50) + "\n")
 }
 
 func main() {
@@ -324,9 +324,9 @@ func displayMainMenu() string {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	
-	cyan.Println("\n" + strings.Repeat("?", 50))
+	cyan.Println("\n" + strings.Repeat("=", 50))
 	cyan.Println("           ?? UNICORN - MAIN MENU ??")
-	cyan.Println(strings.Repeat("?", 50))
+	cyan.Println(strings.Repeat("=", 50))
 	
 	yellow.Println("\n1. New Game")
 	yellow.Println("2. Leaderboards")
@@ -349,9 +349,9 @@ func selectDifficulty() game.Difficulty {
 	red := color.New(color.FgRed)
 	magenta := color.New(color.FgMagenta)
 	
-	cyan.Println("\n" + strings.Repeat("?", 60))
+	cyan.Println("\n" + strings.Repeat("=", 60))
 	cyan.Println("                 SELECT DIFFICULTY")
-	cyan.Println(strings.Repeat("?", 60))
+	cyan.Println(strings.Repeat("=", 60))
 	
 	green.Printf("\n1. Easy")
 	fmt.Printf(" - %s\n", game.EasyDifficulty.Description)
@@ -515,9 +515,9 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		cyan := color.New(color.FgCyan, color.Bold)
 		yellow := color.New(color.FgYellow)
 		
-		fmt.Println("\n" + strings.Repeat("?", 60))
+		fmt.Println("\n" + strings.Repeat("=", 60))
 		cyan.Println("           ?? NEW ACHIEVEMENTS UNLOCKED! ??")
-		fmt.Println(strings.Repeat("?", 60))
+		fmt.Println(strings.Repeat("=", 60))
 		
 		for _, ach := range newAchievements {
 			// Save to database
@@ -543,12 +543,12 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		
 		level, title, _ := achievements.CalculateCareerLevel(totalPoints)
 		
-		fmt.Println("\n" + strings.Repeat("?", 60))
+		fmt.Println("\n" + strings.Repeat("=", 60))
 		fmt.Printf("Career Level: ")
 		yellow.Printf("%d - %s", level, title)
 		fmt.Printf(" | Total Points: ")
 		yellow.Printf("%d\n", totalPoints)
-		fmt.Println(strings.Repeat("?", 60))
+		fmt.Println(strings.Repeat("=", 60))
 	}
 }
 
@@ -556,9 +556,9 @@ func displayLeaderboards() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Println("                       ?? LEADERBOARDS ??")
-	cyan.Println(strings.Repeat("?", 70))
+	cyan.Println(strings.Repeat("=", 70))
 	
 	fmt.Println("\n1. By Net Worth (All Difficulties)")
 	fmt.Println("2. By ROI (All Difficulties)")
@@ -625,9 +625,9 @@ func showTopScores(sortBy string, difficulty string) {
 		return
 	}
 	
-	cyan.Println("\n" + strings.Repeat("?", 90))
+	cyan.Println("\n" + strings.Repeat("=", 90))
 	cyan.Printf("%-40s\n", title)
-	cyan.Println(strings.Repeat("?", 90))
+	cyan.Println(strings.Repeat("=", 90))
 	
 	if len(scores) == 0 {
 		yellow.Println("\nNo games played yet! Be the first!")
@@ -672,9 +672,9 @@ func showRecentGames() {
 		return
 	}
 	
-	cyan.Println("\n" + strings.Repeat("?", 90))
+	cyan.Println("\n" + strings.Repeat("=", 90))
 	cyan.Println("                           RECENT GAMES")
-	cyan.Println(strings.Repeat("?", 90))
+	cyan.Println(strings.Repeat("=", 90))
 	
 	if len(scores) == 0 {
 		yellow.Println("\nNo games played yet!")
@@ -703,9 +703,9 @@ func displayPlayerStats() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("?", 50))
+	cyan.Println("\n" + strings.Repeat("=", 50))
 	cyan.Println("              PLAYER STATISTICS")
-	cyan.Println(strings.Repeat("?", 50))
+	cyan.Println(strings.Repeat("=", 50))
 	
 	fmt.Print("\nEnter player name: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -733,9 +733,9 @@ func displayPlayerStats() {
 	}
 	
 	clear.ClearIt()
-	cyan.Println("\n" + strings.Repeat("?", 50))
+	cyan.Println("\n" + strings.Repeat("=", 50))
 	cyan.Printf("    STATS FOR: %s\n", strings.ToUpper(playerName))
-	cyan.Println(strings.Repeat("?", 50))
+	cyan.Println(strings.Repeat("=", 50))
 	
 	green := color.New(color.FgGreen, color.Bold)
 	
@@ -819,9 +819,9 @@ func displayAchievementsMenu() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("?", 60))
+	cyan.Println("\n" + strings.Repeat("=", 60))
 	cyan.Println("                    ?? ACHIEVEMENTS ??")
-	cyan.Println(strings.Repeat("?", 60))
+	cyan.Println(strings.Repeat("=", 60))
 	
 	fmt.Println("\n1. View My Achievements")
 	fmt.Println("2. Browse All Achievements")
@@ -872,9 +872,9 @@ func viewPlayerAchievements() {
 	}
 	
 	clear.ClearIt()
-	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Printf("     ACHIEVEMENTS FOR: %s\n", strings.ToUpper(playerName))
-	cyan.Println(strings.Repeat("?", 70))
+	cyan.Println(strings.Repeat("=", 70))
 	
 	// Calculate stats
 	totalAchievements := len(achievements.AllAchievements)
@@ -955,9 +955,9 @@ func viewPlayerAchievements() {
 func browseAllAchievements() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Println("                  ALL ACHIEVEMENTS")
-	cyan.Println(strings.Repeat("?", 70))
+	cyan.Println(strings.Repeat("=", 70))
 	
 	// Group by category
 	for _, category := range []string{
@@ -990,9 +990,9 @@ func browseAllAchievements() {
 func displayAchievementLeaderboard() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Println("            ACHIEVEMENT LEADERBOARD (Coming Soon)")
-	cyan.Println(strings.Repeat("?", 70))
+	cyan.Println(strings.Repeat("=", 70))
 	
 	color.Yellow("\nThis feature will show players with the most achievements!")
 }
@@ -1002,9 +1002,9 @@ func displayHelpGuide() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	
-	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Println("                    ?? HELP & INFORMATION ??")
-	cyan.Println(strings.Repeat("?", 70))
+	cyan.Println(strings.Repeat("=", 70))
 	
 	yellow.Println("\n?? GAME OVERVIEW")
 	fmt.Println("You're a VC investor with limited capital. Invest in 20 startups")
@@ -1063,7 +1063,7 @@ func displayHelpGuide() {
 	fmt.Println("? Research: Read company metrics carefully")
 	fmt.Println("? Patience: Some companies take time to grow")
 	
-	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("\n" + strings.Repeat("=", 70))
 	fmt.Print("\nPress 'Enter' to return to menu...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
