@@ -694,12 +694,30 @@ func (gs *GameState) ProcessAITurns() {
 			inv := &gs.AIPlayers[i].Portfolio.Investments[j]
 			inv.MonthsHeld++
 			
-			// Find matching investment valuation from player's view
-			for _, startup := range gs.AvailableStartups {
-				if startup.Name == inv.CompanyName {
-					inv.CurrentValuation = startup.Valuation
-					break
+			wasAboveInitial := inv.CurrentValuation >= inv.InitialValuation
+			
+			// Apply same random events and volatility as player investments
+			// Random chance of an event happening (based on difficulty)
+			if rand.Float64() < gs.Difficulty.EventFrequency && len(gs.EventPool) > 0 {
+				event := gs.EventPool[rand.Intn(len(gs.EventPool))]
+				
+				oldVal := inv.CurrentValuation
+				inv.CurrentValuation = int64(float64(inv.CurrentValuation) * event.Change)
+				
+				// Prevent negative valuations
+				if inv.CurrentValuation < 0 {
+					inv.CurrentValuation = 0
 				}
+			} else {
+				// Natural growth/decline (random walk) - volatility based on difficulty
+				change := (rand.Float64()*2 - 1) * gs.Difficulty.Volatility
+				inv.CurrentValuation = int64(float64(inv.CurrentValuation) * (1 + change))
+			}
+			
+			// Check if investment just went negative (for consistency, but don't generate news for AI)
+			nowBelowInitial := inv.CurrentValuation < inv.InitialValuation
+			if wasAboveInitial && nowBelowInitial && !inv.NegativeNewsSent {
+				inv.NegativeNewsSent = true
 			}
 		}
 		

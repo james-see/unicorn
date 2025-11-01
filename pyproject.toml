@@ -1,0 +1,11 @@
+[project]
+name = "unicorn-leaderboard"
+version = "1.0.0"
+description = "Unicorn Global Leaderboard Datasette Instance"
+requires-python = ">=3.12"
+dependencies = [
+    "datasette>=0.65.0",
+    "datasette-cors>=0.2.0",
+    "mangum>=0.17.0",
+]
+
