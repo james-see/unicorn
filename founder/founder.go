@@ -49,6 +49,7 @@ type StartupTemplate struct {
 	InitialMRR         int64                     `json:"initial_mrr"`
 	AvgDealSize        int64                     `json:"avg_deal_size"`
 	BaseChurnRate      float64                   `json:"base_churn_rate"`
+	BaseCAC            int64                     `json:"base_cac"`
 	TargetMarketSize   int                       `json:"target_market_size"`
 	CompetitionLevel   string                    `json:"competition_level"`
 	InitialTeam        map[string]int            `json:"initial_team"`
@@ -67,6 +68,7 @@ type FounderState struct {
 	AvgDealSize       int64
 	ChurnRate         float64
 	CustomerChurnRate float64 // Alias for ChurnRate
+	BaseCAC           int64   // Base customer acquisition cost for this business
 	Team              Team
 	Turn              int
 	MaxTurns          int
@@ -83,7 +85,7 @@ type FounderState struct {
 	
 	// Growth metrics
 	MonthlyGrowthRate       float64
-	CustomerAcquisitionCost int64
+	CustomerAcquisitionCost int64 // Current effective CAC (changes based on maturity)
 	LifetimeValue           int64
 	
 	// Advanced features
@@ -224,6 +226,7 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		AvgDealSize:       template.AvgDealSize,
 		ChurnRate:         template.BaseChurnRate,
 		CustomerChurnRate: template.BaseChurnRate,
+		BaseCAC:           template.BaseCAC,
 		Turn:              1,
 		MaxTurns:          60, // 5 years
 		ProductMaturity:   0.3, // Start at 30% product maturity
@@ -243,6 +246,9 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		BoardSeats:        1, // Founder starts with 1 board seat
 		MonthlyGrowthRate: 0.10, // Start with 10% monthly growth
 	}
+	
+	// Calculate initial effective CAC
+	fs.UpdateCAC()
 	
 	// Initialize team from template
 	fs.Team = Team{
@@ -499,6 +505,30 @@ func (fs *FounderState) RaiseFunding(roundName string) (success bool, amount int
 	return true, targetRaise, terms, equityGiven
 }
 
+// UpdateCAC recalculates current effective CAC based on product maturity
+func (fs *FounderState) UpdateCAC() {
+	// Start with business-specific base CAC
+	effectiveCAC := float64(fs.BaseCAC)
+	
+	// Product maturity reduces CAC (better product = better conversion)
+	// At 100% maturity, CAC is 60% of base (40% reduction)
+	maturityDiscount := fs.ProductMaturity * 0.4
+	effectiveCAC *= (1.0 - maturityDiscount)
+	
+	// Competition increases CAC
+	switch fs.CompetitionLevel {
+	case "very_high":
+		effectiveCAC *= 1.5 // +50%
+	case "high":
+		effectiveCAC *= 1.3 // +30%
+	case "medium":
+		effectiveCAC *= 1.1 // +10%
+	// low = no change
+	}
+	
+	fs.CustomerAcquisitionCost = int64(effectiveCAC)
+}
+
 // SpendOnMarketing allocates budget to customer acquisition
 func (fs *FounderState) SpendOnMarketing(amount int64) int {
 	if amount > fs.Cash {
@@ -507,21 +537,10 @@ func (fs *FounderState) SpendOnMarketing(amount int64) int {
 	
 	fs.Cash -= amount
 	
-	// Calculate customers acquired
-	// CAC varies by competition level
-	cac := int64(5000) // Base $5k CAC
-	switch fs.CompetitionLevel {
-	case "very_high":
-		cac = 10000
-	case "high":
-		cac = 7500
-	case "medium":
-		cac = 5000
-	case "low":
-		cac = 3000
-	}
+	// Use current effective CAC (which accounts for product maturity and competition)
+	fs.UpdateCAC()
 	
-	newCustomers := int(amount / cac)
+	newCustomers := int(amount / fs.CustomerAcquisitionCost)
 	fs.Customers += newCustomers
 	newMRR := int64(newCustomers) * fs.AvgDealSize
 	fs.MRR += newMRR
@@ -1081,22 +1100,27 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 	
 	fs.Cash -= data.setupCost
 	
-	// Calculate initial customers based on CAC
-	// CAC varies by competition level in new market
-	var localCAC int64
+	// Calculate initial customers based on this business's CAC in new market
+	// Start with business-specific base CAC, then adjust for local competition
+	localCAC := float64(fs.BaseCAC)
+	
 	switch data.competition {
 	case "very_high":
-		localCAC = 10000
+		localCAC *= 1.8 // Much harder to acquire in very competitive markets
 	case "high":
-		localCAC = 7500
+		localCAC *= 1.5
 	case "medium":
-		localCAC = 5000
-	default: // low
-		localCAC = 3000
+		localCAC *= 1.2
+	case "low":
+		localCAC *= 0.8 // Easier in low competition markets
 	}
 	
-	// Initial customers = setup cost / CAC (your investment buys initial customer base)
-	initialCustomers := int(data.setupCost / localCAC)
+	// Product maturity helps even in new markets (your reputation/product quality travels)
+	maturityDiscount := fs.ProductMaturity * 0.3 // Up to 30% discount
+	localCAC *= (1.0 - maturityDiscount)
+	
+	// Initial customers = setup cost / effective local CAC
+	initialCustomers := int(data.setupCost / int64(localCAC))
 	initialMRR := int64(initialCustomers) * fs.AvgDealSize
 	
 	market := Market{

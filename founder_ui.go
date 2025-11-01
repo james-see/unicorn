@@ -368,21 +368,18 @@ func handleMarketing(fs *founder.FounderState) {
 	yellow.Println("📣 MARKETING SPEND")
 	fmt.Println(strings.Repeat("─", 70))
 	
-	fmt.Printf("\nCurrent Cash: $%s\n", formatFounderCurrency(fs.Cash))
-	fmt.Printf("Competition Level: %s\n", fs.CompetitionLevel)
+	fs.UpdateCAC() // Recalculate current CAC
 	
-	var cac int64
-	switch fs.CompetitionLevel {
-	case "very_high":
-		cac = 10000
-	case "high":
-		cac = 7500
-	case "medium":
-		cac = 5000
-	default:
-		cac = 3000
+	fmt.Printf("\nCurrent Cash: $%s\n", formatFounderCurrency(fs.Cash))
+	fmt.Printf("Base CAC (your business): $%s\n", formatFounderCurrency(fs.BaseCAC))
+	fmt.Printf("Current Effective CAC: $%s\n", formatFounderCurrency(fs.CustomerAcquisitionCost))
+	fmt.Printf("  Product Maturity: %.0f%% (reduces CAC up to 40%%)\n", fs.ProductMaturity*100)
+	fmt.Printf("  Competition: %s (impacts CAC)\n", fs.CompetitionLevel)
+	
+	cacReduction := (1.0 - float64(fs.CustomerAcquisitionCost)/float64(fs.BaseCAC)) * 100
+	if cacReduction > 0 {
+		color.Green("  ✓ CAC reduced by %.0f%% from base!\n", cacReduction)
 	}
-	fmt.Printf("Estimated CAC: $%s per customer\n", formatFounderCurrency(cac))
 
 	fmt.Print("\nHow much to spend on marketing? (enter amount or 0 to cancel): $")
 	amountStr, _ := reader.ReadString('\n')
