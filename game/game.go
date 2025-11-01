@@ -686,8 +686,9 @@ func (gs *GameState) IsGameOver() bool {
 func (gs *GameState) GetFinalScore() (netWorth int64, roi float64, successfulExits int) {
 	netWorth = gs.Portfolio.NetWorth
 	
-	// Calculate ROI based on starting cash for this difficulty
-	roi = ((float64(netWorth) - float64(gs.Difficulty.StartingCash)) / float64(gs.Difficulty.StartingCash)) * 100.0
+	// Calculate ROI based on TOTAL starting capital (cash + follow-on reserve)
+	totalStartingCapital := gs.Portfolio.InitialFundSize + gs.Portfolio.FollowOnReserve
+	roi = ((float64(netWorth) - float64(totalStartingCapital)) / float64(totalStartingCapital)) * 100.0
 	
 	// Count successful exits (investments that 5x'd or more)
 	successfulExits = 0
@@ -1245,8 +1246,9 @@ type PlayerScore struct {
 func (gs *GameState) GetLeaderboard() []PlayerScore {
 	scores := []PlayerScore{}
 	
-	// Add player
-	playerROI := ((float64(gs.Portfolio.NetWorth) - float64(gs.Portfolio.InitialFundSize)) / float64(gs.Portfolio.InitialFundSize)) * 100.0
+	// Add player - ROI based on total starting capital (cash + follow-on reserve)
+	totalStartingCapital := gs.Portfolio.InitialFundSize + gs.Portfolio.FollowOnReserve
+	playerROI := ((float64(gs.Portfolio.NetWorth) - float64(totalStartingCapital)) / float64(totalStartingCapital)) * 100.0
 	scores = append(scores, PlayerScore{
 		Name:     gs.PlayerName,
 		Firm:     "Your Fund",
@@ -1255,9 +1257,10 @@ func (gs *GameState) GetLeaderboard() []PlayerScore {
 		IsPlayer: true,
 	})
 	
-	// Add AI players
+	// Add AI players - same calculation
 	for _, ai := range gs.AIPlayers {
-		aiROI := ((float64(ai.Portfolio.NetWorth) - float64(ai.Portfolio.InitialFundSize)) / float64(ai.Portfolio.InitialFundSize)) * 100.0
+		aiTotalCapital := ai.Portfolio.InitialFundSize + ai.Portfolio.FollowOnReserve
+		aiROI := ((float64(ai.Portfolio.NetWorth) - float64(aiTotalCapital)) / float64(aiTotalCapital)) * 100.0
 		scores = append(scores, PlayerScore{
 			Name:     ai.Name,
 			Firm:     ai.Firm,
