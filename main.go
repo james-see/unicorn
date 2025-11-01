@@ -84,7 +84,7 @@ func displayWelcome(username string, difficulty game.Difficulty) {
 	fmt.Printf("\nDifficulty: ")
 	yellow.Printf("%s\n", difficulty.Name)
 	fmt.Printf("Fund Size: $%s\n", formatMoney(difficulty.StartingCash))
-	fmt.Printf("Follow-on Reserve: $%s (for investing in new funding rounds)\n", formatMoney(int64(100000)))
+	fmt.Printf("Follow-on Reserve: $%s ($100k base + $50k per round)\n", formatMoney(int64(1000000)))
 	fmt.Printf("Management Fee: 2%% annually ($%s/year)\n", formatMoney(int64(float64(difficulty.StartingCash)*0.02)))
 	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
 
@@ -292,8 +292,9 @@ func playTurn(gs *game.GameState, autoMode bool) {
 
 	// Check for follow-on investment opportunities BEFORE processing turn
 	// This way the player can invest before dilution happens
+	// Always pause for follow-on investments, even in automated mode
 	opportunities := gs.GetFollowOnOpportunities()
-	if len(opportunities) > 0 && !autoMode {
+	if len(opportunities) > 0 {
 		handleFollowOnOpportunities(gs, opportunities)
 	}
 
@@ -1292,7 +1293,8 @@ func displayHelpGuide() {
 	fmt.Println("2. Review 15 randomly selected companies (from 30 total)")
 	fmt.Println("3. Invest your capital across multiple startups")
 	fmt.Println("4. Watch events unfold each turn (1 turn = 1 month)")
-	fmt.Println("5. After 90-120 turns, see your final score")
+	fmt.Println("5. Invest follow-on capital when companies raise new rounds")
+	fmt.Println("6. After 60 turns (5 years), see your final score")
 
 	yellow.Printf("\n%s COMPANY METRICS\n", ascii.Building)
 	fmt.Printf("%s Risk Score: Low/Medium/High - chance of failure\n", ascii.Warning)
@@ -1307,10 +1309,10 @@ func displayHelpGuide() {
 	fmt.Printf("%s Rating: Based on ROI (Unicorn Hunter = 1000%%+)\n", ascii.Crown)
 
 	yellow.Printf("\n%s DIFFICULTY LEVELS\n", ascii.Shield)
-	fmt.Printf("%s Easy: $1M fund, 20%% events, 3%% volatility\n", ascii.Check)
-	fmt.Printf("%s Medium: $750k fund, 30%% events, 5%% volatility\n", ascii.Star)
-	fmt.Printf("%s Hard: $500k fund, 40%% events, 7%% volatility\n", ascii.Warning)
-	fmt.Printf("%s Expert: $500k fund, 50%% events, 10%% volatility, 90 turns\n", ascii.Zap)
+	fmt.Printf("%s Easy: $1M fund, 20%% events, 3%% volatility, 5 years\n", ascii.Check)
+	fmt.Printf("%s Medium: $750k fund, 30%% events, 5%% volatility, 5 years\n", ascii.Star)
+	fmt.Printf("%s Hard: $500k fund, 40%% events, 7%% volatility, 5 years\n", ascii.Warning)
+	fmt.Printf("%s Expert: $500k fund, 50%% events, 10%% volatility, 5 years\n", ascii.Zap)
 
 	yellow.Printf("\n%s ANALYTICS\n", ascii.Chart)
 	fmt.Println("After each game, view detailed portfolio analytics:")

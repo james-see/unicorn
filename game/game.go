@@ -102,21 +102,31 @@ type AIPlayer struct {
 
 // GameState holds the entire game state
 type GameState struct {
-	PlayerName        string
-	Portfolio         Portfolio
-	AvailableStartups []Startup
-	EventPool         []GameEvent
-	Difficulty        Difficulty
-	AIPlayers         []AIPlayer // Computer opponents
-	FundingRoundQueue []FundingRoundEvent // Scheduled future funding rounds
+	PlayerName         string
+	Portfolio          Portfolio
+	AvailableStartups  []Startup
+	EventPool          []GameEvent
+	Difficulty         Difficulty
+	AIPlayers          []AIPlayer              // Computer opponents
+	FundingRoundQueue  []FundingRoundEvent     // Scheduled future funding rounds
+	AcquisitionQueue   []AcquisitionEvent      // Scheduled acquisition offers
 }
 
 // FundingRoundEvent represents a scheduled funding round
 type FundingRoundEvent struct {
-	CompanyName string
-	RoundName   string
+	CompanyName   string
+	RoundName     string
 	ScheduledTurn int
-	RaiseAmount int64
+	RaiseAmount   int64
+	IsDownRound   bool // True if this is a down round
+}
+
+// AcquisitionEvent represents a potential acquisition offer
+type AcquisitionEvent struct {
+	CompanyName   string
+	ScheduledTurn int
+	OfferMultiple float64 // Multiple of EBITDA or revenue
+	DueDiligence  string  // "good", "bad", "normal"
 }
 
 // FollowOnOpportunity represents a chance to invest more in a company raising a round
@@ -137,8 +147,8 @@ var (
 		StartingCash:   1000000, // $1M fund
 		EventFrequency: 0.20,    // 20% chance
 		Volatility:     0.03,    // 3% volatility
-		MaxTurns:       120,
-		Description:    "$1M fund, lower volatility, fewer bad events",
+		MaxTurns:       60,      // 5 years
+		Description:    "$1M fund, lower volatility, 5 years",
 	}
 	
 	MediumDifficulty = Difficulty{
@@ -146,8 +156,8 @@ var (
 		StartingCash:   750000, // $750k fund
 		EventFrequency: 0.30,   // 30% chance
 		Volatility:     0.05,   // 5% volatility
-		MaxTurns:       120,
-		Description:    "$750k fund - balanced challenge",
+		MaxTurns:       60,     // 5 years
+		Description:    "$750k fund - balanced challenge, 5 years",
 	}
 	
 	HardDifficulty = Difficulty{
@@ -155,8 +165,8 @@ var (
 		StartingCash:   500000, // $500k fund
 		EventFrequency: 0.40,   // 40% chance
 		Volatility:     0.07,   // 7% volatility
-		MaxTurns:       120,
-		Description:    "$500k fund, higher volatility, more events",
+		MaxTurns:       60,     // 5 years
+		Description:    "$500k fund, higher volatility, 5 years",
 	}
 	
 	ExpertDifficulty = Difficulty{
@@ -164,14 +174,19 @@ var (
 		StartingCash:   500000, // $500k fund
 		EventFrequency: 0.50,   // 50% chance
 		Volatility:     0.10,   // 10% volatility
-		MaxTurns:       90,     // Only 7.5 years!
-		Description:    "$500k fund, extreme volatility, shorter time",
+		MaxTurns:       60,     // 5 years
+		Description:    "$500k fund, extreme volatility, 5 years",
 	}
 )
 
 // NewGame initializes a new game with specified difficulty
 func NewGame(playerName string, difficulty Difficulty) *GameState {
 	rand.Seed(time.Now().UnixNano())
+	
+	// Calculate follow-on reserve: $100k base + $50k per potential funding round
+	// Assume ~60% of companies will have at least one round we can participate in
+	expectedRounds := int64(15 * 0.6 * 2) // 15 companies, 60% raise, avg 2 rounds
+	followOnReserve := int64(100000) + (expectedRounds * 50000)
 	
 	gs := &GameState{
 		PlayerName: playerName,
@@ -183,7 +198,7 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 			MaxTurns:            difficulty.MaxTurns,
 			InitialFundSize:     difficulty.StartingCash,
 			AnnualManagementFee: 0.02, // 2% annual management fee
-			FollowOnReserve:     100000, // $100k for follow-on investments
+			FollowOnReserve:     followOnReserve, // Dynamic based on expected rounds
 		},
 	}
 	
@@ -191,6 +206,7 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 	gs.LoadEvents()
 	gs.InitializeAIPlayers()
 	gs.ScheduleFundingRounds()
+	gs.ScheduleAcquisitions()
 	
 	return gs
 }
@@ -214,10 +230,9 @@ func (gs *GameState) LoadStartups() {
 		
 		json.Unmarshal(byteValue, &startup)
 		
-		// Convert valuation to proper scale (assume values are in millions)
-		if startup.Valuation < 1000 {
-			startup.Valuation *= 1000000
-		}
+		// Cap all initial valuations at $1M or less (pre-seed stage)
+		// Generate realistic pre-seed valuations between $250k - $1M
+		startup.Valuation = int64(250000 + rand.Intn(750000))
 		
 		// Calculate risk and growth scores based on metrics
 		startup.RiskScore = gs.calculateRiskScore(&startup)
@@ -545,6 +560,10 @@ func (gs *GameState) ProcessTurn() []string {
 	roundMessages := gs.ProcessFundingRounds()
 	messages = append(messages, roundMessages...)
 	
+	// Process acquisitions
+	acqMessages := gs.ProcessAcquisitions()
+	messages = append(messages, acqMessages...)
+	
 	// Old random event code removed - now using financial-based valuation below
 	
 	// Update financials for all companies
@@ -696,7 +715,7 @@ func (gs *GameState) InitializeAIPlayers() {
 				MaxTurns:            gs.Difficulty.MaxTurns,
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
-				FollowOnReserve:     100000,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
 			},
 		},
 		{
@@ -711,7 +730,7 @@ func (gs *GameState) InitializeAIPlayers() {
 				MaxTurns:            gs.Difficulty.MaxTurns,
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
-				FollowOnReserve:     100000,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
 			},
 		},
 		{
@@ -726,7 +745,7 @@ func (gs *GameState) InitializeAIPlayers() {
 				MaxTurns:            gs.Difficulty.MaxTurns,
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
-				FollowOnReserve:     100000,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
 			},
 		},
 	}
@@ -736,50 +755,108 @@ func (gs *GameState) InitializeAIPlayers() {
 func (gs *GameState) ScheduleFundingRounds() {
 	gs.FundingRoundQueue = []FundingRoundEvent{}
 	
-	// Schedule funding rounds for each startup at random intervals
+	// Schedule funding rounds with realistic amounts
 	for _, startup := range gs.AvailableStartups {
-		// Seed round (6-12 months)
-		seedTurn := 6 + rand.Intn(7)
+		// Seed round (3-9 months) - raise $2M-$5M
+		seedTurn := 3 + rand.Intn(7)
 		if seedTurn < gs.Portfolio.MaxTurns {
+			seedAmount := int64(2000000 + rand.Intn(3000000)) // $2M-$5M
 			gs.FundingRoundQueue = append(gs.FundingRoundQueue, FundingRoundEvent{
 				CompanyName:   startup.Name,
 				RoundName:     "Seed",
 				ScheduledTurn: seedTurn,
-				RaiseAmount:   startup.Valuation / 10, // Raise 10% of current valuation
+				RaiseAmount:   seedAmount,
 			})
 		}
 		
-		// Series A (18-36 months)
-		seriesATurn := 18 + rand.Intn(19)
+		// Series A (12-24 months) - raise $10M-$20M
+		seriesATurn := 12 + rand.Intn(13)
 		if seriesATurn < gs.Portfolio.MaxTurns {
+			seriesAAmount := int64(10000000 + rand.Intn(10000000)) // $10M-$20M
 			gs.FundingRoundQueue = append(gs.FundingRoundQueue, FundingRoundEvent{
 				CompanyName:   startup.Name,
 				RoundName:     "Series A",
 				ScheduledTurn: seriesATurn,
-				RaiseAmount:   startup.Valuation / 5, // Raise 20% of current valuation
+				RaiseAmount:   seriesAAmount,
 			})
 		}
 		
-		// Series B (36-60 months)
-		seriesBTurn := 36 + rand.Intn(25)
+		// Series B (30-48 months) - raise $30M-$50M
+		seriesBTurn := 30 + rand.Intn(19)
 		if seriesBTurn < gs.Portfolio.MaxTurns {
+			seriesBAmount := int64(30000000 + rand.Intn(20000000)) // $30M-$50M
 			gs.FundingRoundQueue = append(gs.FundingRoundQueue, FundingRoundEvent{
 				CompanyName:   startup.Name,
 				RoundName:     "Series B",
 				ScheduledTurn: seriesBTurn,
-				RaiseAmount:   startup.Valuation / 3, // Raise 33% of current valuation
+				RaiseAmount:   seriesBAmount,
 			})
 		}
 		
-		// Series C (60-90 months) - only for some companies
-		if rand.Float64() < 0.5 { // 50% of companies get Series C
-			seriesCTurn := 60 + rand.Intn(31)
+		// Series C (48-60 months) - raise $50M-$100M, only for top performers
+		if rand.Float64() < 0.3 { // 30% of companies
+			seriesCTurn := 48 + rand.Intn(13)
 			if seriesCTurn < gs.Portfolio.MaxTurns {
+				seriesCAmount := int64(50000000 + rand.Intn(50000000)) // $50M-$100M
 				gs.FundingRoundQueue = append(gs.FundingRoundQueue, FundingRoundEvent{
 					CompanyName:   startup.Name,
 					RoundName:     "Series C",
 					ScheduledTurn: seriesCTurn,
-					RaiseAmount:   startup.Valuation / 2, // Raise 50% of current valuation
+					RaiseAmount:   seriesCAmount,
+				})
+			}
+		}
+		
+		// 20% chance of a down round occurring (usually Series A or B)
+		if rand.Float64() < 0.2 {
+			downRoundTurn := 20 + rand.Intn(30) // Months 20-50
+			if downRoundTurn < gs.Portfolio.MaxTurns {
+				downRoundName := "Series A (Down)"
+				if rand.Float64() < 0.5 {
+					downRoundName = "Series B (Down)"
+				}
+				downAmount := int64(5000000 + rand.Intn(15000000)) // $5M-$20M
+				gs.FundingRoundQueue = append(gs.FundingRoundQueue, FundingRoundEvent{
+					CompanyName:   startup.Name,
+					RoundName:     downRoundName,
+					ScheduledTurn: downRoundTurn,
+					RaiseAmount:   downAmount,
+					IsDownRound:   true,
+				})
+			}
+		}
+	}
+}
+
+// ScheduleAcquisitions schedules potential acquisition offers
+func (gs *GameState) ScheduleAcquisitions() {
+	gs.AcquisitionQueue = []AcquisitionEvent{}
+	
+	// 40% of companies get acquisition offers
+	for _, startup := range gs.AvailableStartups {
+		if rand.Float64() < 0.4 {
+			// Acquisitions happen between months 24-60
+			acqTurn := 24 + rand.Intn(37)
+			if acqTurn < gs.Portfolio.MaxTurns {
+				// Multiple ranges from 3x to 6x EBITDA (4x average)
+				multiple := 3.0 + rand.Float64()*3.0
+				
+				// Due diligence quality
+				dueDiligence := "normal"
+				roll := rand.Float64()
+				if roll < 0.15 { // 15% bad due diligence
+					dueDiligence = "bad"
+					multiple *= 0.6 // Offer falls through or gets cut 40%
+				} else if roll > 0.85 { // 15% great due diligence
+					dueDiligence = "good"
+					multiple *= 1.2 // Offer increases 20%
+				}
+				
+				gs.AcquisitionQueue = append(gs.AcquisitionQueue, AcquisitionEvent{
+					CompanyName:   startup.Name,
+					ScheduledTurn: acqTurn,
+					OfferMultiple: multiple,
+					DueDiligence:  dueDiligence,
 				})
 			}
 		}
@@ -797,11 +874,22 @@ func (gs *GameState) ProcessFundingRounds() []string {
 				if gs.AvailableStartups[i].Name == event.CompanyName {
 					startup := &gs.AvailableStartups[i]
 					
-					preMoneyVal := startup.Valuation
-					postMoneyVal := preMoneyVal + event.RaiseAmount
+					var preMoneyVal int64
+					var postMoneyVal int64
+					var dilutionFactor float64
 					
-					// Calculate dilution for existing investors
-					dilutionFactor := float64(preMoneyVal) / float64(postMoneyVal)
+					if event.IsDownRound {
+						// Down round: pre-money is 60-90% of current valuation
+						downFactor := 0.6 + rand.Float64()*0.3 // 60%-90%
+						preMoneyVal = int64(float64(startup.Valuation) * downFactor)
+						postMoneyVal = preMoneyVal + event.RaiseAmount
+						dilutionFactor = float64(preMoneyVal) / float64(postMoneyVal)
+					} else {
+						// Normal round
+						preMoneyVal = startup.Valuation
+						postMoneyVal = preMoneyVal + event.RaiseAmount
+						dilutionFactor = float64(preMoneyVal) / float64(postMoneyVal)
+					}
 					
 					// Update player's investment if they invested in this company
 					for j := range gs.Portfolio.Investments {
@@ -819,14 +907,25 @@ func (gs *GameState) ProcessFundingRounds() []string {
 								Month:            gs.Portfolio.Turn,
 							})
 							
-							messages = append(messages, fmt.Sprintf(
-								"?? %s raised $%d in %s round! Your equity diluted from %.2f%% to %.2f%%",
-								event.CompanyName,
-								event.RaiseAmount,
-								event.RoundName,
-								oldEquity,
-								inv.EquityPercent,
-							))
+							if event.IsDownRound {
+								messages = append(messages, fmt.Sprintf(
+									"⚠️  %s raised $%s in DOWN ROUND (%s)! Valuation dropped. Equity: %.2f%% → %.2f%%",
+									event.CompanyName,
+									formatCurrency(event.RaiseAmount),
+									event.RoundName,
+									oldEquity,
+									inv.EquityPercent,
+								))
+							} else {
+								messages = append(messages, fmt.Sprintf(
+									"🚀 %s raised $%s in %s round! Your equity diluted from %.2f%% to %.2f%%",
+									event.CompanyName,
+									formatCurrency(event.RaiseAmount),
+									event.RoundName,
+									oldEquity,
+									inv.EquityPercent,
+								))
+							}
 						}
 					}
 					
@@ -860,6 +959,110 @@ func (gs *GameState) ProcessFundingRounds() []string {
 						for j := range gs.AIPlayers[k].Portfolio.Investments {
 							if gs.AIPlayers[k].Portfolio.Investments[j].CompanyName == event.CompanyName {
 								gs.AIPlayers[k].Portfolio.Investments[j].CurrentValuation = postMoneyVal
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return messages
+}
+
+// ProcessAcquisitions handles acquisition offers this turn
+func (gs *GameState) ProcessAcquisitions() []string {
+	messages := []string{}
+	
+	for _, event := range gs.AcquisitionQueue {
+		if event.ScheduledTurn == gs.Portfolio.Turn {
+			// Find the company
+			for i := range gs.AvailableStartups {
+				if gs.AvailableStartups[i].Name == event.CompanyName {
+					startup := &gs.AvailableStartups[i]
+					
+					// Calculate EBITDA (approximation: annual net income)
+					annualEBITDA := startup.NetIncome * 12
+					if annualEBITDA < 0 {
+						// For unprofitable companies, use revenue multiple instead
+						annualEBITDA = startup.MonthlyRevenue * 12
+						event.OfferMultiple *= 0.3 // Lower multiple for revenue-based
+					}
+					
+					// Calculate acquisition offer
+					offerValue := int64(float64(annualEBITDA) * event.OfferMultiple)
+					
+					// Ensure minimum offer value
+					if offerValue < startup.Valuation/2 {
+						offerValue = startup.Valuation / 2
+					}
+					
+					// Check if player invested in this company
+					for j := range gs.Portfolio.Investments {
+						if gs.Portfolio.Investments[j].CompanyName == event.CompanyName {
+							inv := &gs.Portfolio.Investments[j]
+							
+							// Calculate payout
+							payout := int64((inv.EquityPercent / 100.0) * float64(offerValue))
+							returnMultiple := float64(payout) / float64(inv.AmountInvested)
+							
+							// Add acquisition message based on due diligence
+							switch event.DueDiligence {
+							case "bad":
+								messages = append(messages, fmt.Sprintf(
+									"⚠️  %s acquisition FELL THROUGH! Due diligence issues. Offer was $%s (%.1fx EBITDA)",
+									event.CompanyName,
+									formatCurrency(offerValue),
+									event.OfferMultiple,
+								))
+							case "good":
+								messages = append(messages, fmt.Sprintf(
+									"🎉 %s ACQUIRED for $%s (%.1fx EBITDA)! Your %.2f%% = $%s (%.1fx return)",
+									event.CompanyName,
+									formatCurrency(offerValue),
+									event.OfferMultiple,
+									inv.EquityPercent,
+									formatCurrency(payout),
+									returnMultiple,
+								))
+								// Execute acquisition
+								gs.Portfolio.Cash += payout
+								// Remove investment from portfolio
+								gs.Portfolio.Investments = append(gs.Portfolio.Investments[:j], gs.Portfolio.Investments[j+1:]...)
+							default: // normal
+								messages = append(messages, fmt.Sprintf(
+									"💰 %s ACQUIRED for $%s (%.1fx EBITDA)! Your %.2f%% = $%s (%.1fx return)",
+									event.CompanyName,
+									formatCurrency(offerValue),
+									event.OfferMultiple,
+									inv.EquityPercent,
+									formatCurrency(payout),
+									returnMultiple,
+								))
+								// Execute acquisition
+								gs.Portfolio.Cash += payout
+								// Remove investment from portfolio
+								gs.Portfolio.Investments = append(gs.Portfolio.Investments[:j], gs.Portfolio.Investments[j+1:]...)
+							}
+							break
+						}
+					}
+					
+					// Handle AI player acquisitions
+					if event.DueDiligence != "bad" {
+						for k := range gs.AIPlayers {
+							for j := len(gs.AIPlayers[k].Portfolio.Investments) - 1; j >= 0; j-- {
+								if gs.AIPlayers[k].Portfolio.Investments[j].CompanyName == event.CompanyName {
+									inv := &gs.AIPlayers[k].Portfolio.Investments[j]
+									payout := int64((inv.EquityPercent / 100.0) * float64(offerValue))
+									gs.AIPlayers[k].Portfolio.Cash += payout
+									// Remove from AI portfolio
+									gs.AIPlayers[k].Portfolio.Investments = append(
+										gs.AIPlayers[k].Portfolio.Investments[:j],
+										gs.AIPlayers[k].Portfolio.Investments[j+1:]...,
+									)
+									break
+								}
 							}
 						}
 					}
