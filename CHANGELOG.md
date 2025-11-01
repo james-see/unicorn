@@ -1,5 +1,80 @@
 # Changelog
 
+## Version 2.0.0 - Global Leaderboard & Cloud Integration (2025-01-XX)
+
+### Major Features Added
+
+#### 🌐 Global Leaderboard System
+- **Real-time Global Competition** - Players can submit scores and compete worldwide
+- **One-Click Score Submission** - Submit scores directly from the game
+- **Multiple Views** - Filter by difficulty, sort by Net Worth or ROI
+- **Real-time Updates** - Leaderboard updates automatically
+- **Beautiful UI** - Modern, responsive design on GitHub Pages
+- **Privacy First** - Only game stats are submitted, no personal data
+- **Free Hosting** - Powered by Vercel (free tier) and Datasette
+
+#### ☁️ Cloud Infrastructure
+- **Vercel Serverless API** - Go-based API endpoint for score submissions (`/api/submit-score`)
+- **Datasette Integration** - Read-only JSON API for leaderboard data
+- **GitHub Pages Display** - Live leaderboard on GitHub Pages
+- **Automatic Deployment** - GitHub Actions workflow for auto-redeployment
+
+#### 📊 New Components
+- **API Endpoint** (`api/submit-score.go`) - Serverless function for score submission
+- **Leaderboard Client** (`leaderboard/leaderboard.go`) - HTTP client for game integration
+- **Database Schema** - SQLite database with UUID-based score tracking
+- **Frontend Integration** - JavaScript fetches from Datasette API
+
+### Technical Changes
+
+#### New Files
+- `api/submit-score.go` - Serverless function for score submission
+- `api/go.mod` - Dependencies for API
+- `leaderboard/leaderboard.go` - HTTP client for game
+- `datasette-metadata.json` - Datasette configuration
+- `vercel.json` - Vercel deployment config
+- `leaderboard.db` - SQLite database with sample data
+- `DATASETTE_SETUP.md` - Detailed setup guide
+- `QUICKSTART_LEADERBOARD.md` - Quick start guide
+- `README_LEADERBOARD.md` - Architecture documentation
+- `DEPLOYMENT_STATUS.md` - Deployment status and next steps
+
+#### Modified Files
+- `main.go` - Added score submission prompt after game ends
+- `docs/index.html` - Added global leaderboard display section
+- `.gitignore` - Added Vercel and DB files
+
+#### Database Schema
+```sql
+CREATE TABLE game_scores (
+  id TEXT PRIMARY KEY,              -- UUID
+  player_name TEXT NOT NULL,
+  final_net_worth INTEGER NOT NULL,
+  roi REAL NOT NULL,
+  successful_exits INTEGER NOT NULL,
+  turns_played INTEGER NOT NULL,
+  difficulty TEXT NOT NULL,
+  played_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Deployment
+- **API Deployed:** Vercel serverless function
+- **Datasette Deployed:** Vercel-hosted database API
+- **Frontend:** GitHub Pages with live leaderboard
+- **Status:** Ready for production use
+
+### API Endpoints
+- `POST /api/submit-score` - Submit game score
+- `GET /leaderboard/game_scores.json` - Fetch leaderboard data
+
+### Next Steps
+- Disable Vercel authentication protection for public access
+- Configure production domains
+- Set up GitHub Actions for auto-deployment
+
+---
+
 ## Phase 4 - Achievements & Career Progression (2025-10-31)
 
 ### Major Features Added
