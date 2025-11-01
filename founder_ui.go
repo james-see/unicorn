@@ -199,19 +199,39 @@ func playFounderTurn(fs *founder.FounderState) {
 
 func handleFounderDecisions(fs *founder.FounderState) {
 	yellow := color.New(color.FgYellow)
+	cyan := color.New(color.FgCyan, color.Bold)
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("\n" + strings.Repeat("─", 70))
 	yellow.Println("🎯 DECISIONS FOR THIS MONTH")
 	fmt.Println(strings.Repeat("─", 70))
 	
-	fmt.Println("\n1. Hire Team Member")
+	cyan.Println("\n[TEAM & OPERATIONS]")
+	fmt.Println("1. Hire Team Member")
 	fmt.Println("2. Fire Team Member")
 	fmt.Println("3. Spend on Marketing")
+	
+	cyan.Println("\n[FUNDING & EQUITY]")
 	fmt.Println("4. Raise Funding Round")
-	fmt.Println("5. Skip (Do Nothing)")
+	if len(fs.FundingRounds) > 0 && fs.MRR > fs.MonthlyTeamCost {
+		fmt.Println("5. Buy Back Equity (profitable companies only)")
+	}
+	fmt.Println("6. Manage Board & Equity Pool")
+	
+	cyan.Println("\n[STRATEGIC]")
+	fmt.Println("7. Start Partnership")
+	if fs.AffiliateProgram == nil {
+		fmt.Println("8. Launch Affiliate Program")
+	}
+	if len(fs.Competitors) > 0 {
+		fmt.Println("9. Handle Competitors")
+	}
+	fmt.Println("10. Expand to New Market")
+	fmt.Println("11. Execute Pivot/Strategy Change")
+	
+	fmt.Println("\n0. Skip (Do Nothing)")
 
-	fmt.Print("\nWhat would you like to do? (1-5): ")
+	fmt.Print("\nWhat would you like to do? (0-11): ")
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
@@ -225,6 +245,20 @@ func handleFounderDecisions(fs *founder.FounderState) {
 	case "4":
 		handleFundraising(fs)
 	case "5":
+		handleBuyback(fs)
+	case "6":
+		handleBoardAndEquity(fs)
+	case "7":
+		handlePartnership(fs)
+	case "8":
+		handleAffiliateLaunch(fs)
+	case "9":
+		handleCompetitorManagement(fs)
+	case "10":
+		handleGlobalExpansion(fs)
+	case "11":
+		handlePivot(fs)
+	case "0":
 		fmt.Println("\n✓ Focusing on operations this month...")
 	default:
 		fmt.Println("\nInvalid choice, skipping...")
@@ -542,6 +576,454 @@ func displayFounderFinalScore(fs *founder.FounderState) {
 			totalRaised += round.Amount
 		}
 		green.Printf("   Total Raised: $%s\n", formatFounderCurrency(totalRaised))
+	}
+}
+
+func handlePartnership(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("🤝 STRATEGIC PARTNERSHIPS")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	fmt.Println("\n1. Distribution Partnership ($50-150k) - 10-30% MRR boost")
+	fmt.Println("2. Technology Partnership ($30-100k) - Product integration, reduce churn")
+	fmt.Println("3. Co-Marketing Partnership ($25-75k) - 15-40% MRR boost")
+	fmt.Println("4. Data Partnership ($40-100k) - Analytics/insights, reduce churn")
+	fmt.Println("0. Cancel")
+
+	fmt.Print("\nSelect partnership type (0-4): ")
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	var partnerType string
+	switch choice {
+	case "1":
+		partnerType = "distribution"
+	case "2":
+		partnerType = "technology"
+	case "3":
+		partnerType = "co-marketing"
+	case "4":
+		partnerType = "data"
+	case "0":
+		fmt.Println("\nCanceled")
+		return
+	default:
+		color.Red("\nInvalid choice!")
+		return
+	}
+
+	partnership, err := fs.StartPartnership(partnerType)
+	if err != nil {
+		color.Red("\n❌ Error: %v", err)
+	} else {
+		color.Green("\n✓ Partnership with %s started!", partnership.Partner)
+		fmt.Printf("  Type: %s\n", partnership.Type)
+		fmt.Printf("  Cost: $%s\n", formatFounderCurrency(partnership.Cost))
+		fmt.Printf("  Duration: %d months\n", partnership.Duration)
+		fmt.Printf("  Expected MRR Boost: $%s\n", formatFounderCurrency(partnership.MRRBoost))
+	}
+}
+
+func handleAffiliateLaunch(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("💰 LAUNCH AFFILIATE PROGRAM")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	fmt.Println("\nAffiliate programs let partners sell your product for commission.")
+	fmt.Println("Setup Cost: $20-50k | Monthly Platform Fees: $5-10k")
+	fmt.Println("\nRecommended commission rates:")
+	fmt.Println("  • 10-15% for SaaS products")
+	fmt.Println("  • 15-20% for marketplaces")
+	fmt.Println("  • 20-30% for high-margin products")
+
+	fmt.Print("\nSet commission rate (5-30%): ")
+	commStr, _ := reader.ReadString('\n')
+	commStr = strings.TrimSpace(commStr)
+	commission, err := strconv.ParseFloat(commStr, 64)
+	if err != nil || commission < 5 || commission > 30 {
+		color.Red("\nInvalid commission rate!")
+		return
+	}
+
+	err = fs.LaunchAffiliateProgram(commission)
+	if err != nil {
+		color.Red("\n❌ Error: %v", err)
+	} else {
+		color.Green("\n✓ Affiliate program launched!")
+		fmt.Printf("  Commission: %.1f%%\n", commission)
+		fmt.Printf("  Starting Affiliates: %d\n", fs.AffiliateProgram.Affiliates)
+	}
+}
+
+func handleCompetitorManagement(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	red := color.New(color.FgRed)
+	reader := bufio.NewReader(os.Stdin)
+
+	if len(fs.Competitors) == 0 {
+		color.Yellow("\nNo active competitors at this time")
+		return
+	}
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("⚔️  COMPETITOR MANAGEMENT")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	fmt.Println("\nActive Competitors:")
+	activeCount := 0
+	for i, comp := range fs.Competitors {
+		if !comp.Active {
+			continue
+		}
+		activeCount++
+		threatColor := color.New(color.FgYellow)
+		if comp.Threat == "high" {
+			threatColor = color.New(color.FgRed)
+		} else if comp.Threat == "low" {
+			threatColor = color.New(color.FgGreen)
+		}
+		
+		fmt.Printf("%d. %s - ", i+1, comp.Name)
+		threatColor.Printf("Threat: %s", comp.Threat)
+		fmt.Printf(" | Market Share: %.1f%% | Strategy: %s\n", comp.MarketShare*100, comp.Strategy)
+	}
+
+	if activeCount == 0 {
+		color.Yellow("\nNo active competitors")
+		return
+	}
+
+	fmt.Print("\nSelect competitor # to handle (0 to cancel): ")
+	compStr, _ := reader.ReadString('\n')
+	compStr = strings.TrimSpace(compStr)
+	compNum, err := strconv.Atoi(compStr)
+	if err != nil || compNum == 0 {
+		fmt.Println("\nCanceled")
+		return
+	}
+	compIndex := compNum - 1
+
+	fmt.Println("\nStrategies:")
+	fmt.Println("1. Ignore - No cost, but they may take market share")
+	fmt.Println("2. Compete Aggressively - $50-150k, reduce their threat")
+	fmt.Println("3. Partner With Them - $100-250k, merge customer bases")
+
+	fmt.Print("\nSelect strategy (1-3): ")
+	stratChoice, _ := reader.ReadString('\n')
+	stratChoice = strings.TrimSpace(stratChoice)
+
+	var strategy string
+	switch stratChoice {
+	case "1":
+		strategy = "ignore"
+	case "2":
+		strategy = "compete"
+	case "3":
+		strategy = "partner"
+	default:
+		red.Println("\nInvalid choice!")
+		return
+	}
+
+	message, err := fs.HandleCompetitor(compIndex, strategy)
+	if err != nil {
+		color.Red("\n❌ Error: %v", err)
+	} else {
+		color.Green("\n✓ %s", message)
+	}
+}
+
+func handleGlobalExpansion(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("🌍 GLOBAL EXPANSION")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	fmt.Println("\nAvailable Markets:")
+	fmt.Println("1. Europe - $200k setup, $30k/mo, 50k market, high competition")
+	fmt.Println("2. Asia - $250k setup, $40k/mo, 100k market, very high competition")
+	fmt.Println("3. LATAM - $150k setup, $20k/mo, 30k market, medium competition")
+	fmt.Println("4. Middle East - $180k setup, $25k/mo, 20k market, low competition")
+	fmt.Println("5. Africa - $120k setup, $15k/mo, 15k market, low competition")
+	fmt.Println("6. Australia - $100k setup, $18k/mo, 10k market, medium competition")
+	fmt.Println("0. Cancel")
+
+	// Show already launched markets
+	if len(fs.GlobalMarkets) > 0 {
+		fmt.Println("\nAlready Operating In:")
+		for _, m := range fs.GlobalMarkets {
+			fmt.Printf("  • %s (%.1f%% penetration, $%s MRR)\n", 
+				m.Region, m.Penetration*100, formatFounderCurrency(m.MRR))
+		}
+	}
+
+	fmt.Print("\nSelect market (0-6): ")
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	var region string
+	switch choice {
+	case "1":
+		region = "Europe"
+	case "2":
+		region = "Asia"
+	case "3":
+		region = "LATAM"
+	case "4":
+		region = "Middle East"
+	case "5":
+		region = "Africa"
+	case "6":
+		region = "Australia"
+	case "0":
+		fmt.Println("\nCanceled")
+		return
+	default:
+		color.Red("\nInvalid choice!")
+		return
+	}
+
+	market, err := fs.ExpandToMarket(region)
+	if err != nil {
+		color.Red("\n❌ Error: %v", err)
+	} else {
+		color.Green("\n✓ Launched in %s!", market.Region)
+		fmt.Printf("  Setup Cost: $%s\n", formatFounderCurrency(market.SetupCost))
+		fmt.Printf("  Monthly Cost: $%s\n", formatFounderCurrency(market.MonthlyCost))
+		fmt.Printf("  Market Size: %d customers\n", market.MarketSize)
+	}
+}
+
+func handlePivot(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	red := color.New(color.FgRed)
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("🔄 PIVOT / STRATEGY CHANGE")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	red.Println("\n⚠️  WARNING: Pivots are expensive and risky!")
+	fmt.Printf("Current Strategy: %s\n", fs.StartupType)
+	fmt.Println("\nExpected Costs:")
+	fmt.Println("  • $100-300k in pivot costs")
+	fmt.Println("  • Lose 20-50% of customers")
+	fmt.Println("  • 30-70% success rate (depends on product maturity & timing)")
+
+	fmt.Println("\nNew Strategy Options:")
+	fmt.Println("1. Enterprise B2B")
+	fmt.Println("2. SMB B2B")
+	fmt.Println("3. B2C")
+	fmt.Println("4. Marketplace")
+	fmt.Println("5. Platform")
+	fmt.Println("6. Vertical SaaS")
+	fmt.Println("7. Horizontal SaaS")
+	fmt.Println("8. Deep Tech")
+	fmt.Println("9. Consumer Apps")
+	fmt.Println("0. Cancel")
+
+	fmt.Print("\nSelect new strategy (0-9): ")
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	strategies := map[string]string{
+		"1": "Enterprise B2B",
+		"2": "SMB B2B",
+		"3": "B2C",
+		"4": "Marketplace",
+		"5": "Platform",
+		"6": "Vertical SaaS",
+		"7": "Horizontal SaaS",
+		"8": "Deep Tech",
+		"9": "Consumer Apps",
+	}
+
+	toStrategy, ok := strategies[choice]
+	if !ok {
+		if choice == "0" {
+			fmt.Println("\nCanceled")
+		} else {
+			red.Println("\nInvalid choice!")
+		}
+		return
+	}
+
+	fmt.Print("\nReason for pivot: ")
+	reason, _ := reader.ReadString('\n')
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "Strategic repositioning"
+	}
+
+	fmt.Print("\nAre you sure? This is risky! (yes/no): ")
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+	if confirm != "yes" && confirm != "y" {
+		fmt.Println("\nCanceled")
+		return
+	}
+
+	pivot, err := fs.ExecutePivot(toStrategy, reason)
+	if err != nil {
+		color.Red("\n❌ Error: %v", err)
+	} else {
+		if pivot.Success {
+			color.Green("\n🎉 Pivot SUCCESSFUL!")
+			fmt.Printf("  New Strategy: %s\n", pivot.ToStrategy)
+			fmt.Printf("  New Market Size: %d (expanded!)\n", fs.TargetMarketSize)
+		} else {
+			red.Println("\n😞 Pivot FAILED")
+			fmt.Println("  The market didn't respond well to the change")
+		}
+		fmt.Printf("  Cost: $%s\n", formatFounderCurrency(pivot.Cost))
+		fmt.Printf("  Customers Lost: %d\n", pivot.CustomersLost)
+	}
+}
+
+func handleBuyback(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	reader := bufio.NewReader(os.Stdin)
+
+	if len(fs.FundingRounds) == 0 {
+		color.Yellow("\nNo funding rounds to buy back from")
+		return
+	}
+
+	monthlyProfit := fs.MRR - fs.MonthlyTeamCost
+	if monthlyProfit <= 0 {
+		color.Red("\nMust be profitable to buy back equity")
+		fmt.Printf("Current monthly profit/loss: $%s\n", formatFounderCurrency(monthlyProfit))
+		return
+	}
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("💎 BUY BACK EQUITY")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	fmt.Printf("\nYou're profitable! Monthly profit: $%s\n", formatFounderCurrency(monthlyProfit))
+	fmt.Println("\nFunding Rounds:")
+	for i, round := range fs.FundingRounds {
+		fmt.Printf("%d. %s - %.1f%% equity given\n", i+1, round.RoundName, round.EquityGiven)
+	}
+
+	fmt.Print("\nSelect round to buy back from (0 to cancel): ")
+	roundStr, _ := reader.ReadString('\n')
+	roundStr = strings.TrimSpace(roundStr)
+	roundNum, err := strconv.Atoi(roundStr)
+	if err != nil || roundNum == 0 {
+		fmt.Println("\nCanceled")
+		return
+	}
+	if roundNum < 1 || roundNum > len(fs.FundingRounds) {
+		color.Red("\nInvalid round!")
+		return
+	}
+
+	selectedRound := fs.FundingRounds[roundNum-1]
+	currentVal := int64(float64(fs.MRR) * 12 * 12) // 12x ARR
+
+	fmt.Printf("\nCurrent valuation: $%s (12x ARR)\n", formatFounderCurrency(currentVal))
+	fmt.Printf("Available to buy back: %.1f%%\n", selectedRound.EquityGiven)
+
+	fmt.Print("\nHow much equity to buy back? (%): ")
+	equityStr, _ := reader.ReadString('\n')
+	equityStr = strings.TrimSpace(equityStr)
+	equity, err := strconv.ParseFloat(equityStr, 64)
+	if err != nil || equity <= 0 {
+		color.Red("\nInvalid percentage!")
+		return
+	}
+
+	costEstimate := int64(float64(currentVal) * equity / 100.0)
+	fmt.Printf("\nEstimated cost: $%s\n", formatFounderCurrency(costEstimate))
+	fmt.Print("Confirm? (yes/no): ")
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+	if confirm != "yes" && confirm != "y" {
+		fmt.Println("\nCanceled")
+		return
+	}
+
+	buyback, err := fs.BuybackEquity(selectedRound.RoundName, equity)
+	if err != nil {
+		color.Red("\n❌ Error: %v", err)
+	} else {
+		color.Green("\n✓ Successfully bought back %.1f%% equity!", buyback.EquityBought)
+		fmt.Printf("  Paid: $%s\n", formatFounderCurrency(buyback.PricePaid))
+		fmt.Printf("  Your new ownership: %.1f%%\n", 100.0-fs.EquityGivenAway)
+	}
+}
+
+func handleBoardAndEquity(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("👔 BOARD & EQUITY POOL")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	fmt.Printf("\nCurrent Board Seats: %d\n", fs.BoardSeats)
+	fmt.Printf("Employee Equity Pool: %.1f%%\n", fs.EquityPool)
+	fmt.Printf("Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
+
+	fmt.Println("\nOptions:")
+	fmt.Println("1. Add Board Seat (costs ~2% from equity pool)")
+	fmt.Println("2. Expand Equity Pool (dilutes you by 1-10%)")
+	fmt.Println("0. Cancel")
+
+	fmt.Print("\nSelect option (0-2): ")
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	switch choice {
+	case "1":
+		fmt.Print("\nReason for new board seat: ")
+		reason, _ := reader.ReadString('\n')
+		reason = strings.TrimSpace(reason)
+		if reason == "" {
+			reason = "Strategic advisor"
+		}
+
+		err := fs.AddBoardSeat(reason)
+		if err != nil {
+			color.Red("\n❌ Error: %v", err)
+		} else {
+			color.Green("\n✓ Added board seat")
+			fmt.Printf("  New board seats: %d\n", fs.BoardSeats)
+			fmt.Printf("  Remaining equity pool: %.1f%%\n", fs.EquityPool)
+		}
+
+	case "2":
+		fmt.Print("\nHow much to add to equity pool? (1-10%): ")
+		pctStr, _ := reader.ReadString('\n')
+		pctStr = strings.TrimSpace(pctStr)
+		pct, err := strconv.ParseFloat(pctStr, 64)
+		if err != nil || pct < 1 || pct > 10 {
+			color.Red("\nInvalid percentage!")
+			return
+		}
+
+		err = fs.ExpandEquityPool(pct)
+		if err != nil {
+			color.Red("\n❌ Error: %v", err)
+		} else {
+			color.Green("\n✓ Expanded equity pool by %.1f%%", pct)
+			fmt.Printf("  New equity pool: %.1f%%\n", fs.EquityPool)
+			fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
+		}
+
+	case "0":
+		fmt.Println("\nCanceled")
+	default:
+		color.Red("\nInvalid choice!")
 	}
 }
 
