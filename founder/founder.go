@@ -327,7 +327,8 @@ func (fs *FounderState) CalculateRunway() {
 	netBurn := monthlyBurn - monthlyRevenue
 	
 	if netBurn <= 0 {
-		fs.CashRunwayMonths = 999 // Effectively infinite if cashflow positive
+		// Cash positive! Runway is infinite
+		fs.CashRunwayMonths = -1
 	} else {
 		fs.CashRunwayMonths = int(fs.Cash / netBurn)
 	}

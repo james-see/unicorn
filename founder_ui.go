@@ -87,7 +87,11 @@ func displayFounderWelcome(fs *founder.FounderState) {
 	fmt.Printf("\n💰 Starting Cash: $%s\n", formatFounderCurrency(fs.Cash))
 	fmt.Printf("📊 MRR: $%s\n", formatFounderCurrency(fs.MRR))
 	fmt.Printf("👥 Team Size: %d\n", fs.Team.TotalEmployees)
-	fmt.Printf("⏱️  Runway: %d months\n", fs.CashRunwayMonths)
+	if fs.CashRunwayMonths < 0 {
+		fmt.Printf("⏱️  Runway: ∞ (cash positive!)\n")
+	} else {
+		fmt.Printf("⏱️  Runway: %d months\n", fs.CashRunwayMonths)
+	}
 	fmt.Printf("📈 Product Maturity: %.0f%%\n", fs.ProductMaturity*100)
 
 	yellow.Println("\n\n🎯 YOUR GOAL:")
@@ -116,7 +120,11 @@ func playFounderTurn(fs *founder.FounderState) {
 	// Check for low cash warning
 	if fs.NeedsLowCashWarning() {
 		red.Println("\n⚠️  WARNING: Cash is running low!")
-		red.Printf("   Cash: $%s | Runway: %d months\n", formatFounderCurrency(fs.Cash), fs.CashRunwayMonths)
+		if fs.CashRunwayMonths < 0 {
+			red.Printf("   Cash: $%s | Runway: ∞ (profitable)\n", formatFounderCurrency(fs.Cash))
+		} else {
+			red.Printf("   Cash: $%s | Runway: %d months\n", formatFounderCurrency(fs.Cash), fs.CashRunwayMonths)
+		}
 		yellow.Println("   Consider: Raise funding, cut costs, or speed up revenue growth!")
 	}
 
@@ -131,7 +139,9 @@ func playFounderTurn(fs *founder.FounderState) {
 	fmt.Println(strings.Repeat("─", 70))
 	
 	fmt.Printf("💰 Cash: $%s", formatFounderCurrency(fs.Cash))
-	if fs.CashRunwayMonths < 6 {
+	if fs.CashRunwayMonths < 0 {
+		green.Printf(" (∞ runway - profitable!)\n")
+	} else if fs.CashRunwayMonths < 6 {
 		red.Printf(" (⚠️  %d months runway)\n", fs.CashRunwayMonths)
 	} else {
 		fmt.Printf(" (%d months runway)\n", fs.CashRunwayMonths)
@@ -306,7 +316,11 @@ func handleHiring(fs *founder.FounderState) {
 		color.Red("\n❌ Error: %v", err)
 	} else {
 		color.Green("\n✓ Hired a new %s!", role)
-		fmt.Printf("New runway: %d months\n", fs.CashRunwayMonths)
+		if fs.CashRunwayMonths < 0 {
+			fmt.Printf("Runway: ∞ (still profitable!)\n")
+		} else {
+			fmt.Printf("New runway: %d months\n", fs.CashRunwayMonths)
+		}
 	}
 }
 
@@ -356,7 +370,11 @@ func handleFiring(fs *founder.FounderState) {
 		color.Red("\n❌ Error: %v", err)
 	} else {
 		color.Green("\n✓ Let go one %s", role)
-		fmt.Printf("New runway: %d months\n", fs.CashRunwayMonths)
+		if fs.CashRunwayMonths < 0 {
+			fmt.Printf("Runway: ∞ (profitable!)\n")
+		} else {
+			fmt.Printf("New runway: %d months\n", fs.CashRunwayMonths)
+		}
 	}
 }
 
@@ -481,7 +499,11 @@ func handleFundraising(fs *founder.FounderState) {
 	fmt.Printf("  Equity Given: %.1f%%\n", equityGiven)
 	fmt.Printf("  Terms: %s\n", terms)
 	fmt.Printf("  Your remaining equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
-	fmt.Printf("  New runway: %d months\n", fs.CashRunwayMonths)
+	if fs.CashRunwayMonths < 0 {
+		fmt.Printf("  Runway: ∞ (profitable!)\n")
+	} else {
+		fmt.Printf("  New runway: %d months\n", fs.CashRunwayMonths)
+	}
 }
 
 func displayAcquisitionOffer(fs *founder.FounderState, offer *founder.AcquisitionOffer) {
