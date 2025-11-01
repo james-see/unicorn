@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 type ScoreSubmission struct {
@@ -74,37 +74,54 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		submission.Difficulty = "Medium"
 	}
 
-	// Connect to database
-	dbPath := os.Getenv("LEADERBOARD_DB_PATH")
-	if dbPath == "" {
-		dbPath = "/tmp/leaderboard.db"
+	// Connect to Vercel Postgres database
+	postgresURL := os.Getenv("POSTGRES_URL")
+	if postgresURL == "" {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Success: false,
+			Message: "Database configuration error: POSTGRES_URL not set",
+		})
+		return
 	}
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("postgres", postgresURL)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(Response{
 			Success: false,
-			Message: "Database connection error",
+			Message: fmt.Sprintf("Database connection error: %v", err),
 		})
 		return
 	}
 	defer db.Close()
 
-	// Create table if not exists
+	// Test connection
+	if err := db.Ping(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Success: false,
+			Message: fmt.Sprintf("Database ping failed: %v", err),
+		})
+		return
+	}
+
+	// Create table if not exists (Postgres syntax)
 	createTableSQL := `
 	CREATE TABLE IF NOT EXISTS game_scores (
 		id TEXT PRIMARY KEY,
 		player_name TEXT NOT NULL,
-		final_net_worth INTEGER NOT NULL,
+		final_net_worth BIGINT NOT NULL,
 		roi REAL NOT NULL,
 		successful_exits INTEGER NOT NULL,
 		turns_played INTEGER NOT NULL,
 		difficulty TEXT NOT NULL,
-		played_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_net_worth ON game_scores(final_net_worth DESC);
 	CREATE INDEX IF NOT EXISTS idx_roi ON game_scores(roi DESC);
+	CREATE INDEX IF NOT EXISTS idx_player ON game_scores(player_name);
+	CREATE INDEX IF NOT EXISTS idx_difficulty ON game_scores(difficulty);
 	`
 	
 	_, err = db.Exec(createTableSQL)
@@ -120,10 +137,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	// Generate UUID for score
 	scoreID := uuid.New().String()
 
-	// Insert score
+	// Insert score (Postgres uses $1, $2, etc. instead of ?)
 	insertSQL := `
 		INSERT INTO game_scores (id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, played_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
 	_, err = db.Exec(insertSQL,
