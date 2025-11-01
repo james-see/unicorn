@@ -1109,14 +1109,10 @@ func handleBoardAndEquity(fs *founder.FounderState) {
 			reason = "Strategic advisor"
 		}
 
-		err := fs.AddBoardSeat(reason)
-		if err != nil {
-			color.Red("\n❌ Error: %v", err)
-		} else {
-			color.Green("\n✓ Added board seat")
-			fmt.Printf("  New board seats: %d\n", fs.BoardSeats)
-			fmt.Printf("  Remaining equity pool: %.1f%%\n", fs.EquityPool)
-		}
+		fs.AddBoardSeat(reason)
+		color.Green("\n✓ Added board seat")
+		fmt.Printf("  New board seats: %d\n", fs.BoardSeats)
+		fmt.Printf("  Remaining equity pool: %.1f%%\n", fs.EquityPool)
 
 	case "2":
 		fmt.Print("\nHow much to add to equity pool? (1-10%): ")
@@ -1128,14 +1124,10 @@ func handleBoardAndEquity(fs *founder.FounderState) {
 			return
 		}
 
-		err = fs.ExpandEquityPool(pct)
-		if err != nil {
-			color.Red("\n❌ Error: %v", err)
-		} else {
-			color.Green("\n✓ Expanded equity pool by %.1f%%", pct)
-			fmt.Printf("  New equity pool: %.1f%%\n", fs.EquityPool)
-			fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
-		}
+		fs.ExpandEquityPool(pct)
+		color.Green("\n✓ Expanded equity pool by %.1f%%", pct)
+		fmt.Printf("  New equity pool: %.1f%%\n", fs.EquityPool)
+		fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
 
 	case "0":
 		fmt.Println("\nCanceled")
