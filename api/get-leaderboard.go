@@ -151,3 +151,8 @@ func GetLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+// Handler is the entry point for Vercel serverless function
+func Handler(w http.ResponseWriter, r *http.Request) {
+	GetLeaderboardHandler(w, r)
+}
