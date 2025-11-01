@@ -294,6 +294,73 @@
             opacity: 0.9;
         }
 
+        .leaderboard-status {
+            margin-top: 1rem;
+            font-weight: 600;
+            opacity: 0.9;
+        }
+
+        .leaderboard-status.hidden {
+            display: none;
+        }
+
+        .leaderboard-table {
+            margin-top: 1.5rem;
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .leaderboard-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        .leaderboard-table th,
+        .leaderboard-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .leaderboard-table th {
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .leaderboard-table tbody tr:hover td {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .leaderboard-error {
+            margin-top: 1rem;
+            font-weight: 600;
+            color: #ffd0d0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .leaderboard-link {
+            display: inline-block;
+            margin-top: 1.5rem;
+            padding: 0.6rem 1.5rem;
+            border-radius: 999px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            text-decoration: none;
+            color: #fff;
+            font-weight: 600;
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+
+        .leaderboard-link:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-3px);
+        }
+
         /* GitHub Link */
         .github-link {
             display: inline-flex;
@@ -464,6 +531,31 @@
             </div>
         </div>
 
+        <div class="card" id="global-leaderboard">
+            <h2>🌍 Global Leaderboard</h2>
+            <p>Live top scores submitted by the community via our Datasette-powered leaderboard.</p>
+            <div class="leaderboard-status" id="leaderboard-status">Connecting to Datasette…</div>
+            <div class="leaderboard-table hidden" id="leaderboard-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Player</th>
+                            <th>Net Worth</th>
+                            <th>ROI</th>
+                            <th>Exits</th>
+                            <th>Difficulty</th>
+                            <th>Played</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body"></tbody>
+                </table>
+            </div>
+            <a href="#" id="leaderboard-link" class="leaderboard-link hidden" target="_blank" rel="noopener noreferrer">
+                View full leaderboard
+            </a>
+        </div>
+
         <div class="card">
             <h2>🎯 How to Play</h2>
             <p><strong>1.</strong> Download and run the game</p>
@@ -496,6 +588,140 @@
             <p style="margin-top: 1rem;">Play • Invest • Build Your Empire 🚀</p>
         </footer>
     </div>
+
+    <script>
+        (function () {
+            const statusEl = document.getElementById('leaderboard-status');
+            const tableWrapper = document.getElementById('leaderboard-table');
+            const tbody = document.getElementById('leaderboard-body');
+            const link = document.getElementById('leaderboard-link');
+
+            if (!statusEl || !tableWrapper || !tbody || !link) {
+                return;
+            }
+
+            function formatCurrency(value) {
+                const number = Number(value) || 0;
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    maximumFractionDigits: 0
+                }).format(number);
+            }
+
+            function formatROI(value) {
+                const number = Number(value) || 0;
+                return `${number.toFixed(1)}%`;
+            }
+
+            function formatDate(value) {
+                if (!value) return '—';
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) {
+                    return value;
+                }
+                return date.toLocaleString();
+            }
+
+            function showPlaceholder(message, isError = false) {
+                statusEl.textContent = message;
+                statusEl.classList.toggle('hidden', false);
+                statusEl.classList.toggle('leaderboard-error', isError);
+            }
+
+            function buildRow(row, index) {
+                const tr = document.createElement('tr');
+                const cells = [
+                    index + 1,
+                    row.player_name || 'Unknown',
+                    formatCurrency(row.final_net_worth),
+                    formatROI(row.roi),
+                    row.successful_exits ?? 0,
+                    row.difficulty || '—',
+                    formatDate(row.played_at || row.submitted_at)
+                ];
+
+                cells.forEach((value) => {
+                    const td = document.createElement('td');
+                    td.textContent = value;
+                    tr.appendChild(td);
+                });
+                return tr;
+            }
+
+            async function loadConfig() {
+                try {
+                    const response = await fetch('leaderboard-config.json', { cache: 'no-cache' });
+                    if (!response.ok) {
+                        throw new Error('Unable to load leaderboard configuration.');
+                    }
+                    return await response.json();
+                } catch (error) {
+                    throw new Error('Unable to load leaderboard configuration.');
+                }
+            }
+
+            async function loadLeaderboard() {
+                showPlaceholder('Connecting to Datasette…');
+
+                let config;
+                try {
+                    config = await loadConfig();
+                } catch (error) {
+                    showPlaceholder(error.message, true);
+                    return;
+                }
+
+                if (!config || !config.datasette_base_url || config.datasette_base_url.includes('example')) {
+                    showPlaceholder('Configure your Datasette instance in docs/leaderboard-config.json to display the global leaderboard.', true);
+                    return;
+                }
+
+                const baseUrl = config.datasette_base_url.replace(/\/+$/, '');
+                const database = encodeURIComponent(config.database || 'unicorn');
+                const table = encodeURIComponent(config.table || 'game_scores');
+                const limit = config.limit || 10;
+
+                const params = new URLSearchParams({
+                    _shape: 'array',
+                    _sort: '-final_net_worth',
+                    _size: String(limit)
+                });
+
+                const leaderboardUrl = `${baseUrl}/${database}/${table}.json?${params.toString()}`;
+
+                try {
+                    const response = await fetch(leaderboardUrl, { cache: 'no-store' });
+                    if (!response.ok) {
+                        throw new Error(`Datasette responded with ${response.status}`);
+                    }
+
+                    const rows = await response.json();
+                    if (!Array.isArray(rows) || rows.length === 0) {
+                        showPlaceholder('Global leaderboard is empty. Be the first to submit a score!');
+                        return;
+                    }
+
+                    tbody.innerHTML = '';
+                    rows.forEach((row, index) => {
+                        tbody.appendChild(buildRow(row, index));
+                    });
+
+                    tableWrapper.classList.remove('hidden');
+                    statusEl.classList.add('hidden');
+
+                    if (config.full_leaderboard_url) {
+                        link.href = config.full_leaderboard_url;
+                        link.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    showPlaceholder(`Could not load global leaderboard: ${error.message}`, true);
+                }
+            }
+
+            loadLeaderboard();
+        })();
+    </script>
 </body>
 </html>
 

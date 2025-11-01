@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -16,6 +17,7 @@ import (
 	// analytics "github.com/jamesacampbell/unicorn/analytics"
 	clear "github.com/jamesacampbell/unicorn/clear"
 	db "github.com/jamesacampbell/unicorn/database"
+	datasette "github.com/jamesacampbell/unicorn/datasette"
 	game "github.com/jamesacampbell/unicorn/game"
 	logo "github.com/jamesacampbell/unicorn/logo"
 	yaml "gopkg.in/yaml.v2"
@@ -26,6 +28,8 @@ type gameData struct {
 	BadThings  int64  `yaml:"number-of-bad-things-per-year"`
 	Foreground string `yaml:"foreground-color"`
 }
+
+var globalDatasetteClient *datasette.Client
 
 func initMenu() (username string) {
 	reader := bufio.NewReader(os.Stdin)
@@ -53,6 +57,25 @@ func loadConfig() gameData {
 		fmt.Println(err)
 	}
 	return gd
+}
+
+func initDatasetteIntegration() {
+	globalDatasetteClient = nil
+
+	cfg, err := datasette.LoadConfig("config/datasette.yaml")
+	if err != nil {
+		fmt.Printf("Warning: Could not load Datasette config: %v\n", err)
+		return
+	}
+
+	if err := cfg.Validate(); err != nil {
+		fmt.Printf("Warning: Datasette integration disabled due to misconfiguration: %v\n", err)
+		return
+	}
+
+	if cfg.Enabled {
+		globalDatasetteClient = datasette.NewClient(*cfg)
+	}
 }
 
 func askForAutomatedMode() bool {
@@ -282,16 +305,16 @@ func displayFinalScore(gs *game.GameState) {
 	roiColor.Printf("%s Return on Investment: %.2f%%\n", ascii.Chart, roi)
 	fmt.Printf("%s Successful Exits (5x+): %d\n", ascii.Rocket, successfulExits)
 
-	fmt.Println("\n" + strings.Repeat("═", 50))
+	fmt.Println("\n" + strings.Repeat("\u2550", 50))
 	fmt.Println("FINAL PORTFOLIO:")
 	for _, inv := range gs.Portfolio.Investments {
 		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
-		fmt.Printf("   %s: $%s → $%s\n",
+		fmt.Printf("   %s: $%s \u2192 $%s\n",
 			inv.CompanyName, formatMoney(inv.AmountInvested), formatMoney(value))
 	}
 
 	// Performance rating
-	fmt.Println("\n" + strings.Repeat("═", 50))
+	fmt.Println("\n" + strings.Repeat("\u2550", 50))
 	var rating string
 	var icon string
 	if roi >= 1000 {
@@ -316,10 +339,38 @@ func displayFinalScore(gs *game.GameState) {
 
 	yellow := color.New(color.FgYellow, color.Bold)
 	yellow.Printf("Rating: %s %s\n", icon, rating)
-	fmt.Println(strings.Repeat("═", 50) + "\n")
+	fmt.Println(strings.Repeat("\u2550", 50) + "\n")
+}
+
+func maybeSubmitGlobalLeaderboard(score db.GameScore) {
+	if globalDatasetteClient == nil {
+		return
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Would you like to submit your score to the global leaderboard? (y/N): ")
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(strings.ToLower(response))
+
+	if response != "y" && response != "yes" {
+		return
+	}
+
+	fmt.Println("\nSubmitting score to global leaderboard...")
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+
+	if err := globalDatasetteClient.SubmitScore(ctx, score); err != nil {
+		color.Yellow("Warning: Could not submit global leaderboard score: %v", err)
+		return
+	}
+
+	color.Green("\n%s Score submitted to the global leaderboard!", ascii.Trophy)
 }
 
 func main() {
+	initDatasetteIntegration()
+
 	// Initialize database
 	err := db.InitDB("unicorn_scores.db")
 	if err != nil {
@@ -365,7 +416,7 @@ func displayMainMenu() string {
 	yellow := color.New(color.FgYellow)
 
 	cyan.Println("\n" + strings.Repeat("=", 50))
-	cyan.Println("           ★ UNICORN - MAIN MENU ★")
+	cyan.Println("           \u2605 UNICORN - MAIN MENU \u2605")
 	cyan.Println(strings.Repeat("=", 50))
 
 	yellow.Println("\n1. New Game")
@@ -479,6 +530,8 @@ func playNewGame() {
 		color.Green("\n%s Score saved to leaderboard!", ascii.Check)
 	}
 
+	maybeSubmitGlobalLeaderboard(score)
+
 	// Check for achievements
 	checkAndUnlockAchievements(gs)
 
@@ -555,9 +608,9 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		cyan := color.New(color.FgCyan, color.Bold)
 		yellow := color.New(color.FgYellow)
 
-		fmt.Println("\n" + strings.Repeat("═", 60))
+		fmt.Println("\n" + strings.Repeat("\u2550", 60))
 		cyan.Printf("     %s NEW ACHIEVEMENTS UNLOCKED! %s\n", ascii.Star, ascii.Star)
-		fmt.Println(strings.Repeat("═", 60))
+		fmt.Println(strings.Repeat("\u2550", 60))
 
 		for _, ach := range newAchievements {
 			// Save to database
@@ -741,9 +794,9 @@ func displayPlayerStats() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 
-	cyan.Println("\n" + strings.Repeat("═", 50))
+	cyan.Println("\n" + strings.Repeat("\u2550", 50))
 	cyan.Println("           PLAYER STATISTICS")
-	cyan.Println(strings.Repeat("═", 50))
+	cyan.Println(strings.Repeat("\u2550", 50))
 
 	fmt.Print("\nEnter player name: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -1038,9 +1091,9 @@ func displayHelpGuide() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 
-	cyan.Println("\n" + strings.Repeat("═", 70))
+	cyan.Println("\n" + strings.Repeat("\u2550", 70))
 	cyan.Println("              HELP & INFORMATION")
-	cyan.Println(strings.Repeat("═", 70))
+	cyan.Println(strings.Repeat("\u2550", 70))
 
 	yellow.Printf("\n%s GAME OVERVIEW\n", ascii.Lightbulb)
 	fmt.Println("You're a VC investor with limited capital. Invest in 15 randomly")
@@ -1082,9 +1135,9 @@ func displayHelpGuide() {
 	yellow.Printf("\n%s AVAILABLE COMPANIES\n", ascii.Building)
 	fmt.Println("30 diverse startups across 12+ sectors:")
 	fmt.Println("Each game randomly selects 15 companies from the pool.")
-	fmt.Println("FinTech • BioTech • CleanTech • HealthTech • EdTech")
-	fmt.Println("Robotics • Security • Gaming • LegalTech • AgriTech")
-	fmt.Println("Logistics • IoT • Creative • CloudTech • and more!")
+	fmt.Println("FinTech \u2022 BioTech \u2022 CleanTech \u2022 HealthTech \u2022 EdTech")
+	fmt.Println("Robotics \u2022 Security \u2022 Gaming \u2022 LegalTech \u2022 AgriTech")
+	fmt.Println("Logistics \u2022 IoT \u2022 Creative \u2022 CloudTech \u2022 and more!")
 	fmt.Println("Includes LOW risk stable companies and VERY HIGH risk moonshots!")
 
 	yellow.Printf("\n%s RANDOM EVENTS\n", ascii.News)

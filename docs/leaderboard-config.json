@@ -1,0 +1,7 @@
+{
+  "datasette_base_url": "https://your-datasette-instance.example",
+  "database": "unicorn",
+  "table": "game_scores",
+  "limit": 10,
+  "full_leaderboard_url": ""
+}

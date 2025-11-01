@@ -138,6 +138,44 @@ go build -o unicorn
 
 **Long-term:** Game mode where you run a startup trying to become a Unicorn
 
+## 🌍 Datasette Global Leaderboard
+
+Unicorn now speaks to a Datasette instance so players can opt-in to a shared leaderboard and publish live scores on GitHub Pages.
+
+1. **Deploy Datasette with write support** – for example, `pip install datasette datasette-write` and run it on Fly.io, Railway, or `datasette publish gh-pages`. Make sure CORS is enabled (default) and `datasette-write` is registered.
+2. **Create the leaderboard table** (matches the local SQLite schema):
+
+   ```sql
+   CREATE TABLE IF NOT EXISTS game_scores (
+     id INTEGER PRIMARY KEY,
+     player_name TEXT NOT NULL,
+     final_net_worth INTEGER NOT NULL,
+     roi REAL NOT NULL,
+     successful_exits INTEGER NOT NULL,
+     turns_played INTEGER NOT NULL,
+     difficulty TEXT NOT NULL,
+     played_at TEXT NOT NULL,
+     submitted_at TEXT
+   );
+   ```
+
+3. **Generate a Datasette API token** with insert permissions and store it locally (never commit secrets). Export it before running the game:
+
+   ```bash
+   export UNICORN_DATASETTE_TOKEN="your-token"
+   ```
+
+   Alternatively, place it in `config/datasette.yaml` (not recommended for public repos).
+
+4. **Configure the game** by editing `config/datasette.yaml`:
+   - `enabled: true`
+   - `base_url`: Datasette root URL (e.g. `https://leaderboard.yourdomain.com`)
+   - `database` and `table`: where `datasette-write` should insert rows
+
+5. **Update the website** by editing `docs/leaderboard-config.json` with the same base URL, database, table, and optional `full_leaderboard_url`. Commit and redeploy GitHub Pages – the `docs/index.html` page will render a live table via Datasette’s JSON API.
+
+When a game ends, players are prompted to submit their score to the global leaderboard. Successful submissions appear on the Datasette instance instantly and on the GitHub page on the next refresh.
+
 ## Demo
 
 ![unicorn-demo 2019-01-02 16_21_43](https://user-images.githubusercontent.com/616585/50613136-95163300-0eaa-11e9-9e0b-a4ed7c57bc71.gif)

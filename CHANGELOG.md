@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 5 - Datasette Global Leaderboard (2025-11-01)
+
+### Major Features Added
+
+- **Global Leaderboard Publishing:** Players can opt into submitting their final results to a Datasette-backed leaderboard after each game.
+- **GitHub Pages Integration:** The project website now renders the live global leaderboard by consuming Datasette?s JSON API.
+- **Configurable Deployment:** YAML/JSON configs make it easy to point both the game and website at your Datasette instance.
+
+### Technical Changes
+
+- Added `datasette/datasette.go` for authenticated inserts via the `datasette-write` API.
+- Introduced `config/datasette.yaml` for runtime configuration with optional `UNICORN_DATASETTE_TOKEN` override.
+- Updated `main.go` to load Datasette settings, prompt players, and submit global scores.
+- Refreshed `docs/index.html` with a live leaderboard card, styles, and a Datasette-powered loader.
+- Added `docs/leaderboard-config.json` to configure the Datasette endpoint used by GitHub Pages.
+- Documented the workflow in `README.md`.
+
+---
+
 ## Phase 4 - Achievements & Career Progression (2025-10-31)
 
 ### Major Features Added

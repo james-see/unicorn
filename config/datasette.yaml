@@ -1,0 +1,7 @@
+enabled: false
+base_url: "https://your-datasette-instance.example"
+database: "unicorn"
+table: "game_scores"
+# api_token can be supplied via this file or the UNICORN_DATASETTE_TOKEN env var
+api_token: ""
+timeout_seconds: 10
