@@ -1,5 +1,47 @@
 # Changelog
 
+## Version 3.6.0 - Founder Mode: Realistic Financials & Cap Table (2025-11-01)
+
+### Major Features Added
+
+#### 💰 MRR Cash Flow System
+- **Realistic Revenue Conversion** - MRR now flows into company cash after realistic deductions
+- **Tax Deductions** - 20% tax rate on revenue
+- **Processing Fees** - 3% payment processing fees
+- **Company Overhead** - 5% operational overhead costs
+- **Savings Buffer** - 5% set aside for reserves
+- **Net Cash Flow** - ~67% of MRR converts to cash (realistic for SaaS businesses)
+
+#### 📊 Cap Table Management
+- **Equity Tracking** - Complete cap table structure tracking all equity holders
+- **Employee Equity Grants** - Initial employees receive 1-2% equity each at game start
+- **Executive Equity Grants** - C-suite executives (CTO, CFO, COO, CGO) receive 3-10% equity when hired
+- **Investor Tracking** - All funding rounds tracked on cap table with equity percentages
+- **Cap Table Structure** - Detailed tracking of employee, executive, and investor equity
+
+#### 🎲 Startup Randomization
+- **Cash Variance** - Initial cash varies ±20% (0.8x to 1.2x multiplier)
+- **Competition Randomization** - 30% chance to randomize competition level (low/medium/high/very_high)
+- **More Variety** - Each game start has unique financial and market conditions
+
+### Technical Changes
+
+#### Modified Files
+- `founder/founder.go` - Added MRR cash flow, cap table structures, equity grants, and randomization
+
+#### New Structures
+- `CapTableEntry` - Tracks individual equity ownership (name, type, equity %, month granted)
+- `Employee.Equity` - Added equity percentage field to Employee struct
+- `FounderState.CapTable` - Array tracking all equity holders
+
+### Gameplay Impact
+- **More Realistic** - MRR now properly affects cash runway and company financials
+- **Strategic Equity** - Players must manage equity pool when hiring executives
+- **Varied Starts** - Each game provides different initial conditions for replayability
+- **Complete Ownership** - Full visibility into who owns what percentage of the company
+
+---
+
 ## Version 2.0.0 - Global Leaderboard & Cloud Integration (2025-01-XX)
 
 ### Major Features Added
