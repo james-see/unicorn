@@ -530,15 +530,15 @@
             <p style="margin-bottom: 1rem;">Compete with players worldwide! Top scores updated in real-time.</p>
             
             <div class="filter-tabs">
-                <button class="filter-tab active" onclick="loadLeaderboard('all', 'net_worth')">Top by Net Worth</button>
-                <button class="filter-tab" onclick="loadLeaderboard('all', 'roi')">Top by ROI</button>
-                <button class="filter-tab" onclick="loadLeaderboard('Easy', 'net_worth')">Easy</button>
-                <button class="filter-tab" onclick="loadLeaderboard('Medium', 'net_worth')">Medium</button>
-                <button class="filter-tab" onclick="loadLeaderboard('Hard', 'net_worth')">Hard</button>
-                <button class="filter-tab" onclick="loadLeaderboard('Expert', 'net_worth')">Expert</button>
+                <button class="filter-tab active" onclick="loadLeaderboard('all', 'net_worth', event)">Top by Net Worth</button>
+                <button class="filter-tab" onclick="loadLeaderboard('all', 'roi', event)">Top by ROI</button>
+                <button class="filter-tab" onclick="loadLeaderboard('Easy', 'net_worth', event)">Easy</button>
+                <button class="filter-tab" onclick="loadLeaderboard('Medium', 'net_worth', event)">Medium</button>
+                <button class="filter-tab" onclick="loadLeaderboard('Hard', 'net_worth', event)">Hard</button>
+                <button class="filter-tab" onclick="loadLeaderboard('Expert', 'net_worth', event)">Expert</button>
             </div>
 
-            <button class="refresh-btn" onclick="loadLeaderboard()">🔄 Refresh</button>
+            <button class="refresh-btn" onclick="loadLeaderboard(currentFilter, currentSort, null)">🔄 Refresh</button>
 
             <div id="leaderboard-content">
                 <div class="loading">Loading global leaderboard...</div>
@@ -637,7 +637,7 @@
         }
 
         // Load leaderboard data
-        async function loadLeaderboard(difficulty = currentFilter, sortBy = currentSort) {
+        async function loadLeaderboard(difficulty = currentFilter, sortBy = currentSort, event = null) {
             currentFilter = difficulty;
             currentSort = sortBy;
             
@@ -648,7 +648,17 @@
             document.querySelectorAll('.filter-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
-            event?.target?.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            } else {
+                // Find and activate the matching tab
+                document.querySelectorAll('.filter-tab').forEach(tab => {
+                    const onclick = tab.getAttribute('onclick');
+                    if (onclick && onclick.includes(`'${difficulty}'`) && onclick.includes(`'${sortBy}'`)) {
+                        tab.classList.add('active');
+                    }
+                });
+            }
 
             try {
                 // Build query parameters
@@ -721,9 +731,17 @@
         }
 
         // Load leaderboard on page load
-        document.addEventListener('DOMContentLoaded', () => {
+        function initLeaderboard() {
             loadLeaderboard('all', 'net_worth');
-        });
+        }
+
+        // Try multiple initialization methods to ensure it loads
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initLeaderboard);
+        } else {
+            // DOMContentLoaded has already fired
+            initLeaderboard();
+        }
 
         // Smooth scroll to leaderboard
         if (window.location.hash === '#leaderboard') {

@@ -1,5 +1,5 @@
 datasette>=0.65.0
 datasette-cors>=0.2.0
-datasette-postgres>=0.1
 pysqlite3-binary
+psycopg2-binary
 
