@@ -10,10 +10,8 @@ import (
 )
 
 const (
-	// Update this URL after deploying to Vercel
-	// Production URL: https://unicorn.vercel.app/api/submit-score
-	// Preview URL (temporary): https://unicorn-g5xp1fzsv-james-campbells-projects-98ba50e1.vercel.app/api/submit-score
-	DefaultAPIEndpoint = "https://unicorn-g5xp1fzsv-james-campbells-projects-98ba50e1.vercel.app/api/submit-score"
+	// Production URL for Vercel deployment
+	DefaultAPIEndpoint = "https://unicorn-green.vercel.app/api/submit-score"
 )
 
 // ScoreSubmission represents a score to be submitted to the global leaderboard
