@@ -60,6 +60,18 @@ type Startup struct {
 	PercentMargin          int     `json:"Percent Margin Per Unit"`
 	RiskScore              float64 // 0-1, higher is riskier
 	GrowthPotential        float64 // 0-1, higher is better
+	
+	// Financial tracking
+	MonthlyRevenue         int64   // Revenue this month
+	MonthlyCosts           int64   // Costs this month (burn rate)
+	NetIncome              int64   // Profit/Loss this month
+	CumulativeRevenue      int64   // Total revenue to date
+	CumulativeCosts        int64   // Total costs to date
+	Last409AValuation      int64   // Last 409A valuation
+	Last409AMonth          int     // When was last 409A done
+	RevenueGrowthRate      float64 // Month-over-month growth
+	CustomerCount          int     // Current customers
+	MonthlyRecurringRevenue int64  // MRR for SaaS companies
 }
 
 // GameEvent represents something that happens to a startup
@@ -210,6 +222,16 @@ func (gs *GameState) LoadStartups() {
 		// Calculate risk and growth scores based on metrics
 		startup.RiskScore = gs.calculateRiskScore(&startup)
 		startup.GrowthPotential = gs.calculateGrowthPotential(&startup)
+		
+		// Initialize financial metrics
+		startup.MonthlyRevenue = int64(startup.MonthlySales * startup.SalePrice)
+		startup.MonthlyCosts = int64(startup.GrossBurnRate * 1000) // Convert to actual dollars
+		startup.NetIncome = startup.MonthlyRevenue - startup.MonthlyCosts
+		startup.CustomerCount = startup.MonthlySales // Approximate
+		startup.MonthlyRecurringRevenue = startup.MonthlyRevenue
+		startup.RevenueGrowthRate = 0.05 // Default 5% growth
+		startup.Last409AValuation = startup.Valuation
+		startup.Last409AMonth = 0
 		
 		allStartups = append(allStartups, startup)
 	}
@@ -373,6 +395,143 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 	return fmt.Errorf("you have not invested in %s", companyName)
 }
 
+// HasFollowOnOpportunities checks if there are any follow-on opportunities this turn
+func (gs *GameState) HasFollowOnOpportunities() bool {
+	opportunities := gs.GetFollowOnOpportunities()
+	return len(opportunities) > 0
+}
+
+// UpdateCompanyFinancials updates monthly financials for a company
+func (gs *GameState) UpdateCompanyFinancials(startup *Startup) {
+	// Apply growth rate to revenue (with some randomness)
+	growthVariance := (rand.Float64()*0.4 - 0.2) // -20% to +20% variance
+	actualGrowth := startup.RevenueGrowthRate + growthVariance
+	
+	// Update revenue based on growth
+	startup.MonthlyRevenue = int64(float64(startup.MonthlyRevenue) * (1 + actualGrowth))
+	
+	// Costs grow slower than revenue (economies of scale)
+	costGrowth := actualGrowth * 0.6 // Costs grow at 60% of revenue growth rate
+	startup.MonthlyCosts = int64(float64(startup.MonthlyCosts) * (1 + costGrowth))
+	
+	// Calculate net income
+	startup.NetIncome = startup.MonthlyRevenue - startup.MonthlyCosts
+	
+	// Update cumulative totals
+	startup.CumulativeRevenue += startup.MonthlyRevenue
+	startup.CumulativeCosts += startup.MonthlyCosts
+	
+	// Update customer count based on revenue
+	if startup.SalePrice > 0 {
+		startup.CustomerCount = int(startup.MonthlyRevenue / int64(startup.SalePrice))
+	}
+	
+	// Update MRR
+	startup.MonthlyRecurringRevenue = startup.MonthlyRevenue
+	
+	// Adjust growth rate based on performance
+	if startup.NetIncome > 0 {
+		startup.RevenueGrowthRate *= 1.02 // Profitable companies grow faster
+	} else {
+		startup.RevenueGrowthRate *= 0.98 // Unprofitable slow down
+	}
+	
+	// Cap growth rate
+	if startup.RevenueGrowthRate > 0.30 {
+		startup.RevenueGrowthRate = 0.30 // Max 30% monthly growth
+	}
+	if startup.RevenueGrowthRate < -0.15 {
+		startup.RevenueGrowthRate = -0.15 // Max 15% monthly decline
+	}
+	
+	// Update valuation based on financial performance
+	annualRevenue := startup.MonthlyRevenue * 12
+	
+	// Revenue multiple varies by profitability
+	revenueMultiple := 10.0
+	if startup.NetIncome > 0 {
+		revenueMultiple = 15.0 // Profitable companies get premium
+	}
+	
+	newValuation := int64(float64(annualRevenue) * revenueMultiple)
+	
+	// Smooth valuation changes (max 20% per month)
+	maxChange := float64(startup.Valuation) * 0.20
+	valuationChange := newValuation - startup.Valuation
+	if valuationChange > int64(maxChange) {
+		newValuation = startup.Valuation + int64(maxChange)
+	} else if valuationChange < -int64(maxChange) {
+		newValuation = startup.Valuation - int64(maxChange)
+	}
+	
+	// Minimum valuation
+	if newValuation < 100000 {
+		newValuation = 100000
+	}
+	
+	startup.Valuation = newValuation
+}
+
+// Calculate409AValuation performs quarterly 409A valuation
+func (gs *GameState) Calculate409AValuation(startup *Startup) int64 {
+	// 409A considers multiple factors
+	annualRevenue := startup.MonthlyRevenue * 12
+	
+	// Revenue multiple (conservative for 409A)
+	revenueMultiple := 8.0
+	if startup.NetIncome > 0 {
+		revenueMultiple = 12.0
+	}
+	revenueValue := int64(float64(annualRevenue) * revenueMultiple)
+	
+	// Cost to duplicate
+	costValue := startup.CumulativeCosts
+	
+	// Market value
+	marketValue := startup.Valuation
+	
+	// Weighted average
+	val409A := (revenueValue*4 + costValue*2 + marketValue*4) / 10
+	
+	// 409A is typically 20-30% discount to FMV
+	val409A = int64(float64(val409A) * 0.75)
+	
+	startup.Last409AValuation = val409A
+	startup.Last409AMonth = gs.Portfolio.Turn
+	
+	return val409A
+}
+
+// formatCurrency formats a number as currency
+func formatCurrency(amount int64) string {
+	abs := amount
+	if abs < 0 {
+		abs = -abs
+	}
+	
+	s := fmt.Sprintf("%d", abs)
+	n := len(s)
+	if n <= 3 {
+		if amount < 0 {
+			return "-" + s
+		}
+		return s
+	}
+	
+	result := ""
+	for i, digit := range s {
+		if i > 0 && (n-i)%3 == 0 {
+			result += ","
+		}
+		result += string(digit)
+	}
+	
+	if amount < 0 {
+		return "-" + result
+	}
+	return result
+}
+
 // ProcessTurn simulates one month of game time
 func (gs *GameState) ProcessTurn() []string {
 	messages := []string{}
@@ -381,39 +540,81 @@ func (gs *GameState) ProcessTurn() []string {
 	feeMessages := gs.ProcessManagementFees()
 	messages = append(messages, feeMessages...)
 	
+	// NOTE: Follow-on investments should be handled BEFORE this function is called
 	// Process funding rounds
 	roundMessages := gs.ProcessFundingRounds()
 	messages = append(messages, roundMessages...)
 	
-	// Apply random events to each investment
+	// Old random event code removed - now using financial-based valuation below
+	
+	// Update financials for all companies
+	for i := range gs.AvailableStartups {
+		startup := &gs.AvailableStartups[i]
+		gs.UpdateCompanyFinancials(startup)
+		
+		// Do 409A valuation quarterly (every 3 months)
+		if gs.Portfolio.Turn%3 == 0 {
+			val409A := gs.Calculate409AValuation(startup)
+			
+			// Show 409A for companies we're invested in
+			for _, inv := range gs.Portfolio.Investments {
+				if inv.CompanyName == startup.Name {
+					profitLossStr := ""
+					if startup.NetIncome >= 0 {
+						profitLossStr = fmt.Sprintf("Profit: $%s", formatCurrency(startup.NetIncome))
+					} else {
+						profitLossStr = fmt.Sprintf("Loss: $%s", formatCurrency(-startup.NetIncome))
+					}
+					
+					messages = append(messages, fmt.Sprintf(
+						"?? %s 409A: $%s (FMV: $%s, Revenue: $%s/mo, %s)",
+						startup.Name,
+						formatCurrency(val409A),
+						formatCurrency(startup.Valuation),
+						formatCurrency(startup.MonthlyRevenue),
+						profitLossStr,
+					))
+					break
+				}
+			}
+		}
+	}
+	
+	// Update player investments based on company valuations
 	for i := range gs.Portfolio.Investments {
 		inv := &gs.Portfolio.Investments[i]
-		inv.MonthsHeld++
 		
 		wasAboveInitial := inv.CurrentValuation >= inv.InitialValuation
 		
-		// Random chance of an event happening (based on difficulty)
-		if rand.Float64() < gs.Difficulty.EventFrequency && len(gs.EventPool) > 0 {
-			event := gs.EventPool[rand.Intn(len(gs.EventPool))]
-			
-			oldVal := inv.CurrentValuation
-			inv.CurrentValuation = int64(float64(inv.CurrentValuation) * event.Change)
-			
-			// Prevent negative valuations
-			if inv.CurrentValuation < 0 {
-				inv.CurrentValuation = 0
+		// Find the company and update valuation
+		for _, startup := range gs.AvailableStartups {
+			if startup.Name == inv.CompanyName {
+				oldVal := inv.CurrentValuation
+				inv.CurrentValuation = startup.Valuation
+				
+				// Show significant monthly changes (>15%)
+				change := inv.CurrentValuation - oldVal
+				if oldVal > 0 {
+					percentChange := float64(change) / float64(oldVal) * 100.0
+					
+					if percentChange > 15.0 {
+						messages = append(messages, fmt.Sprintf(
+							"?? %s: Strong growth! Revenue $%s/mo (+%.1f%%)",
+							startup.Name,
+							formatCurrency(startup.MonthlyRevenue),
+							percentChange,
+						))
+					} else if percentChange < -15.0 {
+						messages = append(messages, fmt.Sprintf(
+							"?? %s: Declining. Revenue $%s/mo (%.1f%%)",
+							startup.Name,
+							formatCurrency(startup.MonthlyRevenue),
+							percentChange,
+						))
+					}
+				}
+				break
 			}
-			
-			change := inv.CurrentValuation - oldVal
-			if change > 0 {
-				messages = append(messages, fmt.Sprintf("?? %s: %s (+$%d)", inv.CompanyName, event.Event, change))
-			} else {
-				messages = append(messages, fmt.Sprintf("?? %s: %s ($%d)", inv.CompanyName, event.Event, change))
-			}
-		} else {
-			// Natural growth/decline (random walk) - volatility based on difficulty
-			change := (rand.Float64()*2 - 1) * gs.Difficulty.Volatility
-			inv.CurrentValuation = int64(float64(inv.CurrentValuation) * (1 + change))
 		}
 		
 		// Check if investment just went negative and generate news

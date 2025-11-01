@@ -152,24 +152,34 @@ func handleFollowOnOpportunities(gs *game.GameState, opportunities []game.Follow
 	green := color.New(color.FgGreen, color.Bold)
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow, color.Bold)
+	magenta := color.New(color.FgMagenta, color.Bold)
 	
-	cyan.Println("\n" + strings.Repeat("?", 70))
-	cyan.Println("         ?? FOLLOW-ON INVESTMENT OPPORTUNITY!")
-	cyan.Println(strings.Repeat("?", 70))
+	// Clear screen to make it obvious
+	fmt.Println("\n\n")
+	fmt.Println(strings.Repeat("=", 70))
+	magenta.Println("            ???? FOLLOW-ON INVESTMENT OPPORTUNITY!")
+	fmt.Println(strings.Repeat("=", 70))
+	cyan.Println("\nOne of your portfolio companies is raising a new funding round!")
+	cyan.Println("You can invest MORE money to avoid dilution and increase ownership.")
 	
 	for _, opp := range opportunities {
-		fmt.Printf("\n%s %s is raising a %s round!\n", ascii.Rocket, opp.CompanyName, opp.RoundName)
+		fmt.Println("\n" + strings.Repeat("-", 70))
+		magenta.Printf("\n?? COMPANY: %s\n", opp.CompanyName)
+		fmt.Printf("   Raising: %s round\n", opp.RoundName)
 		fmt.Printf("   Pre-money Valuation: $%s\n", formatMoney(opp.PreMoneyVal))
 		fmt.Printf("   Post-money Valuation: $%s\n", formatMoney(opp.PostMoneyVal))
-		fmt.Printf("   Your Current Equity: %.2f%%\n", opp.CurrentEquity)
-		fmt.Printf("   Follow-on Reserve Available: $%s\n", formatMoney(gs.Portfolio.FollowOnReserve))
+		yellow.Printf("   Your Current Equity: %.2f%%\n", opp.CurrentEquity)
+		green.Printf("   Follow-on Reserve Available: $%s\n", formatMoney(gs.Portfolio.FollowOnReserve))
 		
-		yellow.Println("\nWould you like to invest more to maintain/increase your ownership?")
-		fmt.Printf("You can invest between $%s and $%s\n", 
+		fmt.Println("\n" + strings.Repeat("-", 70))
+		cyan.Println("\n?? INVEST MORE TO AVOID DILUTION!")
+		fmt.Println("   If you don't invest, your ownership % will decrease.")
+		fmt.Println("   If you DO invest, you'll maintain or increase your stake.")
+		fmt.Printf("\n   Investment Range: $%s to $%s\n", 
 			formatMoney(opp.MinInvestment), formatMoney(opp.MaxInvestment))
 		
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("\nEnter investment amount (or 0 to skip): $")
+		fmt.Print("\n?? Enter amount to invest (or 0 to skip): $")
 		amountStr, _ := reader.ReadString('\n')
 		amountStr = strings.TrimSpace(amountStr)
 		
@@ -280,15 +290,16 @@ func playTurn(gs *game.GameState, autoMode bool) {
 	yellow := color.New(color.FgYellow, color.Bold)
 	cyan := color.New(color.FgCyan, color.Bold)
 
-	// Print separator line instead of clearing screen
-	fmt.Println(strings.Repeat("=", 70))
-	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
-
-	// Check for follow-on investment opportunities before processing turn
+	// Check for follow-on investment opportunities BEFORE processing turn
+	// This way the player can invest before dilution happens
 	opportunities := gs.GetFollowOnOpportunities()
 	if len(opportunities) > 0 && !autoMode {
 		handleFollowOnOpportunities(gs, opportunities)
 	}
+
+	// Print separator line instead of clearing screen
+	fmt.Println(strings.Repeat("=", 70))
+	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
 
 	messages := gs.ProcessTurn()
 
