@@ -1081,19 +1081,41 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 	
 	fs.Cash -= data.setupCost
 	
+	// Calculate initial customers based on CAC
+	// CAC varies by competition level in new market
+	var localCAC int64
+	switch data.competition {
+	case "very_high":
+		localCAC = 10000
+	case "high":
+		localCAC = 7500
+	case "medium":
+		localCAC = 5000
+	default: // low
+		localCAC = 3000
+	}
+	
+	// Initial customers = setup cost / CAC (your investment buys initial customer base)
+	initialCustomers := int(data.setupCost / localCAC)
+	initialMRR := int64(initialCustomers) * fs.AvgDealSize
+	
 	market := Market{
-		Region:          region,
-		LaunchMonth:     fs.Turn,
-		SetupCost:       data.setupCost,
-		MonthlyCost:     data.monthlyCost,
-		CustomerCount:   0,
-		MRR:             0,
-		MarketSize:      data.marketSize,
-		Penetration:     0,
+		Region:           region,
+		LaunchMonth:      fs.Turn,
+		SetupCost:        data.setupCost,
+		MonthlyCost:      data.monthlyCost,
+		CustomerCount:    initialCustomers,
+		MRR:              initialMRR,
+		MarketSize:       data.marketSize,
+		Penetration:      float64(initialCustomers) / float64(data.marketSize),
 		LocalCompetition: data.competition,
 	}
 	
 	fs.GlobalMarkets = append(fs.GlobalMarkets, market)
+	
+	// Increase global churn rate for each new market (operational complexity)
+	// Each market adds 1-2% to base churn rate
+	fs.CustomerChurnRate += 0.01 + (rand.Float64() * 0.01)
 	
 	return &market, nil
 }
@@ -1108,38 +1130,120 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		// Pay monthly costs
 		fs.Cash -= m.MonthlyCost
 		
-		// Grow customers in market
-		growthRate := 0.05 + rand.Float64()*0.1 // 5-15% monthly growth
+		// Calculate market-specific churn rate
+		marketChurn := fs.CustomerChurnRate
 		
-		// Adjust for competition
+		// No CS team? Much higher churn (up to 50% in new markets)
+		if len(fs.Team.CustomerSuccess) == 0 {
+			marketChurn += 0.30 // +30% base churn without CS
+		}
+		
+		// Product not mature? Higher churn
+		if fs.ProductMaturity < 1.0 {
+			marketChurn += (1.0 - fs.ProductMaturity) * 0.20 // Up to +20% if product immature
+		}
+		
+		// No engineers? Product degrades, churn increases
+		if len(fs.Team.Engineers) == 0 {
+			marketChurn += 0.15 // +15% without engineers
+		}
+		
+		// Local competition increases churn
 		switch m.LocalCompetition {
 		case "very_high":
-			growthRate *= 0.6
+			marketChurn += 0.10
 		case "high":
-			growthRate *= 0.8
+			marketChurn += 0.07
 		case "medium":
-			growthRate *= 0.9
+			marketChurn += 0.04
 		}
 		
-		// Adjust for product maturity
-		growthRate *= fs.ProductMaturity
-		
-		newCustomers := int(float64(m.MarketSize) * growthRate)
-		if m.CustomerCount + newCustomers > m.MarketSize {
-			newCustomers = m.MarketSize - m.CustomerCount
+		// Process churn first
+		customersLost := int(float64(m.CustomerCount) * marketChurn)
+		if customersLost > 0 {
+			m.CustomerCount -= customersLost
+			mrrLost := int64(customersLost) * fs.AvgDealSize
+			m.MRR -= mrrLost
+			fs.MRR -= mrrLost
+			fs.Customers -= customersLost
+			
+			messages = append(messages, fmt.Sprintf("📉 %s: Lost %d customers (%.1f%% churn)", 
+				m.Region, customersLost, marketChurn*100))
 		}
+		
+		// Competitors actively take customers
+		for _, comp := range fs.Competitors {
+			if !comp.Active {
+				continue
+			}
+			// Competitors are more effective in markets where you're weak
+			if comp.Strategy == "ignore" && len(fs.Team.Sales) < 3 {
+				competitorSteal := int(float64(m.CustomerCount) * comp.MarketShare * 0.15) // 15% of their market share
+				if competitorSteal > 0 {
+					m.CustomerCount -= competitorSteal
+					stolenMRR := int64(competitorSteal) * fs.AvgDealSize
+					m.MRR -= stolenMRR
+					fs.MRR -= stolenMRR
+					fs.Customers -= competitorSteal
+					
+					messages = append(messages, fmt.Sprintf("⚠️  %s took %d customers in %s", 
+						comp.Name, competitorSteal, m.Region))
+				}
+			}
+		}
+		
+		// Now attempt growth
+		// Base growth rate much lower - you need to work for it
+		baseGrowth := 0.02 + (rand.Float64() * 0.03) // 2-5% base monthly growth
+		
+		// Sales team impact (need sales to grow in new markets)
+		salesImpact := float64(len(fs.Team.Sales)) * 0.02 // Each sales rep adds 2%
+		
+		// Marketing spend helps (if they spent on marketing this turn, residual effect)
+		marketingImpact := 0.01 * float64(len(fs.Team.Marketing)) // Each marketer adds 1%
+		
+		// Adjust for competition
+		competitionMultiplier := 1.0
+		switch m.LocalCompetition {
+		case "very_high":
+			competitionMultiplier = 0.5 // Half growth in very competitive markets
+		case "high":
+			competitionMultiplier = 0.7
+		case "medium":
+			competitionMultiplier = 0.85
+		case "low":
+			competitionMultiplier = 1.1 // Easier growth in low competition
+		}
+		
+		// Product maturity affects conversion
+		productMultiplier := fs.ProductMaturity
+		if productMultiplier < 0.5 {
+			productMultiplier = 0.5 // Can't grow much with immature product
+		}
+		
+		totalGrowth := (baseGrowth + salesImpact + marketingImpact) * competitionMultiplier * productMultiplier
+		
+		// Calculate new customers (as % of remaining market opportunity)
+		remainingMarket := m.MarketSize - m.CustomerCount
+		newCustomers := int(float64(remainingMarket) * totalGrowth)
 		
 		if newCustomers > 0 {
 			m.CustomerCount += newCustomers
 			newMRR := int64(newCustomers) * fs.AvgDealSize
 			m.MRR += newMRR
-			fs.MRR += newMRR // Add to global MRR
+			fs.MRR += newMRR
 			fs.Customers += newCustomers
 			
 			m.Penetration = float64(m.CustomerCount) / float64(m.MarketSize)
 			
 			messages = append(messages, fmt.Sprintf("🌍 %s: +%d customers, $%s MRR (%.1f%% penetration)", 
 				m.Region, newCustomers, formatCurrency(m.MRR), m.Penetration*100))
+		}
+		
+		// Market can shrink if churn > growth
+		if m.CustomerCount < 0 {
+			m.CustomerCount = 0
+			m.MRR = 0
 		}
 	}
 	

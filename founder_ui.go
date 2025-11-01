@@ -748,13 +748,17 @@ func handleGlobalExpansion(fs *founder.FounderState) {
 	fmt.Println(strings.Repeat("─", 70))
 	
 	fmt.Println("\nAvailable Markets:")
-	fmt.Println("1. Europe - $200k setup, $30k/mo, 50k market, high competition")
-	fmt.Println("2. Asia - $250k setup, $40k/mo, 100k market, very high competition")
-	fmt.Println("3. LATAM - $150k setup, $20k/mo, 30k market, medium competition")
-	fmt.Println("4. Middle East - $180k setup, $25k/mo, 20k market, low competition")
-	fmt.Println("5. Africa - $120k setup, $15k/mo, 15k market, low competition")
-	fmt.Println("6. Australia - $100k setup, $18k/mo, 10k market, medium competition")
+	fmt.Println("1. Europe - $200k setup (~27 initial customers), $30k/mo, high competition")
+	fmt.Println("2. Asia - $250k setup (~25 initial customers), $40k/mo, very high competition")
+	fmt.Println("3. LATAM - $150k setup (~30 initial customers), $20k/mo, medium competition")
+	fmt.Println("4. Middle East - $180k setup (~60 initial customers), $25k/mo, low competition")
+	fmt.Println("5. Africa - $120k setup (~40 initial customers), $15k/mo, low competition")
+	fmt.Println("6. Australia - $100k setup (~20 initial customers), $18k/mo, medium competition")
 	fmt.Println("0. Cancel")
+	
+	yellow.Println("\nⓘ  Initial customers = Setup Cost ÷ Local CAC")
+	fmt.Println("   Without CS team & immature product: ~50% monthly churn!")
+	fmt.Println("   Competitors in market will steal customers if ignored")
 
 	// Show already launched markets
 	if len(fs.GlobalMarkets) > 0 {
@@ -797,8 +801,14 @@ func handleGlobalExpansion(fs *founder.FounderState) {
 	} else {
 		color.Green("\n✓ Launched in %s!", market.Region)
 		fmt.Printf("  Setup Cost: $%s\n", formatFounderCurrency(market.SetupCost))
-		fmt.Printf("  Monthly Cost: $%s\n", formatFounderCurrency(market.MonthlyCost))
-		fmt.Printf("  Market Size: %d customers\n", market.MarketSize)
+		fmt.Printf("  Initial Customers: %d\n", market.CustomerCount)
+		fmt.Printf("  Initial MRR: $%s\n", formatFounderCurrency(market.MRR))
+		fmt.Printf("  Monthly Operating Cost: $%s\n", formatFounderCurrency(market.MonthlyCost))
+		fmt.Printf("  Market Size: %d potential customers\n", market.MarketSize)
+		fmt.Printf("  Initial Penetration: %.2f%%\n", market.Penetration*100)
+		
+		yellow.Println("\n⚠️  Your global churn rate increased due to operational complexity")
+		fmt.Printf("  New churn rate: %.1f%%\n", fs.CustomerChurnRate*100)
 	}
 }
 
