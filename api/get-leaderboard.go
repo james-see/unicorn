@@ -12,7 +12,8 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func GetLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
+// Handler is the entry point for Vercel serverless function
+func Handler(w http.ResponseWriter, r *http.Request) {
 	// Enable CORS
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
@@ -152,9 +153,4 @@ func GetLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
-}
-
-// Handler is the entry point for Vercel serverless function
-func Handler(w http.ResponseWriter, r *http.Request) {
-	GetLeaderboardHandler(w, r)
 }

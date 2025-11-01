@@ -613,10 +613,9 @@
     </div>
 
     <script>
-        // Datasette API endpoint
-        // Production URL: https://datasette-deploy.vercel.app/leaderboard/game_scores.json
-        // Alternative: https://unicorn-leaderboard-james-campbells-projects-98ba50e1.vercel.app/leaderboard/game_scores.json
-        const DATASETTE_URL = 'https://datasette-deploy.vercel.app/leaderboard/game_scores.json';
+        // Leaderboard API endpoint - reads from Postgres
+        // Production URL: https://unicorn-green.vercel.app/leaderboard/game_scores.json
+        const DATASETTE_URL = 'https://unicorn-green.vercel.app/leaderboard/game_scores.json';
         
         let currentFilter = 'all';
         let currentSort = 'net_worth';
