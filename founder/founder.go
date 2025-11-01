@@ -17,6 +17,10 @@ const (
 	RoleSales           EmployeeRole = "sales"
 	RoleCustomerSuccess EmployeeRole = "customer_success"
 	RoleMarketing       EmployeeRole = "marketing"
+	RoleCTO             EmployeeRole = "cto"
+	RoleCFO             EmployeeRole = "cfo"
+	RoleCOO             EmployeeRole = "coo"
+	RoleCGO             EmployeeRole = "cgo" // Chief Growth Officer (sales/marketing)
 )
 
 // Employee represents a team member
@@ -24,6 +28,7 @@ type Employee struct {
 	Role        EmployeeRole
 	MonthlyCost int64
 	Impact      float64 // Productivity/effectiveness multiplier
+	IsExecutive bool    // C-level executives have 3x impact, $300k/year salary
 }
 
 // Team tracks all employees
@@ -32,6 +37,7 @@ type Team struct {
 	Sales            []Employee
 	CustomerSuccess  []Employee
 	Marketing        []Employee
+	Executives       []Employee // C-level: CTO, CFO, COO, CGO
 	TotalMonthlyCost int64
 	TotalEmployees   int
 }
@@ -82,6 +88,7 @@ type FounderState struct {
 	AcquisitionOffers []AcquisitionOffer
 	CashRunwayMonths  int
 	MonthlyTeamCost   int64 // Cached monthly team cost
+	FounderSalary     int64 // $150k/year = $12,500/month
 	
 	// Growth metrics
 	MonthlyGrowthRate       float64
@@ -106,6 +113,16 @@ type FundingRound struct {
 	EquityGiven float64
 	Month       int
 	Terms       string // "Founder-friendly", "Standard", "Investor-heavy"
+}
+
+// TermSheetOption represents different fundraising options to choose from
+type TermSheetOption struct {
+	Amount        int64
+	PostValuation int64
+	PreValuation  int64
+	Equity        float64
+	Terms         string
+	Description   string
 }
 
 // AcquisitionOffer represents an offer to buy the company
@@ -245,6 +262,7 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		EquityGivenAway:   0.0,
 		BoardSeats:        1, // Founder starts with 1 board seat
 		MonthlyGrowthRate: 0.10, // Start with 10% monthly growth
+		FounderSalary:     12500, // $150k/year
 	}
 	
 	// Calculate initial effective CAC
@@ -265,6 +283,7 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 			Role:        RoleEngineer,
 			MonthlyCost: avgSalary / 12,
 			Impact:      0.8 + rand.Float64()*0.4, // 0.8-1.2x impact
+			IsExecutive: false,
 		}
 	}
 	for i := range fs.Team.Sales {
@@ -272,6 +291,7 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 			Role:        RoleSales,
 			MonthlyCost: avgSalary / 12,
 			Impact:      0.8 + rand.Float64()*0.4,
+			IsExecutive: false,
 		}
 	}
 	for i := range fs.Team.CustomerSuccess {
@@ -279,6 +299,7 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 			Role:        RoleCustomerSuccess,
 			MonthlyCost: avgSalary / 12,
 			Impact:      0.8 + rand.Float64()*0.4,
+			IsExecutive: false,
 		}
 	}
 	for i := range fs.Team.Marketing {
@@ -286,6 +307,7 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 			Role:        RoleMarketing,
 			MonthlyCost: avgSalary / 12,
 			Impact:      0.8 + rand.Float64()*0.4,
+			IsExecutive: false,
 		}
 	}
 	
@@ -297,8 +319,9 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 
 // CalculateTeamCost calculates total monthly team cost
 func (fs *FounderState) CalculateTeamCost() {
-	total := int64(0)
-	count := 0
+	total := fs.FounderSalary // Start with founder salary
+	count := 1 // Founder counts as 1 employee
+	
 	for _, e := range fs.Team.Engineers {
 		total += e.MonthlyCost
 		count++
@@ -315,6 +338,11 @@ func (fs *FounderState) CalculateTeamCost() {
 		total += e.MonthlyCost
 		count++
 	}
+	for _, e := range fs.Team.Executives {
+		total += e.MonthlyCost
+		count++
+	}
+	
 	fs.Team.TotalMonthlyCost = total
 	fs.Team.TotalEmployees = count
 	fs.MonthlyTeamCost = total
@@ -369,23 +397,46 @@ func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founde
 // HireEmployee adds a new team member
 func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 	avgSalary := int64(100000)
-	employee := Employee{
-		Role:        role,
-		MonthlyCost: avgSalary / 12,
-		Impact:      0.8 + rand.Float64()*0.4,
-	}
+	var employee Employee
 	
-	switch role {
-	case RoleEngineer:
-		fs.Team.Engineers = append(fs.Team.Engineers, employee)
-	case RoleSales:
-		fs.Team.Sales = append(fs.Team.Sales, employee)
-	case RoleCustomerSuccess:
-		fs.Team.CustomerSuccess = append(fs.Team.CustomerSuccess, employee)
-	case RoleMarketing:
-		fs.Team.Marketing = append(fs.Team.Marketing, employee)
-	default:
-		return fmt.Errorf("unknown role: %s", role)
+	// C-level executives cost $300k and have 3x impact
+	isExec := (role == RoleCTO || role == RoleCFO || role == RoleCOO || role == RoleCGO)
+	
+	if isExec {
+		// Check if we already have this executive
+		for _, exec := range fs.Team.Executives {
+			if exec.Role == role {
+				return fmt.Errorf("already have a %s", role)
+			}
+		}
+		
+		employee = Employee{
+			Role:        role,
+			MonthlyCost: 25000, // $300k/year
+			Impact:      3.0 * (0.8 + rand.Float64()*0.4), // 3x impact (2.4-3.6x)
+			IsExecutive: true,
+		}
+		fs.Team.Executives = append(fs.Team.Executives, employee)
+	} else {
+		employee = Employee{
+			Role:        role,
+			MonthlyCost: avgSalary / 12,
+			Impact:      0.8 + rand.Float64()*0.4,
+			IsExecutive: false,
+		}
+		
+		switch role {
+		case RoleEngineer:
+			fs.Team.Engineers = append(fs.Team.Engineers, employee)
+		case RoleSales:
+			fs.Team.Sales = append(fs.Team.Sales, employee)
+		case RoleCustomerSuccess:
+			fs.Team.CustomerSuccess = append(fs.Team.CustomerSuccess, employee)
+		case RoleMarketing:
+			fs.Team.Marketing = append(fs.Team.Marketing, employee)
+		default:
+			return fmt.Errorf("unknown role: %s", role)
+		}
 	}
 	
 	fs.CalculateTeamCost()
@@ -395,6 +446,21 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 
 // FireEmployee removes a team member
 func (fs *FounderState) FireEmployee(role EmployeeRole) error {
+	// Check if it's an executive role
+	isExec := (role == RoleCTO || role == RoleCFO || role == RoleCOO || role == RoleCGO)
+	
+	if isExec {
+		for i, exec := range fs.Team.Executives {
+			if exec.Role == role {
+				fs.Team.Executives = append(fs.Team.Executives[:i], fs.Team.Executives[i+1:]...)
+				fs.CalculateTeamCost()
+				fs.CalculateRunway()
+				return nil
+			}
+		}
+		return fmt.Errorf("don't have a %s to let go", role)
+	}
+	
 	switch role {
 	case RoleEngineer:
 		if len(fs.Team.Engineers) > 0 {
@@ -429,9 +495,9 @@ func (fs *FounderState) FireEmployee(role EmployeeRole) error {
 	return nil
 }
 
-// RaiseFunding attempts to raise a funding round
-func (fs *FounderState) RaiseFunding(roundName string) (success bool, amount int64, terms string, equityGiven float64) {
-	// Calculate valuation based on metrics
+// GenerateTermSheetOptions creates multiple term sheet options for a funding round
+func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOption {
+	// Calculate base valuation based on metrics
 	baseValuation := int64(float64(fs.MRR) * 12 * 10) // 10x ARR
 	
 	// Adjust based on growth and metrics
@@ -446,64 +512,117 @@ func (fs *FounderState) RaiseFunding(roundName string) (success bool, amount int
 	}
 	
 	// Minimum valuations by round
-	var minValuation, targetRaise int64
+	var minValuation, baseRaise int64
 	switch roundName {
 	case "Seed":
 		minValuation = 3000000
-		targetRaise = 2000000 + rand.Int63n(3000000) // $2-5M
+		baseRaise = 2000000
 	case "Series A":
 		minValuation = 15000000
-		targetRaise = 10000000 + rand.Int63n(10000000) // $10-20M
+		baseRaise = 10000000
 	case "Series B":
 		minValuation = 50000000
-		targetRaise = 30000000 + rand.Int63n(20000000) // $30-50M
+		baseRaise = 30000000
 	default:
-		return false, 0, "", 0
+		return []TermSheetOption{}
 	}
 	
 	if baseValuation < minValuation {
 		baseValuation = minValuation
 	}
 	
-	// Due diligence affects terms
-	dueDiligence := rand.Float64()
-	if dueDiligence < 0.15 {
-		// Bad due diligence - harsh terms
-		terms = "Investor-heavy"
-		equityGiven = (float64(targetRaise) / float64(baseValuation)) * 100 * 1.3
-		targetRaise = int64(float64(targetRaise) * 0.7) // Get less money
-	} else if dueDiligence > 0.85 {
-		// Great due diligence - founder friendly
-		terms = "Founder-friendly"
-		equityGiven = (float64(targetRaise) / float64(baseValuation)) * 100 * 0.8
-		targetRaise = int64(float64(targetRaise) * 1.2) // Get more money
-	} else {
-		// Normal terms
-		terms = "Standard"
-		equityGiven = (float64(targetRaise) / float64(baseValuation)) * 100
-	}
+	options := []TermSheetOption{}
 	
-	// Cap equity dilution
-	if equityGiven > 30 {
-		equityGiven = 30
-	}
+	// Option 1: Less money, founder-friendly (lower dilution)
+	option1Amount := int64(float64(baseRaise) * 0.7)
+	option1PreVal := int64(float64(baseValuation) * 1.1) // 10% higher pre-money
+	option1PostVal := option1PreVal + option1Amount
+	option1Equity := (float64(option1Amount) / float64(option1PostVal)) * 100
+	options = append(options, TermSheetOption{
+		Amount:        option1Amount,
+		PostValuation: option1PostVal,
+		PreValuation:  option1PreVal,
+		Equity:        option1Equity,
+		Terms:         "Founder-friendly",
+		Description:   "Lower dilution, founder-friendly terms, but less capital",
+	})
 	
-	fs.Cash += targetRaise
-	fs.EquityGivenAway += equityGiven
+	// Option 2: Standard terms (balanced)
+	option2Amount := baseRaise
+	option2PreVal := baseValuation
+	option2PostVal := option2PreVal + option2Amount
+	option2Equity := (float64(option2Amount) / float64(option2PostVal)) * 100
+	options = append(options, TermSheetOption{
+		Amount:        option2Amount,
+		PostValuation: option2PostVal,
+		PreValuation:  option2PreVal,
+		Equity:        option2Equity,
+		Terms:         "Standard",
+		Description:   "Fair terms, balanced approach",
+	})
+	
+	// Option 3: More money, higher dilution
+	option3Amount := int64(float64(baseRaise) * 1.4)
+	option3PreVal := int64(float64(baseValuation) * 0.9) // 10% lower pre-money
+	option3PostVal := option3PreVal + option3Amount
+	option3Equity := (float64(option3Amount) / float64(option3PostVal)) * 100
+	options = append(options, TermSheetOption{
+		Amount:        option3Amount,
+		PostValuation: option3PostVal,
+		PreValuation:  option3PreVal,
+		Equity:        option3Equity,
+		Terms:         "Growth-focused",
+		Description:   "More capital to scale faster, but higher dilution",
+	})
+	
+	// Option 4: Maximum money, investor-heavy terms
+	option4Amount := int64(float64(baseRaise) * 1.8)
+	option4PreVal := int64(float64(baseValuation) * 0.75) // 25% lower pre-money
+	option4PostVal := option4PreVal + option4Amount
+	option4Equity := (float64(option4Amount) / float64(option4PostVal)) * 100
+	options = append(options, TermSheetOption{
+		Amount:        option4Amount,
+		PostValuation: option4PostVal,
+		PreValuation:  option4PreVal,
+		Equity:        option4Equity,
+		Terms:         "Investor-heavy",
+		Description:   "Maximum capital, but significant dilution and investor control",
+	})
+	
+	return options
+}
+
+// RaiseFunding attempts to raise a funding round with a chosen term sheet
+func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheetOption) (success bool) {
+	fs.Cash += option.Amount
+	fs.EquityGivenAway += option.Equity
 	
 	round := FundingRound{
 		RoundName:   roundName,
-		Amount:      targetRaise,
-		Valuation:   baseValuation,
-		EquityGiven: equityGiven,
+		Amount:      option.Amount,
+		Valuation:   option.PreValuation,
+		EquityGiven: option.Equity,
 		Month:       fs.Turn,
-		Terms:       terms,
+		Terms:       option.Terms,
 	}
 	fs.FundingRounds = append(fs.FundingRounds, round)
 	
 	fs.CalculateRunway()
 	
-	return true, targetRaise, terms, equityGiven
+	return true
+}
+
+// RaiseFunding is the legacy function kept for backwards compatibility
+func (fs *FounderState) RaiseFunding(roundName string) (success bool, amount int64, terms string, equityGiven float64) {
+	options := fs.GenerateTermSheetOptions(roundName)
+	if len(options) == 0 {
+		return false, 0, "", 0
+	}
+	
+	// Use standard (middle) option
+	option := options[1]
+	success = fs.RaiseFundingWithTerms(roundName, option)
+	return success, option.Amount, option.Terms, option.Equity
 }
 
 // UpdateCAC recalculates current effective CAC based on product maturity
@@ -620,16 +739,28 @@ func (fs *FounderState) ProcessMonth() []string {
 	oldMRR := fs.MRR
 	
 	// Engineer impact on product (reduces churn, increases sales)
+	// CTO counts as 3x engineers
 	engImpact := 1.0
 	for _, eng := range fs.Team.Engineers {
 		engImpact += (eng.Impact * 0.05) // Each engineer adds ~5% product improvement
 	}
+	for _, exec := range fs.Team.Executives {
+		if exec.Role == RoleCTO {
+			engImpact += (exec.Impact * 0.05) // CTO has 3x impact already built into Impact field
+		}
+	}
 	fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity+(0.02*engImpact))
 	
 	// Sales team impact on growth
+	// CGO counts as 3x sales reps
 	salesImpact := 1.0
 	for _, sales := range fs.Team.Sales {
 		salesImpact += (sales.Impact * 0.1) // Each sales rep adds ~10% to close rate
+	}
+	for _, exec := range fs.Team.Executives {
+		if exec.Role == RoleCGO {
+			salesImpact += (exec.Impact * 0.1) // CGO has 3x impact already built into Impact field
+		}
 	}
 	
 	// Marketing impact (residual from spend)
@@ -647,9 +778,15 @@ func (fs *FounderState) ProcessMonth() []string {
 		baseChurn := fs.CustomerChurnRate
 		
 		// CS team reduces churn
+		// COO counts as 3x CS reps
 		csImpact := 0.0
 		for _, cs := range fs.Team.CustomerSuccess {
 			csImpact += (cs.Impact * 0.02) // Each CS rep reduces churn by ~2%
+		}
+		for _, exec := range fs.Team.Executives {
+			if exec.Role == RoleCOO {
+				csImpact += (exec.Impact * 0.02) // COO has 3x impact already built into Impact field
+			}
 		}
 		actualChurn = math.Max(0.01, baseChurn-csImpact)
 		

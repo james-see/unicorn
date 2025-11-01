@@ -277,23 +277,33 @@ func handleFounderDecisions(fs *founder.FounderState) {
 
 func handleHiring(fs *founder.FounderState) {
 	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("\n" + strings.Repeat("─", 70))
 	yellow.Println("💼 HIRING")
 	fmt.Println(strings.Repeat("─", 70))
 	
-	fmt.Println("\n1. Engineer ($100k/year) - Builds product, reduces churn")
+	fmt.Println("\n== INDIVIDUAL CONTRIBUTORS ==")
+	fmt.Println("1. Engineer ($100k/year) - Builds product, reduces churn")
 	fmt.Println("2. Sales Rep ($100k/year) - Increases customer acquisition")
 	fmt.Println("3. Customer Success ($100k/year) - Reduces churn")
 	fmt.Println("4. Marketing ($100k/year) - Supports customer acquisition")
-	fmt.Println("5. Cancel")
+	
+	green.Println("\n== C-LEVEL EXECUTIVES (3x impact, $300k/year) ==")
+	fmt.Println("5. CTO - Like hiring 3 engineers at once")
+	fmt.Println("6. CGO (Chief Growth Officer) - Like hiring 3 sales reps")
+	fmt.Println("7. COO (Chief Operating Officer) - Like hiring 3 CS reps")
+	fmt.Println("8. CFO (Chief Financial Officer) - Reduces burn by 10%, 1 role only")
+	
+	fmt.Println("\n0. Cancel")
 
-	fmt.Print("\nWho would you like to hire? (1-5): ")
+	fmt.Print("\nWho would you like to hire? (0-8): ")
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
 	var role founder.EmployeeRole
+	var isExec bool
 	switch choice {
 	case "1":
 		role = founder.RoleEngineer
@@ -304,6 +314,18 @@ func handleHiring(fs *founder.FounderState) {
 	case "4":
 		role = founder.RoleMarketing
 	case "5":
+		role = founder.RoleCTO
+		isExec = true
+	case "6":
+		role = founder.RoleCGO
+		isExec = true
+	case "7":
+		role = founder.RoleCOO
+		isExec = true
+	case "8":
+		role = founder.RoleCFO
+		isExec = true
+	case "0":
 		fmt.Println("\nCanceled hiring")
 		return
 	default:
@@ -315,11 +337,17 @@ func handleHiring(fs *founder.FounderState) {
 	if err != nil {
 		color.Red("\n❌ Error: %v", err)
 	} else {
-		color.Green("\n✓ Hired a new %s!", role)
-		if fs.CashRunwayMonths < 0 {
-			fmt.Printf("Runway: ∞ (still profitable!)\n")
+		if isExec {
+			green.Printf("\n🎉 Hired a %s! (3x impact)\n", role)
+			fmt.Printf("   Cost: $300k/year ($25k/month)\n")
 		} else {
-			fmt.Printf("New runway: %d months\n", fs.CashRunwayMonths)
+			color.Green("\n✓ Hired a new %s!", role)
+			fmt.Printf("   Cost: $100k/year ($8.3k/month)\n")
+		}
+		if fs.CashRunwayMonths < 0 {
+			fmt.Printf("   Runway: ∞ (still profitable!)\n")
+		} else {
+			fmt.Printf("   New runway: %d months\n", fs.CashRunwayMonths)
 		}
 	}
 }
@@ -337,13 +365,25 @@ func handleFiring(fs *founder.FounderState) {
 	yellow.Println("⚠️  LAYOFFS")
 	fmt.Println(strings.Repeat("─", 70))
 	
-	fmt.Printf("\n1. Engineer (current: %d)\n", len(fs.Team.Engineers))
+	fmt.Println("\n== INDIVIDUAL CONTRIBUTORS ==")
+	fmt.Printf("1. Engineer (current: %d)\n", len(fs.Team.Engineers))
 	fmt.Printf("2. Sales Rep (current: %d)\n", len(fs.Team.Sales))
 	fmt.Printf("3. Customer Success (current: %d)\n", len(fs.Team.CustomerSuccess))
 	fmt.Printf("4. Marketing (current: %d)\n", len(fs.Team.Marketing))
-	fmt.Println("5. Cancel")
+	
+	fmt.Println("\n== EXECUTIVES ==")
+	execCount := make(map[founder.EmployeeRole]int)
+	for _, exec := range fs.Team.Executives {
+		execCount[exec.Role]++
+	}
+	fmt.Printf("5. CTO (current: %d)\n", execCount[founder.RoleCTO])
+	fmt.Printf("6. CGO (current: %d)\n", execCount[founder.RoleCGO])
+	fmt.Printf("7. COO (current: %d)\n", execCount[founder.RoleCOO])
+	fmt.Printf("8. CFO (current: %d)\n", execCount[founder.RoleCFO])
+	
+	fmt.Println("\n0. Cancel")
 
-	fmt.Print("\nWho would you like to let go? (1-5): ")
+	fmt.Print("\nWho would you like to let go? (0-8): ")
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
@@ -358,6 +398,14 @@ func handleFiring(fs *founder.FounderState) {
 	case "4":
 		role = founder.RoleMarketing
 	case "5":
+		role = founder.RoleCTO
+	case "6":
+		role = founder.RoleCGO
+	case "7":
+		role = founder.RoleCOO
+	case "8":
+		role = founder.RoleCFO
+	case "0":
 		fmt.Println("\nCanceled")
 		return
 	default:
@@ -486,18 +534,58 @@ func handleFundraising(fs *founder.FounderState) {
 	}
 
 	roundName := options[choiceNum-1]
-	success, amount, terms, equityGiven := fs.RaiseFunding(roundName)
-
+	
+	// Generate term sheet options
+	termSheets := fs.GenerateTermSheetOptions(roundName)
+	if len(termSheets) == 0 {
+		color.Red("\n❌ Unable to generate term sheets!")
+		return
+	}
+	
+	// Display term sheet options
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("📄 TERM SHEET OPTIONS")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	for i, sheet := range termSheets {
+		fmt.Printf("\n%d. %s\n", i+1, sheet.Terms)
+		fmt.Printf("   Amount: $%s\n", formatFounderCurrency(sheet.Amount))
+		fmt.Printf("   Pre-Money Valuation: $%s\n", formatFounderCurrency(sheet.PreValuation))
+		fmt.Printf("   Post-Money Valuation: $%s\n", formatFounderCurrency(sheet.PostValuation))
+		fmt.Printf("   Equity Given: %.1f%%\n", sheet.Equity)
+		fmt.Printf("   → %s\n", sheet.Description)
+	}
+	fmt.Println("\n0. Cancel")
+	
+	fmt.Print("\nSelect term sheet (0-4): ")
+	termChoice, _ := reader.ReadString('\n')
+	termChoice = strings.TrimSpace(termChoice)
+	
+	if termChoice == "0" {
+		fmt.Println("\nCanceled")
+		return
+	}
+	
+	termNum, err := strconv.Atoi(termChoice)
+	if err != nil || termNum < 1 || termNum > len(termSheets) {
+		color.Red("\nInvalid choice!")
+		return
+	}
+	
+	selectedSheet := termSheets[termNum-1]
+	success := fs.RaiseFundingWithTerms(roundName, selectedSheet)
+	
 	if !success {
 		color.Red("\n❌ Failed to raise funding!")
 		return
 	}
 
 	color.Green("\n✓ Successfully raised %s!", roundName)
-	color.Green("  Amount: $%s", formatFounderCurrency(amount))
-	fmt.Printf("  Valuation: $%s\n", formatFounderCurrency(fs.FundingRounds[len(fs.FundingRounds)-1].Valuation))
-	fmt.Printf("  Equity Given: %.1f%%\n", equityGiven)
-	fmt.Printf("  Terms: %s\n", terms)
+	color.Green("  Amount: $%s", formatFounderCurrency(selectedSheet.Amount))
+	fmt.Printf("  Pre-Money Valuation: $%s\n", formatFounderCurrency(selectedSheet.PreValuation))
+	fmt.Printf("  Post-Money Valuation: $%s\n", formatFounderCurrency(selectedSheet.PostValuation))
+	fmt.Printf("  Equity Given: %.1f%%\n", selectedSheet.Equity)
+	fmt.Printf("  Terms: %s\n", selectedSheet.Terms)
 	fmt.Printf("  Your remaining equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
 	if fs.CashRunwayMonths < 0 {
 		fmt.Printf("  Runway: ∞ (profitable!)\n")
