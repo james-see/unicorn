@@ -171,3 +171,4 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		ID:      scoreID,
 	})
 }
+

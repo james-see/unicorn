@@ -2,15 +2,15 @@
   "routes": [
     {
       "src": "/api/submit-score",
-      "dest": "/api/submit-score.go"
+      "dest": "/api/submit-score"
     },
     {
       "src": "/api/get-leaderboard",
-      "dest": "/api/get-leaderboard.go"
+      "dest": "/api/get-leaderboard"
     },
     {
       "src": "/leaderboard/game_scores.json",
-      "dest": "/api/get-leaderboard.go"
+      "dest": "/api/get-leaderboard"
     }
   ]
 }
