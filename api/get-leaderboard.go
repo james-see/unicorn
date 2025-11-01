@@ -8,6 +8,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	_ "github.com/lib/pq"
 )
 
 func GetLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
