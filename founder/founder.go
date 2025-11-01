@@ -44,21 +44,21 @@ type Team struct {
 
 // StartupTemplate represents a startup idea from JSON
 type StartupTemplate struct {
-	ID                 string                    `json:"id"`
-	Name               string                    `json:"name"`
-	Tagline            string                    `json:"tagline"`
-	Type               string                    `json:"type"`
-	Description        string                    `json:"description"`
-	InitialCash        int64                     `json:"initial_cash"`
-	MonthlyBurn        int64                     `json:"monthly_burn"`
-	InitialCustomers   int                       `json:"initial_customers"`
-	InitialMRR         int64                     `json:"initial_mrr"`
-	AvgDealSize        int64                     `json:"avg_deal_size"`
-	BaseChurnRate      float64                   `json:"base_churn_rate"`
-	BaseCAC            int64                     `json:"base_cac"`
-	TargetMarketSize   int                       `json:"target_market_size"`
-	CompetitionLevel   string                    `json:"competition_level"`
-	InitialTeam        map[string]int            `json:"initial_team"`
+	ID               string         `json:"id"`
+	Name             string         `json:"name"`
+	Tagline          string         `json:"tagline"`
+	Type             string         `json:"type"`
+	Description      string         `json:"description"`
+	InitialCash      int64          `json:"initial_cash"`
+	MonthlyBurn      int64          `json:"monthly_burn"`
+	InitialCustomers int            `json:"initial_customers"`
+	InitialMRR       int64          `json:"initial_mrr"`
+	AvgDealSize      int64          `json:"avg_deal_size"`
+	BaseChurnRate    float64        `json:"base_churn_rate"`
+	BaseCAC          int64          `json:"base_cac"`
+	TargetMarketSize int            `json:"target_market_size"`
+	CompetitionLevel string         `json:"competition_level"`
+	InitialTeam      map[string]int `json:"initial_team"`
 }
 
 // FounderState represents the current state of your startup
@@ -89,20 +89,20 @@ type FounderState struct {
 	CashRunwayMonths  int
 	MonthlyTeamCost   int64 // Cached monthly team cost
 	FounderSalary     int64 // $150k/year = $12,500/month
-	
+
 	// Growth metrics
 	MonthlyGrowthRate       float64
 	CustomerAcquisitionCost int64 // Current effective CAC (changes based on maturity)
 	LifetimeValue           int64
-	
+
 	// Advanced features
-	Partnerships      []Partnership
-	AffiliateProgram  *AffiliateProgram
-	Competitors       []Competitor
-	GlobalMarkets     []Market
-	PivotHistory      []Pivot
-	EquityPool        float64 // Employee equity pool %
-	InvestorBuybacks  []Buyback
+	Partnerships     []Partnership
+	AffiliateProgram *AffiliateProgram
+	Competitors      []Competitor
+	GlobalMarkets    []Market
+	PivotHistory     []Pivot
+	EquityPool       float64 // Employee equity pool %
+	InvestorBuybacks []Buyback
 }
 
 // FundingRound represents a completed fundraise
@@ -127,23 +127,23 @@ type TermSheetOption struct {
 
 // AcquisitionOffer represents an offer to buy the company
 type AcquisitionOffer struct {
-	Acquirer      string
-	OfferAmount   int64
-	Month         int
-	DueDiligence  string // "good", "normal", "bad"
-	TermsQuality  string // "excellent", "good", "poor"
+	Acquirer     string
+	OfferAmount  int64
+	Month        int
+	DueDiligence string // "good", "normal", "bad"
+	TermsQuality string // "excellent", "good", "poor"
 }
 
 // Partnership represents a strategic partnership
 type Partnership struct {
-	Partner       string
-	Type          string // "distribution", "technology", "co-marketing", "data"
-	MonthStarted  int
-	Duration      int // months
-	Cost          int64
-	MRRBoost      int64
+	Partner        string
+	Type           string // "distribution", "technology", "co-marketing", "data"
+	MonthStarted   int
+	Duration       int // months
+	Cost           int64
+	MRRBoost       int64
 	ChurnReduction float64
-	Status        string // "active", "expired", "terminated"
+	Status         string // "active", "expired", "terminated"
 }
 
 // AffiliateProgram represents an affiliate marketing program
@@ -169,14 +169,14 @@ type Competitor struct {
 
 // Market represents a geographic expansion
 type Market struct {
-	Region          string // "North America", "Europe", "Asia", "LATAM", etc.
-	LaunchMonth     int
-	SetupCost       int64
-	MonthlyCost     int64
-	CustomerCount   int
-	MRR             int64
-	MarketSize      int
-	Penetration     float64
+	Region           string // "North America", "Europe", "Asia", "LATAM", etc.
+	LaunchMonth      int
+	SetupCost        int64
+	MonthlyCost      int64
+	CustomerCount    int
+	MRR              int64
+	MarketSize       int
+	Penetration      float64
 	LocalCompetition string
 }
 
@@ -193,11 +193,11 @@ type Pivot struct {
 
 // Buyback represents buying back equity from investors
 type Buyback struct {
-	Month         int
-	Investor      string // Which round (Seed, Series A, etc)
-	EquityBought  float64
-	PricePaid     int64
-	Valuation     int64
+	Month        int
+	Investor     string // Which round (Seed, Series A, etc)
+	EquityBought float64
+	PricePaid    int64
+	Valuation    int64
 }
 
 // Decision represents a choice the founder can make
@@ -215,17 +215,17 @@ func LoadFounderStartups(filename string) ([]StartupTemplate, error) {
 		return nil, fmt.Errorf("failed to open startups.json: %v", err)
 	}
 	defer file.Close()
-	
+
 	data, err := ioutil.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read startups.json: %v", err)
 	}
-	
+
 	var templates []StartupTemplate
 	if err := json.Unmarshal(data, &templates); err != nil {
 		return nil, fmt.Errorf("failed to parse startups.json: %v", err)
 	}
-	
+
 	return templates, nil
 }
 
@@ -245,37 +245,37 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		CustomerChurnRate: template.BaseChurnRate,
 		BaseCAC:           template.BaseCAC,
 		Turn:              1,
-		MaxTurns:          60, // 5 years
+		MaxTurns:          60,  // 5 years
 		ProductMaturity:   0.3, // Start at 30% product maturity
 		MarketPenetration: float64(template.InitialCustomers) / float64(template.TargetMarketSize),
 		TargetMarketSize:  template.TargetMarketSize,
 		CompetitionLevel:  template.CompetitionLevel,
-		
+
 		// Initialize advanced features
-		Partnerships:     []Partnership{},
-		AffiliateProgram: nil,
-		Competitors:      []Competitor{},
-		GlobalMarkets:    []Market{},
-		PivotHistory:     []Pivot{},
-		EquityPool:       10.0, // Start with 10% equity pool for employees
-		InvestorBuybacks: []Buyback{},
+		Partnerships:      []Partnership{},
+		AffiliateProgram:  nil,
+		Competitors:       []Competitor{},
+		GlobalMarkets:     []Market{},
+		PivotHistory:      []Pivot{},
+		EquityPool:        10.0, // Start with 10% equity pool for employees
+		InvestorBuybacks:  []Buyback{},
 		EquityGivenAway:   0.0,
-		BoardSeats:        1, // Founder starts with 1 board seat
-		MonthlyGrowthRate: 0.10, // Start with 10% monthly growth
+		BoardSeats:        1,     // Founder starts with 1 board seat
+		MonthlyGrowthRate: 0.10,  // Start with 10% monthly growth
 		FounderSalary:     12500, // $150k/year
 	}
-	
+
 	// Calculate initial effective CAC
 	fs.UpdateCAC()
-	
+
 	// Initialize team from template
 	fs.Team = Team{
-		Engineers:        make([]Employee, template.InitialTeam["engineers"]),
-		Sales:            make([]Employee, template.InitialTeam["sales"]),
-		CustomerSuccess:  make([]Employee, template.InitialTeam["customer_success"]),
-		Marketing:        make([]Employee, template.InitialTeam["marketing"]),
+		Engineers:       make([]Employee, template.InitialTeam["engineers"]),
+		Sales:           make([]Employee, template.InitialTeam["sales"]),
+		CustomerSuccess: make([]Employee, template.InitialTeam["customer_success"]),
+		Marketing:       make([]Employee, template.InitialTeam["marketing"]),
 	}
-	
+
 	// Set up initial employees
 	avgSalary := int64(100000)
 	for i := range fs.Team.Engineers {
@@ -310,18 +310,18 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 			IsExecutive: false,
 		}
 	}
-	
+
 	fs.CalculateTeamCost()
 	fs.CalculateRunway()
-	
+
 	return fs
 }
 
 // CalculateTeamCost calculates total monthly team cost
 func (fs *FounderState) CalculateTeamCost() {
 	total := fs.FounderSalary // Start with founder salary
-	count := 1 // Founder counts as 1 employee
-	
+	count := 1                // Founder counts as 1 employee
+
 	for _, e := range fs.Team.Engineers {
 		total += e.MonthlyCost
 		count++
@@ -342,7 +342,7 @@ func (fs *FounderState) CalculateTeamCost() {
 		total += e.MonthlyCost
 		count++
 	}
-	
+
 	fs.Team.TotalMonthlyCost = total
 	fs.Team.TotalEmployees = count
 	fs.MonthlyTeamCost = total
@@ -353,7 +353,7 @@ func (fs *FounderState) CalculateRunway() {
 	monthlyBurn := fs.Team.TotalMonthlyCost + 20000 // Team + $20k ops costs
 	monthlyRevenue := fs.MRR
 	netBurn := monthlyBurn - monthlyRevenue
-	
+
 	if netBurn <= 0 {
 		// Cash positive! Runway is infinite
 		fs.CashRunwayMonths = -1
@@ -361,7 +361,6 @@ func (fs *FounderState) CalculateRunway() {
 		fs.CashRunwayMonths = int(fs.Cash / netBurn)
 	}
 }
-
 
 // IsGameOver checks if the game has ended
 func (fs *FounderState) IsGameOver() bool {
@@ -375,10 +374,10 @@ func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founde
 	if fs.MRR > 1000000 {
 		multiple = 15.0 // Higher multiple for scale
 	}
-	
+
 	valuation = int64(float64(fs.MRR) * 12 * multiple)
 	founderEquity = 100.0 - fs.EquityGivenAway
-	
+
 	if fs.Cash <= 0 {
 		outcome = "Shut Down - Ran Out of Cash"
 	} else if fs.MRR > 5000000 {
@@ -390,7 +389,7 @@ func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founde
 	} else {
 		outcome = "Surviving - Keep Pushing"
 	}
-	
+
 	return outcome, valuation, founderEquity
 }
 
@@ -398,10 +397,10 @@ func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founde
 func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 	avgSalary := int64(100000)
 	var employee Employee
-	
+
 	// C-level executives cost $300k and have 3x impact
 	isExec := (role == RoleCTO || role == RoleCFO || role == RoleCOO || role == RoleCGO)
-	
+
 	if isExec {
 		// Check if we already have this executive
 		for _, exec := range fs.Team.Executives {
@@ -409,10 +408,10 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 				return fmt.Errorf("already have a %s", role)
 			}
 		}
-		
+
 		employee = Employee{
 			Role:        role,
-			MonthlyCost: 25000, // $300k/year
+			MonthlyCost: 25000,                            // $300k/year
 			Impact:      3.0 * (0.8 + rand.Float64()*0.4), // 3x impact (2.4-3.6x)
 			IsExecutive: true,
 		}
@@ -424,7 +423,7 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 			Impact:      0.8 + rand.Float64()*0.4,
 			IsExecutive: false,
 		}
-		
+
 		switch role {
 		case RoleEngineer:
 			fs.Team.Engineers = append(fs.Team.Engineers, employee)
@@ -438,7 +437,7 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 			return fmt.Errorf("unknown role: %s", role)
 		}
 	}
-	
+
 	fs.CalculateTeamCost()
 	fs.CalculateRunway()
 	return nil
@@ -448,7 +447,7 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 func (fs *FounderState) FireEmployee(role EmployeeRole) error {
 	// Check if it's an executive role
 	isExec := (role == RoleCTO || role == RoleCFO || role == RoleCOO || role == RoleCGO)
-	
+
 	if isExec {
 		for i, exec := range fs.Team.Executives {
 			if exec.Role == role {
@@ -460,7 +459,7 @@ func (fs *FounderState) FireEmployee(role EmployeeRole) error {
 		}
 		return fmt.Errorf("don't have a %s to let go", role)
 	}
-	
+
 	switch role {
 	case RoleEngineer:
 		if len(fs.Team.Engineers) > 0 {
@@ -489,7 +488,7 @@ func (fs *FounderState) FireEmployee(role EmployeeRole) error {
 	default:
 		return fmt.Errorf("unknown role: %s", role)
 	}
-	
+
 	fs.CalculateTeamCost()
 	fs.CalculateRunway()
 	return nil
@@ -499,7 +498,7 @@ func (fs *FounderState) FireEmployee(role EmployeeRole) error {
 func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOption {
 	// Calculate base valuation based on metrics
 	baseValuation := int64(float64(fs.MRR) * 12 * 10) // 10x ARR
-	
+
 	// Adjust based on growth and metrics
 	if fs.MonthlyGrowthRate > 0.20 {
 		baseValuation = int64(float64(baseValuation) * 1.5)
@@ -510,7 +509,7 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 	if fs.Customers < 10 {
 		baseValuation = int64(float64(baseValuation) * 0.5)
 	}
-	
+
 	// Minimum valuations by round
 	var minValuation, baseRaise int64
 	switch roundName {
@@ -526,13 +525,13 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 	default:
 		return []TermSheetOption{}
 	}
-	
+
 	if baseValuation < minValuation {
 		baseValuation = minValuation
 	}
-	
+
 	options := []TermSheetOption{}
-	
+
 	// Option 1: Less money, founder-friendly (lower dilution)
 	option1Amount := int64(float64(baseRaise) * 0.7)
 	option1PreVal := int64(float64(baseValuation) * 1.1) // 10% higher pre-money
@@ -546,7 +545,7 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 		Terms:         "Founder-friendly",
 		Description:   "Lower dilution, founder-friendly terms, but less capital",
 	})
-	
+
 	// Option 2: Standard terms (balanced)
 	option2Amount := baseRaise
 	option2PreVal := baseValuation
@@ -560,7 +559,7 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 		Terms:         "Standard",
 		Description:   "Fair terms, balanced approach",
 	})
-	
+
 	// Option 3: More money, higher dilution
 	option3Amount := int64(float64(baseRaise) * 1.4)
 	option3PreVal := int64(float64(baseValuation) * 0.9) // 10% lower pre-money
@@ -574,7 +573,7 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 		Terms:         "Growth-focused",
 		Description:   "More capital to scale faster, but higher dilution",
 	})
-	
+
 	// Option 4: Maximum money, investor-heavy terms
 	option4Amount := int64(float64(baseRaise) * 1.8)
 	option4PreVal := int64(float64(baseValuation) * 0.75) // 25% lower pre-money
@@ -588,7 +587,7 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 		Terms:         "Investor-heavy",
 		Description:   "Maximum capital, but significant dilution and investor control",
 	})
-	
+
 	return options
 }
 
@@ -596,7 +595,7 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheetOption) (success bool) {
 	fs.Cash += option.Amount
 	fs.EquityGivenAway += option.Equity
-	
+
 	round := FundingRound{
 		RoundName:   roundName,
 		Amount:      option.Amount,
@@ -606,9 +605,9 @@ func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheet
 		Terms:       option.Terms,
 	}
 	fs.FundingRounds = append(fs.FundingRounds, round)
-	
+
 	fs.CalculateRunway()
-	
+
 	return true
 }
 
@@ -618,7 +617,7 @@ func (fs *FounderState) RaiseFunding(roundName string) (success bool, amount int
 	if len(options) == 0 {
 		return false, 0, "", 0
 	}
-	
+
 	// Use standard (middle) option
 	option := options[1]
 	success = fs.RaiseFundingWithTerms(roundName, option)
@@ -629,12 +628,12 @@ func (fs *FounderState) RaiseFunding(roundName string) (success bool, amount int
 func (fs *FounderState) UpdateCAC() {
 	// Start with business-specific base CAC
 	effectiveCAC := float64(fs.BaseCAC)
-	
+
 	// Product maturity reduces CAC (better product = better conversion)
 	// At 100% maturity, CAC is 60% of base (40% reduction)
 	maturityDiscount := fs.ProductMaturity * 0.4
 	effectiveCAC *= (1.0 - maturityDiscount)
-	
+
 	// Competition increases CAC
 	switch fs.CompetitionLevel {
 	case "very_high":
@@ -643,9 +642,9 @@ func (fs *FounderState) UpdateCAC() {
 		effectiveCAC *= 1.3 // +30%
 	case "medium":
 		effectiveCAC *= 1.1 // +10%
-	// low = no change
+		// low = no change
 	}
-	
+
 	fs.CustomerAcquisitionCost = int64(effectiveCAC)
 }
 
@@ -654,19 +653,19 @@ func (fs *FounderState) SpendOnMarketing(amount int64) int {
 	if amount > fs.Cash {
 		return 0
 	}
-	
+
 	fs.Cash -= amount
-	
+
 	// Use current effective CAC (which accounts for product maturity and competition)
 	fs.UpdateCAC()
-	
+
 	newCustomers := int(amount / fs.CustomerAcquisitionCost)
 	fs.Customers += newCustomers
 	newMRR := int64(newCustomers) * fs.AvgDealSize
 	fs.MRR += newMRR
-	
+
 	fs.CalculateRunway()
-	
+
 	return newCustomers
 }
 
@@ -680,24 +679,24 @@ func (fs *FounderState) CheckForAcquisition() *AcquisitionOffer {
 			break
 		}
 	}
-	
+
 	if !hasSeriesA {
 		return nil
 	}
-	
+
 	// 5% chance per month after Series A
 	if rand.Float64() > 0.05 {
 		return nil
 	}
-	
+
 	// Calculate offer
 	multiple := 3.0 + rand.Float64()*3.0 // 3-6x revenue
 	annualRevenue := fs.MRR * 12
 	offerAmount := int64(float64(annualRevenue) * multiple)
-	
+
 	dueDiligence := "normal"
 	termsQuality := "good"
-	
+
 	roll := rand.Float64()
 	if roll < 0.15 {
 		dueDiligence = "bad"
@@ -708,12 +707,12 @@ func (fs *FounderState) CheckForAcquisition() *AcquisitionOffer {
 		termsQuality = "excellent"
 		offerAmount = int64(float64(offerAmount) * 1.3)
 	}
-	
+
 	acquirers := []string{
 		"Google", "Microsoft", "Amazon", "Salesforce", "Oracle",
 		"Meta", "Apple", "Adobe", "SAP", "IBM",
 	}
-	
+
 	offer := AcquisitionOffer{
 		Acquirer:     acquirers[rand.Intn(len(acquirers))],
 		OfferAmount:  offerAmount,
@@ -721,7 +720,7 @@ func (fs *FounderState) CheckForAcquisition() *AcquisitionOffer {
 		DueDiligence: dueDiligence,
 		TermsQuality: termsQuality,
 	}
-	
+
 	return &offer
 }
 
@@ -734,10 +733,10 @@ func (fs *FounderState) NeedsLowCashWarning() bool {
 func (fs *FounderState) ProcessMonth() []string {
 	var messages []string
 	fs.Turn++
-	
+
 	// 1. Process revenue growth
 	oldMRR := fs.MRR
-	
+
 	// Engineer impact on product (reduces churn, increases sales)
 	// CTO counts as 3x engineers
 	engImpact := 1.0
@@ -750,7 +749,7 @@ func (fs *FounderState) ProcessMonth() []string {
 		}
 	}
 	fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity+(0.02*engImpact))
-	
+
 	// Sales team impact on growth
 	// CGO counts as 3x sales reps
 	salesImpact := 1.0
@@ -762,21 +761,21 @@ func (fs *FounderState) ProcessMonth() []string {
 			salesImpact += (exec.Impact * 0.1) // CGO has 3x impact already built into Impact field
 		}
 	}
-	
+
 	// Marketing impact (residual from spend)
 	baseGrowth := fs.MonthlyGrowthRate
 	actualGrowth := baseGrowth * salesImpact * engImpact
-	
+
 	// Apply growth
 	newRevenue := int64(float64(fs.MRR) * actualGrowth)
 	fs.MRR += newRevenue
-	
+
 	// 2. Process churn (only if we have customers)
 	var lostCustomers int
 	var actualChurn float64
 	if fs.Customers > 0 {
 		baseChurn := fs.CustomerChurnRate
-		
+
 		// CS team reduces churn
 		// COO counts as 3x CS reps
 		csImpact := 0.0
@@ -789,12 +788,12 @@ func (fs *FounderState) ProcessMonth() []string {
 			}
 		}
 		actualChurn = math.Max(0.01, baseChurn-csImpact)
-		
+
 		churnLoss := int64(float64(fs.MRR) * actualChurn)
 		fs.MRR -= churnLoss
 		lostCustomers = int(float64(fs.Customers) * actualChurn)
 		fs.Customers -= lostCustomers
-		
+
 		if fs.MRR < 0 {
 			fs.MRR = 0
 		}
@@ -802,16 +801,16 @@ func (fs *FounderState) ProcessMonth() []string {
 			fs.Customers = 0
 		}
 	}
-	
+
 	// 3. Calculate costs
 	totalCost := fs.MonthlyTeamCost + (int64(fs.Team.TotalEmployees) * 2000) // +$2k overhead per employee
 	fs.Cash -= totalCost
-	
+
 	netIncome := fs.MRR - totalCost
-	
+
 	// 4. Update runway
 	fs.CalculateRunway()
-	
+
 	// 5. Update growth rate for next month
 	if oldMRR > 0 {
 		fs.MonthlyGrowthRate = float64(fs.MRR-oldMRR) / float64(oldMRR)
@@ -819,7 +818,7 @@ func (fs *FounderState) ProcessMonth() []string {
 		// First customers! Set initial growth rate
 		fs.MonthlyGrowthRate = 0.10 // Start with 10% base growth
 	}
-	
+
 	// 6. Generate messages
 	if fs.MRR > 0 && oldMRR == 0 {
 		messages = append(messages, fmt.Sprintf("🎉 FIRST REVENUE! MRR: $%s", formatCurrency(fs.MRR)))
@@ -832,40 +831,40 @@ func (fs *FounderState) ProcessMonth() []string {
 	} else if fs.MRR == 0 && fs.Turn > 3 {
 		messages = append(messages, "⚠️  Still no revenue! Hire sales or spend on marketing!")
 	}
-	
+
 	if lostCustomers > 0 {
 		messages = append(messages, fmt.Sprintf("📉 Lost %d customers to churn (%.1f%% churn rate)", lostCustomers, actualChurn*100))
 	}
-	
+
 	if netIncome > 0 {
 		messages = append(messages, fmt.Sprintf("✅ Positive cash flow: $%s/month", formatCurrency(netIncome)))
 	} else {
 		messages = append(messages, fmt.Sprintf("💸 Burn rate: $%s/month", formatCurrency(-netIncome)))
 	}
-	
+
 	if fs.ProductMaturity >= 1.0 {
 		messages = append(messages, "🎉 Product has reached full maturity!")
 	}
-	
+
 	// 7. Process advanced features
 	partnershipMsgs := fs.UpdatePartnerships()
 	messages = append(messages, partnershipMsgs...)
-	
+
 	affiliateMsgs := fs.UpdateAffiliateProgram()
 	messages = append(messages, affiliateMsgs...)
-	
+
 	competitorMsgs := fs.UpdateCompetitors()
 	messages = append(messages, competitorMsgs...)
-	
+
 	marketMsgs := fs.UpdateGlobalMarkets()
 	messages = append(messages, marketMsgs...)
-	
+
 	// 8. Spawn new competitors randomly
 	if newComp := fs.SpawnCompetitor(); newComp != nil {
-		messages = append(messages, fmt.Sprintf("🚨 NEW COMPETITOR: %s entered the market! Threat: %s, Market Share: %.1f%%", 
+		messages = append(messages, fmt.Sprintf("🚨 NEW COMPETITOR: %s entered the market! Threat: %s, Market Share: %.1f%%",
 			newComp.Name, newComp.Threat, newComp.MarketShare*100))
 	}
-	
+
 	return messages
 }
 
@@ -873,7 +872,7 @@ func formatCurrency(amount int64) string {
 	if amount < 0 {
 		return fmt.Sprintf("-$%s", formatCurrency(-amount))
 	}
-	
+
 	str := fmt.Sprintf("%d", amount)
 	var result string
 	for i, digit := range str {
@@ -893,89 +892,89 @@ func formatCurrency(amount int64) string {
 func (fs *FounderState) StartPartnership(partnerType string) (*Partnership, error) {
 	partners := map[string][]string{
 		"distribution": {"Salesforce", "HubSpot", "Oracle", "SAP", "Adobe"},
-		"technology": {"AWS", "Google Cloud", "Microsoft Azure", "IBM", "MongoDB"},
+		"technology":   {"AWS", "Google Cloud", "Microsoft Azure", "IBM", "MongoDB"},
 		"co-marketing": {"Shopify", "Stripe", "Zendesk", "Slack", "Atlassian"},
-		"data": {"Snowflake", "Databricks", "Tableau", "Segment", "Amplitude"},
+		"data":         {"Snowflake", "Databricks", "Tableau", "Segment", "Amplitude"},
 	}
-	
+
 	partnerList, ok := partners[partnerType]
 	if !ok {
 		return nil, fmt.Errorf("unknown partnership type: %s", partnerType)
 	}
-	
+
 	partner := partnerList[rand.Intn(len(partnerList))]
-	
+
 	// Calculate costs and benefits
 	var cost, mrrBoost int64
 	var churnReduction float64
 	var duration int
-	
+
 	switch partnerType {
 	case "distribution":
-		cost = 50000 + rand.Int63n(100000) // $50-150k
+		cost = 50000 + rand.Int63n(100000)                             // $50-150k
 		mrrBoost = int64(float64(fs.MRR) * (0.1 + rand.Float64()*0.2)) // 10-30% MRR boost
-		churnReduction = 0.01 + rand.Float64()*0.02 // 1-3% churn reduction
-		duration = 12 + rand.Intn(12) // 12-24 months
+		churnReduction = 0.01 + rand.Float64()*0.02                    // 1-3% churn reduction
+		duration = 12 + rand.Intn(12)                                  // 12-24 months
 	case "technology":
-		cost = 30000 + rand.Int63n(70000) // $30-100k
+		cost = 30000 + rand.Int63n(70000)                                // $30-100k
 		mrrBoost = int64(float64(fs.MRR) * (0.05 + rand.Float64()*0.15)) // 5-20% MRR boost
-		churnReduction = 0.02 + rand.Float64()*0.03 // 2-5% churn reduction
-		duration = 12 + rand.Intn(24) // 12-36 months
+		churnReduction = 0.02 + rand.Float64()*0.03                      // 2-5% churn reduction
+		duration = 12 + rand.Intn(24)                                    // 12-36 months
 	case "co-marketing":
-		cost = 25000 + rand.Int63n(50000) // $25-75k
+		cost = 25000 + rand.Int63n(50000)                                // $25-75k
 		mrrBoost = int64(float64(fs.MRR) * (0.15 + rand.Float64()*0.25)) // 15-40% MRR boost
-		churnReduction = 0.005 + rand.Float64()*0.015 // 0.5-2% churn reduction
-		duration = 6 + rand.Intn(12) // 6-18 months
+		churnReduction = 0.005 + rand.Float64()*0.015                    // 0.5-2% churn reduction
+		duration = 6 + rand.Intn(12)                                     // 6-18 months
 	case "data":
-		cost = 40000 + rand.Int63n(60000) // $40-100k
+		cost = 40000 + rand.Int63n(60000)                                // $40-100k
 		mrrBoost = int64(float64(fs.MRR) * (0.08 + rand.Float64()*0.12)) // 8-20% MRR boost
-		churnReduction = 0.01 + rand.Float64()*0.02 // 1-3% churn reduction
-		duration = 12 + rand.Intn(24) // 12-36 months
+		churnReduction = 0.01 + rand.Float64()*0.02                      // 1-3% churn reduction
+		duration = 12 + rand.Intn(24)                                    // 12-36 months
 	}
-	
+
 	if cost > fs.Cash {
 		return nil, fmt.Errorf("insufficient cash for partnership (need $%s)", formatCurrency(cost))
 	}
-	
+
 	partnership := Partnership{
-		Partner:       partner,
-		Type:          partnerType,
-		MonthStarted:  fs.Turn,
-		Duration:      duration,
-		Cost:          cost,
-		MRRBoost:      mrrBoost,
+		Partner:        partner,
+		Type:           partnerType,
+		MonthStarted:   fs.Turn,
+		Duration:       duration,
+		Cost:           cost,
+		MRRBoost:       mrrBoost,
 		ChurnReduction: churnReduction,
-		Status:        "active",
+		Status:         "active",
 	}
-	
+
 	fs.Cash -= cost
 	fs.Partnerships = append(fs.Partnerships, partnership)
-	
+
 	return &partnership, nil
 }
 
 // UpdatePartnerships processes active partnerships
 func (fs *FounderState) UpdatePartnerships() []string {
 	var messages []string
-	
+
 	for i := range fs.Partnerships {
 		p := &fs.Partnerships[i]
 		if p.Status != "active" {
 			continue
 		}
-		
+
 		monthsActive := fs.Turn - p.MonthStarted
 		if monthsActive >= p.Duration {
 			p.Status = "expired"
 			messages = append(messages, fmt.Sprintf("🤝 Partnership with %s has expired", p.Partner))
 			continue
 		}
-		
+
 		// Apply partnership benefits
 		fs.MRR += p.MRRBoost / int64(p.Duration) // Distribute boost over duration
-		fs.CustomerChurnRate = math.Max(0.01, fs.CustomerChurnRate - (p.ChurnReduction / float64(p.Duration)))
+		fs.CustomerChurnRate = math.Max(0.01, fs.CustomerChurnRate-(p.ChurnReduction/float64(p.Duration)))
 	}
-	
+
 	return messages
 }
 
@@ -988,67 +987,67 @@ func (fs *FounderState) LaunchAffiliateProgram(commission float64) error {
 	if fs.AffiliateProgram != nil && fs.AffiliateProgram.Active {
 		return fmt.Errorf("affiliate program already active")
 	}
-	
+
 	if commission < 5 || commission > 30 {
 		return fmt.Errorf("commission must be between 5%% and 30%%")
 	}
-	
+
 	setupCost := int64(20000 + rand.Intn(30000)) // $20-50k setup
 	if setupCost > fs.Cash {
 		return fmt.Errorf("insufficient cash for affiliate program setup")
 	}
-	
+
 	fs.Cash -= setupCost
 	fs.AffiliateProgram = &AffiliateProgram{
 		Active:       true,
 		MonthStarted: fs.Turn,
 		Commission:   commission,
 		MonthlyCost:  5000 + int64(rand.Intn(5000)), // $5-10k/month platform fees
-		Affiliates:   5 + rand.Intn(10), // Start with 5-15 affiliates
+		Affiliates:   5 + rand.Intn(10),             // Start with 5-15 affiliates
 	}
-	
+
 	return nil
 }
 
 // UpdateAffiliateProgram processes monthly affiliate sales
 func (fs *FounderState) UpdateAffiliateProgram() []string {
 	var messages []string
-	
+
 	if fs.AffiliateProgram == nil || !fs.AffiliateProgram.Active {
 		return messages
 	}
-	
+
 	ap := fs.AffiliateProgram
-	
+
 	// Pay monthly platform costs
 	fs.Cash -= ap.MonthlyCost
-	
+
 	// Affiliates grow over time
 	if rand.Float64() < 0.3 {
 		newAffiliates := 1 + rand.Intn(3)
 		ap.Affiliates += newAffiliates
 		messages = append(messages, fmt.Sprintf("🤝 +%d new affiliates joined (total: %d)", newAffiliates, ap.Affiliates))
 	}
-	
+
 	// Generate affiliate sales (each affiliate brings ~0.5-2 customers/month)
 	customersPerAffiliate := 0.5 + rand.Float64()*1.5
 	newCustomers := int(float64(ap.Affiliates) * customersPerAffiliate)
-	
+
 	if newCustomers > 0 {
 		revenue := int64(newCustomers) * fs.AvgDealSize
 		commissionPaid := int64(float64(revenue) * ap.Commission / 100.0)
-		
+
 		fs.Customers += newCustomers
 		fs.MRR += revenue
 		fs.Cash -= commissionPaid
-		
+
 		ap.CustomersAcquired += newCustomers
 		ap.MonthlyRevenue = revenue
-		
-		messages = append(messages, fmt.Sprintf("💰 Affiliates brought %d customers ($%s MRR, $%s commission)", 
+
+		messages = append(messages, fmt.Sprintf("💰 Affiliates brought %d customers ($%s MRR, $%s commission)",
 			newCustomers, formatCurrency(revenue), formatCurrency(commissionPaid)))
 	}
-	
+
 	return messages
 }
 
@@ -1062,16 +1061,16 @@ func (fs *FounderState) SpawnCompetitor() *Competitor {
 	if fs.Turn < 6 || rand.Float64() > 0.1 {
 		return nil
 	}
-	
+
 	names := []string{
-		"RivalTech", "FastGrowth Inc", "MarketLeader", "DisruptCo", 
+		"RivalTech", "FastGrowth Inc", "MarketLeader", "DisruptCo",
 		"NextGen Solutions", "AgileStartup", "InnovateLabs", "ScaleUp",
 		"CompeteCorp", "ChallengerTech",
 	}
-	
+
 	threats := []string{"low", "medium", "high"}
 	weights := []float64{0.5, 0.35, 0.15}
-	
+
 	// Weighted random threat selection
 	r := rand.Float64()
 	var threat string
@@ -1083,9 +1082,9 @@ func (fs *FounderState) SpawnCompetitor() *Competitor {
 			break
 		}
 	}
-	
+
 	marketShare := 0.05 + rand.Float64()*0.15 // 5-20% market share
-	
+
 	competitor := Competitor{
 		Name:          names[rand.Intn(len(names))],
 		Threat:        threat,
@@ -1094,7 +1093,7 @@ func (fs *FounderState) SpawnCompetitor() *Competitor {
 		MonthAppeared: fs.Turn,
 		Active:        true,
 	}
-	
+
 	fs.Competitors = append(fs.Competitors, competitor)
 	return &competitor
 }
@@ -1104,15 +1103,15 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 	if compIndex < 0 || compIndex >= len(fs.Competitors) {
 		return "", fmt.Errorf("invalid competitor index")
 	}
-	
+
 	comp := &fs.Competitors[compIndex]
 	if !comp.Active {
 		return "", fmt.Errorf("competitor no longer active")
 	}
-	
+
 	var message string
 	var cost int64
-	
+
 	switch strategy {
 	case "ignore":
 		comp.Strategy = "ignore"
@@ -1121,7 +1120,7 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 		fs.Customers -= lostCustomers
 		fs.MRR -= int64(lostCustomers) * fs.AvgDealSize
 		message = fmt.Sprintf("Ignored %s. Lost %d customers to competition", comp.Name, lostCustomers)
-		
+
 	case "compete":
 		comp.Strategy = "compete"
 		// Aggressive competition - costs money but reduces their threat
@@ -1130,12 +1129,12 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 			return "", fmt.Errorf("insufficient cash to compete aggressively")
 		}
 		fs.Cash -= cost
-		
+
 		// Reduce their market share
 		comp.MarketShare *= 0.7
 		if comp.MarketShare < 0.02 {
 			comp.Active = false
-			message = fmt.Sprintf("Successfully competed against %s! They shut down. Cost: $%s", 
+			message = fmt.Sprintf("Successfully competed against %s! They shut down. Cost: $%s",
 				comp.Name, formatCurrency(cost))
 		} else {
 			// Lower threat level
@@ -1144,10 +1143,10 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 			} else if comp.Threat == "medium" {
 				comp.Threat = "low"
 			}
-			message = fmt.Sprintf("Competed aggressively with %s. Reduced their threat to '%s'. Cost: $%s", 
+			message = fmt.Sprintf("Competed aggressively with %s. Reduced their threat to '%s'. Cost: $%s",
 				comp.Name, comp.Threat, formatCurrency(cost))
 		}
-		
+
 	case "partner":
 		comp.Strategy = "partner"
 		// Partner with competitor - costs money but creates synergy
@@ -1156,33 +1155,33 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 			return "", fmt.Errorf("insufficient cash for partnership")
 		}
 		fs.Cash -= cost
-		
+
 		// Merge customer bases (partial)
 		gainedCustomers := int(float64(comp.MarketShare) * float64(fs.TargetMarketSize) * 0.3)
 		fs.Customers += gainedCustomers
 		fs.MRR += int64(gainedCustomers) * fs.AvgDealSize
-		
+
 		comp.Active = false
-		message = fmt.Sprintf("Partnered with %s! Gained %d customers. Cost: $%s", 
+		message = fmt.Sprintf("Partnered with %s! Gained %d customers. Cost: $%s",
 			comp.Name, gainedCustomers, formatCurrency(cost))
-		
+
 	default:
 		return "", fmt.Errorf("unknown strategy: %s", strategy)
 	}
-	
+
 	return message, nil
 }
 
 // UpdateCompetitors processes competitor actions
 func (fs *FounderState) UpdateCompetitors() []string {
 	var messages []string
-	
+
 	for i := range fs.Competitors {
 		comp := &fs.Competitors[i]
 		if !comp.Active {
 			continue
 		}
-		
+
 		// Competitors take actions based on threat level
 		if comp.Strategy == "ignore" {
 			// They keep taking market share
@@ -1195,7 +1194,7 @@ func (fs *FounderState) UpdateCompetitors() []string {
 				}
 			}
 		}
-		
+
 		// Competitors may escalate threat
 		if rand.Float64() < 0.05 {
 			if comp.Threat == "low" {
@@ -1207,7 +1206,7 @@ func (fs *FounderState) UpdateCompetitors() []string {
 			}
 		}
 	}
-	
+
 	return messages
 }
 
@@ -1223,36 +1222,36 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 			return nil, fmt.Errorf("already operating in %s", region)
 		}
 	}
-	
+
 	marketData := map[string]struct {
-		setupCost        int64
-		monthlyCost      int64
-		marketSize       int
-		competition      string
+		setupCost   int64
+		monthlyCost int64
+		marketSize  int
+		competition string
 	}{
-		"Europe": {200000, 30000, 50000, "high"},
-		"Asia": {250000, 40000, 100000, "very_high"},
-		"LATAM": {150000, 20000, 30000, "medium"},
+		"Europe":      {200000, 30000, 50000, "high"},
+		"Asia":        {250000, 40000, 100000, "very_high"},
+		"LATAM":       {150000, 20000, 30000, "medium"},
 		"Middle East": {180000, 25000, 20000, "low"},
-		"Africa": {120000, 15000, 15000, "low"},
-		"Australia": {100000, 18000, 10000, "medium"},
+		"Africa":      {120000, 15000, 15000, "low"},
+		"Australia":   {100000, 18000, 10000, "medium"},
 	}
-	
+
 	data, ok := marketData[region]
 	if !ok {
 		return nil, fmt.Errorf("unknown region: %s", region)
 	}
-	
+
 	if data.setupCost > fs.Cash {
 		return nil, fmt.Errorf("insufficient cash for expansion (need $%s)", formatCurrency(data.setupCost))
 	}
-	
+
 	fs.Cash -= data.setupCost
-	
+
 	// Calculate initial customers based on this business's CAC in new market
 	// Start with business-specific base CAC, then adjust for local competition
 	localCAC := float64(fs.BaseCAC)
-	
+
 	switch data.competition {
 	case "very_high":
 		localCAC *= 1.8 // Much harder to acquire in very competitive markets
@@ -1263,15 +1262,15 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 	case "low":
 		localCAC *= 0.8 // Easier in low competition markets
 	}
-	
+
 	// Product maturity helps even in new markets (your reputation/product quality travels)
 	maturityDiscount := fs.ProductMaturity * 0.3 // Up to 30% discount
 	localCAC *= (1.0 - maturityDiscount)
-	
+
 	// Initial customers = setup cost / effective local CAC
 	initialCustomers := int(data.setupCost / int64(localCAC))
 	initialMRR := int64(initialCustomers) * fs.AvgDealSize
-	
+
 	market := Market{
 		Region:           region,
 		LaunchMonth:      fs.Turn,
@@ -1283,44 +1282,44 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 		Penetration:      float64(initialCustomers) / float64(data.marketSize),
 		LocalCompetition: data.competition,
 	}
-	
+
 	fs.GlobalMarkets = append(fs.GlobalMarkets, market)
-	
+
 	// Increase global churn rate for each new market (operational complexity)
 	// Each market adds 1-2% to base churn rate
 	fs.CustomerChurnRate += 0.01 + (rand.Float64() * 0.01)
-	
+
 	return &market, nil
 }
 
 // UpdateGlobalMarkets processes all international markets
 func (fs *FounderState) UpdateGlobalMarkets() []string {
 	var messages []string
-	
+
 	for i := range fs.GlobalMarkets {
 		m := &fs.GlobalMarkets[i]
-		
+
 		// Pay monthly costs
 		fs.Cash -= m.MonthlyCost
-		
+
 		// Calculate market-specific churn rate
 		marketChurn := fs.CustomerChurnRate
-		
+
 		// No CS team? Much higher churn (up to 50% in new markets)
 		if len(fs.Team.CustomerSuccess) == 0 {
 			marketChurn += 0.30 // +30% base churn without CS
 		}
-		
+
 		// Product not mature? Higher churn
 		if fs.ProductMaturity < 1.0 {
 			marketChurn += (1.0 - fs.ProductMaturity) * 0.20 // Up to +20% if product immature
 		}
-		
+
 		// No engineers? Product degrades, churn increases
 		if len(fs.Team.Engineers) == 0 {
 			marketChurn += 0.15 // +15% without engineers
 		}
-		
+
 		// Local competition increases churn
 		switch m.LocalCompetition {
 		case "very_high":
@@ -1330,7 +1329,7 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		case "medium":
 			marketChurn += 0.04
 		}
-		
+
 		// Process churn first
 		customersLost := int(float64(m.CustomerCount) * marketChurn)
 		if customersLost > 0 {
@@ -1339,11 +1338,11 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 			m.MRR -= mrrLost
 			fs.MRR -= mrrLost
 			fs.Customers -= customersLost
-			
-			messages = append(messages, fmt.Sprintf("📉 %s: Lost %d customers (%.1f%% churn)", 
+
+			messages = append(messages, fmt.Sprintf("📉 %s: Lost %d customers (%.1f%% churn)",
 				m.Region, customersLost, marketChurn*100))
 		}
-		
+
 		// Competitors actively take customers
 		for _, comp := range fs.Competitors {
 			if !comp.Active {
@@ -1358,23 +1357,23 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 					m.MRR -= stolenMRR
 					fs.MRR -= stolenMRR
 					fs.Customers -= competitorSteal
-					
-					messages = append(messages, fmt.Sprintf("⚠️  %s took %d customers in %s", 
+
+					messages = append(messages, fmt.Sprintf("⚠️  %s took %d customers in %s",
 						comp.Name, competitorSteal, m.Region))
 				}
 			}
 		}
-		
+
 		// Now attempt growth
 		// Base growth rate much lower - you need to work for it
 		baseGrowth := 0.02 + (rand.Float64() * 0.03) // 2-5% base monthly growth
-		
+
 		// Sales team impact (need sales to grow in new markets)
 		salesImpact := float64(len(fs.Team.Sales)) * 0.02 // Each sales rep adds 2%
-		
+
 		// Marketing spend helps (if they spent on marketing this turn, residual effect)
 		marketingImpact := 0.01 * float64(len(fs.Team.Marketing)) // Each marketer adds 1%
-		
+
 		// Adjust for competition
 		competitionMultiplier := 1.0
 		switch m.LocalCompetition {
@@ -1387,39 +1386,45 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		case "low":
 			competitionMultiplier = 1.1 // Easier growth in low competition
 		}
-		
+
 		// Product maturity affects conversion
 		productMultiplier := fs.ProductMaturity
 		if productMultiplier < 0.5 {
 			productMultiplier = 0.5 // Can't grow much with immature product
 		}
-		
+
 		totalGrowth := (baseGrowth + salesImpact + marketingImpact) * competitionMultiplier * productMultiplier
+
+		// Calculate new customers (as % of CURRENT customer base in this market)
+		// This is much more realistic - you grow based on what you already have
+		newCustomers := int(float64(m.CustomerCount) * totalGrowth)
 		
-		// Calculate new customers (as % of remaining market opportunity)
+		// But cap at remaining market opportunity
 		remainingMarket := m.MarketSize - m.CustomerCount
-		newCustomers := int(float64(remainingMarket) * totalGrowth)
-		
+		if newCustomers > remainingMarket {
+			newCustomers = remainingMarket
+		}
+
 		if newCustomers > 0 {
 			m.CustomerCount += newCustomers
 			newMRR := int64(newCustomers) * fs.AvgDealSize
 			m.MRR += newMRR
 			fs.MRR += newMRR
 			fs.Customers += newCustomers
-			
+
 			m.Penetration = float64(m.CustomerCount) / float64(m.MarketSize)
-			
-			messages = append(messages, fmt.Sprintf("🌍 %s: +%d customers, $%s MRR (%.1f%% penetration)", 
+
+			messages = append(messages, fmt.Sprintf("🌍 %s: +%d customers, $%s MRR (%.1f%% penetration)",
 				m.Region, newCustomers, formatCurrency(m.MRR), m.Penetration*100))
 		}
-		
+
 		// Market can shrink if churn > growth
 		if m.CustomerCount < 0 {
 			m.CustomerCount = 0
 			m.MRR = 0
 		}
 	}
-	
+
 	return messages
 }
 
@@ -1433,7 +1438,7 @@ func (fs *FounderState) ExecutePivot(toStrategy string, reason string) (*Pivot, 
 		"Enterprise B2B", "SMB B2B", "B2C", "Marketplace", "Platform",
 		"Vertical SaaS", "Horizontal SaaS", "Deep Tech", "Consumer Apps",
 	}
-	
+
 	valid := false
 	for _, s := range strategies {
 		if s == toStrategy {
@@ -1444,24 +1449,24 @@ func (fs *FounderState) ExecutePivot(toStrategy string, reason string) (*Pivot, 
 	if !valid {
 		return nil, fmt.Errorf("invalid strategy: %s", toStrategy)
 	}
-	
+
 	// Pivots are expensive and risky
 	cost := 100000 + int64(rand.Intn(200000)) // $100-300k
 	if cost > fs.Cash {
 		return nil, fmt.Errorf("insufficient cash for pivot (need $%s)", formatCurrency(cost))
 	}
-	
+
 	// Lose some customers in transition
 	customersLost := int(float64(fs.Customers) * (0.2 + rand.Float64()*0.3)) // Lose 20-50%
-	
+
 	// Success rate depends on product maturity and timing
 	successChance := 0.3 + (fs.ProductMaturity * 0.4) // 30-70% success
 	if fs.Turn > 36 {
 		successChance *= 0.7 // Harder to pivot late
 	}
-	
+
 	success := rand.Float64() < successChance
-	
+
 	pivot := Pivot{
 		Month:         fs.Turn,
 		FromStrategy:  fs.StartupType,
@@ -1471,11 +1476,11 @@ func (fs *FounderState) ExecutePivot(toStrategy string, reason string) (*Pivot, 
 		CustomersLost: customersLost,
 		Success:       success,
 	}
-	
+
 	fs.Cash -= cost
 	fs.Customers -= customersLost
 	fs.MRR -= int64(customersLost) * fs.AvgDealSize
-	
+
 	if success {
 		// Successful pivot opens new market
 		fs.TargetMarketSize = int(float64(fs.TargetMarketSize) * (1.5 + rand.Float64()))
@@ -1485,9 +1490,9 @@ func (fs *FounderState) ExecutePivot(toStrategy string, reason string) (*Pivot, 
 		// Failed pivot
 		fs.MonthlyGrowthRate *= 0.7 // Slower growth
 	}
-	
+
 	fs.PivotHistory = append(fs.PivotHistory, pivot)
-	
+
 	return &pivot, nil
 }
 
@@ -1502,7 +1507,7 @@ func (fs *FounderState) BuybackEquity(roundName string, equityPercent float64) (
 	if monthlyProfit <= 0 {
 		return nil, fmt.Errorf("must be profitable to buy back equity")
 	}
-	
+
 	// Find the round
 	var foundRound *FundingRound
 	for i := range fs.FundingRounds {
@@ -1514,20 +1519,20 @@ func (fs *FounderState) BuybackEquity(roundName string, equityPercent float64) (
 	if foundRound == nil {
 		return nil, fmt.Errorf("funding round not found: %s", roundName)
 	}
-	
+
 	// Can't buy back more than they own
 	if equityPercent > foundRound.EquityGiven {
 		return nil, fmt.Errorf("can't buy back more equity than investors own")
 	}
-	
+
 	// Calculate current valuation
 	currentValuation := int64(float64(fs.MRR) * 12 * 12) // 12x ARR
 	priceToPay := int64(float64(currentValuation) * equityPercent / 100.0)
-	
+
 	if priceToPay > fs.Cash {
 		return nil, fmt.Errorf("insufficient cash for buyback (need $%s)", formatCurrency(priceToPay))
 	}
-	
+
 	buyback := Buyback{
 		Month:        fs.Turn,
 		Investor:     roundName,
@@ -1535,13 +1540,13 @@ func (fs *FounderState) BuybackEquity(roundName string, equityPercent float64) (
 		PricePaid:    priceToPay,
 		Valuation:    currentValuation,
 	}
-	
+
 	fs.Cash -= priceToPay
 	fs.EquityGivenAway -= equityPercent
 	foundRound.EquityGiven -= equityPercent
-	
+
 	fs.InvestorBuybacks = append(fs.InvestorBuybacks, buyback)
-	
+
 	return &buyback, nil
 }
 
@@ -1553,14 +1558,14 @@ func (fs *FounderState) BuybackEquity(roundName string, equityPercent float64) (
 func (fs *FounderState) AddBoardSeat(reason string) error {
 	// Each board seat costs ~2% from employee equity pool
 	equityCost := 1.5 + rand.Float64()
-	
+
 	if fs.EquityPool < equityCost {
 		return fmt.Errorf("insufficient equity pool (need %.1f%%)", equityCost)
 	}
-	
+
 	fs.BoardSeats++
 	fs.EquityPool -= equityCost
-	
+
 	return nil
 }
 
@@ -1569,11 +1574,10 @@ func (fs *FounderState) ExpandEquityPool(percentToAdd float64) error {
 	if percentToAdd < 1 || percentToAdd > 10 {
 		return fmt.Errorf("can only add 1-10%% to equity pool at once")
 	}
-	
+
 	// This dilutes the founder
 	fs.EquityGivenAway += percentToAdd
 	fs.EquityPool += percentToAdd
-	
+
 	return nil
 }
-
