@@ -1,21 +1,25 @@
+import asyncio
 from datasette.app import Datasette
 import json
 import os
-from mangum import Mangum
 
-# Load metadata
-metadata_path = os.path.join(os.path.dirname(__file__), 'datasette-metadata.json')
-with open(metadata_path) as f:
-    metadata = json.load(f)
+metadata = dict()
+try:
+    metadata_path = os.path.join(os.path.dirname(__file__), 'datasette-metadata.json')
+    metadata = json.load(open(metadata_path))
+except Exception:
+    pass
 
-# Create Datasette instance
-db_path = os.path.join(os.path.dirname(__file__), 'leaderboard.db')
 ds = Datasette(
-    [db_path],
+    [os.path.join(os.path.dirname(__file__), 'leaderboard.db')],
     metadata=metadata,
     cors=True,
     sql_time_limit_ms=3500
 )
 
-# Wrap with Mangum for Vercel compatibility
-handler = Mangum(ds.app())
+asyncio.run(ds.invoke_startup())
+app = ds.app()
+
+# For Vercel, we need to use mangum adapter
+from mangum import Mangum
+handler = Mangum(app, lifespan="off")

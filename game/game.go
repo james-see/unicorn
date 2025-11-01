@@ -701,7 +701,6 @@ func (gs *GameState) ProcessAITurns() {
 			if rand.Float64() < gs.Difficulty.EventFrequency && len(gs.EventPool) > 0 {
 				event := gs.EventPool[rand.Intn(len(gs.EventPool))]
 				
-				oldVal := inv.CurrentValuation
 				inv.CurrentValuation = int64(float64(inv.CurrentValuation) * event.Change)
 				
 				// Prevent negative valuations
