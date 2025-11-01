@@ -17,6 +17,7 @@ import (
 	clear "github.com/jamesacampbell/unicorn/clear"
 	db "github.com/jamesacampbell/unicorn/database"
 	game "github.com/jamesacampbell/unicorn/game"
+	leaderboard "github.com/jamesacampbell/unicorn/leaderboard"
 	logo "github.com/jamesacampbell/unicorn/logo"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -282,16 +283,16 @@ func displayFinalScore(gs *game.GameState) {
 	roiColor.Printf("%s Return on Investment: %.2f%%\n", ascii.Chart, roi)
 	fmt.Printf("%s Successful Exits (5x+): %d\n", ascii.Rocket, successfulExits)
 
-	fmt.Println("\n" + strings.Repeat("═", 50))
+	fmt.Println("\n" + strings.Repeat("?", 50))
 	fmt.Println("FINAL PORTFOLIO:")
 	for _, inv := range gs.Portfolio.Investments {
 		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
-		fmt.Printf("   %s: $%s → $%s\n",
+		fmt.Printf("   %s: $%s ? $%s\n",
 			inv.CompanyName, formatMoney(inv.AmountInvested), formatMoney(value))
 	}
 
 	// Performance rating
-	fmt.Println("\n" + strings.Repeat("═", 50))
+	fmt.Println("\n" + strings.Repeat("?", 50))
 	var rating string
 	var icon string
 	if roi >= 1000 {
@@ -316,7 +317,7 @@ func displayFinalScore(gs *game.GameState) {
 
 	yellow := color.New(color.FgYellow, color.Bold)
 	yellow.Printf("Rating: %s %s\n", icon, rating)
-	fmt.Println(strings.Repeat("═", 50) + "\n")
+	fmt.Println(strings.Repeat("?", 50) + "\n")
 }
 
 func main() {
@@ -365,7 +366,7 @@ func displayMainMenu() string {
 	yellow := color.New(color.FgYellow)
 
 	cyan.Println("\n" + strings.Repeat("=", 50))
-	cyan.Println("           ★ UNICORN - MAIN MENU ★")
+	cyan.Println("           ? UNICORN - MAIN MENU ?")
 	cyan.Println(strings.Repeat("=", 50))
 
 	yellow.Println("\n1. New Game")
@@ -476,8 +477,11 @@ func playNewGame() {
 	if err != nil {
 		color.Yellow("\nWarning: Could not save score: %v", err)
 	} else {
-		color.Green("\n%s Score saved to leaderboard!", ascii.Check)
+		color.Green("\n%s Score saved to local leaderboard!", ascii.Check)
 	}
+
+	// Ask if player wants to submit to global leaderboard
+	askToSubmitToGlobalLeaderboard(score)
 
 	// Check for achievements
 	checkAndUnlockAchievements(gs)
@@ -555,9 +559,9 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		cyan := color.New(color.FgCyan, color.Bold)
 		yellow := color.New(color.FgYellow)
 
-		fmt.Println("\n" + strings.Repeat("═", 60))
+		fmt.Println("\n" + strings.Repeat("?", 60))
 		cyan.Printf("     %s NEW ACHIEVEMENTS UNLOCKED! %s\n", ascii.Star, ascii.Star)
-		fmt.Println(strings.Repeat("═", 60))
+		fmt.Println(strings.Repeat("?", 60))
 
 		for _, ach := range newAchievements {
 			// Save to database
@@ -741,9 +745,9 @@ func displayPlayerStats() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 
-	cyan.Println("\n" + strings.Repeat("═", 50))
+	cyan.Println("\n" + strings.Repeat("?", 50))
 	cyan.Println("           PLAYER STATISTICS")
-	cyan.Println(strings.Repeat("═", 50))
+	cyan.Println(strings.Repeat("?", 50))
 
 	fmt.Print("\nEnter player name: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -1033,14 +1037,68 @@ func displayAchievementLeaderboard() {
 	color.Yellow("\nThis feature will show players with the most achievements!")
 }
 
+func askToSubmitToGlobalLeaderboard(score db.GameScore) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	cyan.Println("           ?? GLOBAL LEADERBOARD")
+	fmt.Println(strings.Repeat("=", 60))
+
+	yellow.Println("\nWould you like to submit your score to the global leaderboard?")
+	fmt.Println("Your score will be visible to all players worldwide!")
+	fmt.Print("\nSubmit to global leaderboard? (y/n, default n): ")
+
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(strings.ToLower(choice))
+
+	if choice != "y" && choice != "yes" {
+		fmt.Println("Okay, score saved locally only.")
+		return
+	}
+
+	// Check API availability
+	fmt.Print("\nChecking global leaderboard service...")
+	if !leaderboard.IsAPIAvailable("") {
+		color.Yellow("\n??  Global leaderboard service is not available right now.")
+		color.Yellow("Your score has been saved locally.")
+		return
+	}
+	color.Green(" ?")
+
+	// Submit score
+	fmt.Print("Submitting your score...")
+	submission := leaderboard.ScoreSubmission{
+		PlayerName:      score.PlayerName,
+		FinalNetWorth:   score.FinalNetWorth,
+		ROI:             score.ROI,
+		SuccessfulExits: score.SuccessfulExits,
+		TurnsPlayed:     score.TurnsPlayed,
+		Difficulty:      score.Difficulty,
+	}
+
+	err := leaderboard.SubmitScore(submission, "")
+	if err != nil {
+		color.Red("\n? Failed to submit score: %v", err)
+		color.Yellow("Your score has been saved locally.")
+		return
+	}
+
+	color.Green(" ?")
+	cyan.Println("\n?? Success! Your score has been submitted to the global leaderboard!")
+	yellow.Println("\nView the global leaderboard at:")
+	yellow.Println("https://jamesacampbell.github.io/unicorn")
+}
+
 func displayHelpGuide() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 
-	cyan.Println("\n" + strings.Repeat("═", 70))
+	cyan.Println("\n" + strings.Repeat("?", 70))
 	cyan.Println("              HELP & INFORMATION")
-	cyan.Println(strings.Repeat("═", 70))
+	cyan.Println(strings.Repeat("?", 70))
 
 	yellow.Printf("\n%s GAME OVERVIEW\n", ascii.Lightbulb)
 	fmt.Println("You're a VC investor with limited capital. Invest in 15 randomly")
@@ -1082,9 +1140,9 @@ func displayHelpGuide() {
 	yellow.Printf("\n%s AVAILABLE COMPANIES\n", ascii.Building)
 	fmt.Println("30 diverse startups across 12+ sectors:")
 	fmt.Println("Each game randomly selects 15 companies from the pool.")
-	fmt.Println("FinTech • BioTech • CleanTech • HealthTech • EdTech")
-	fmt.Println("Robotics • Security • Gaming • LegalTech • AgriTech")
-	fmt.Println("Logistics • IoT • Creative • CloudTech • and more!")
+	fmt.Println("FinTech ? BioTech ? CleanTech ? HealthTech ? EdTech")
+	fmt.Println("Robotics ? Security ? Gaming ? LegalTech ? AgriTech")
+	fmt.Println("Logistics ? IoT ? Creative ? CloudTech ? and more!")
 	fmt.Println("Includes LOW risk stable companies and VERY HIGH risk moonshots!")
 
 	yellow.Printf("\n%s RANDOM EVENTS\n", ascii.News)

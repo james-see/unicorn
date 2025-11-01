@@ -1,0 +1,30 @@
+{
+  "title": "?? Unicorn Global Leaderboard",
+  "description": "Global leaderboard for Unicorn VC Investment Game",
+  "source": "Unicorn Game Players",
+  "source_url": "https://github.com/jamesacampbell/unicorn",
+  "license": "MIT",
+  "license_url": "https://github.com/jamesacampbell/unicorn/blob/main/LICENSE",
+  "databases": {
+    "leaderboard": {
+      "tables": {
+        "game_scores": {
+          "title": "Game Scores",
+          "description": "All submitted game scores from players worldwide",
+          "sort_desc": "final_net_worth",
+          "facets": ["difficulty"],
+          "columns": {
+            "id": "Unique Score ID",
+            "player_name": "Player Name",
+            "final_net_worth": "Final Net Worth ($)",
+            "roi": "ROI (%)",
+            "successful_exits": "Successful Exits (5x+)",
+            "turns_played": "Turns Played",
+            "difficulty": "Difficulty Level",
+            "played_at": "Date Played"
+          }
+        }
+      }
+    }
+  }
+}

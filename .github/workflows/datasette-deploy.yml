@@ -1,0 +1,55 @@
+name: Deploy Datasette to Vercel
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install datasette and plugins
+        run: |
+          pip install datasette datasette-publish-vercel
+      
+      - name: Download latest database
+        run: |
+          # If database exists in repo, use it; otherwise create empty one
+          if [ ! -f leaderboard.db ]; then
+            sqlite3 leaderboard.db <<EOF
+          CREATE TABLE IF NOT EXISTS game_scores (
+            id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            final_net_worth INTEGER NOT NULL,
+            roi REAL NOT NULL,
+            successful_exits INTEGER NOT NULL,
+            turns_played INTEGER NOT NULL,
+            difficulty TEXT NOT NULL,
+            played_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE INDEX IF NOT EXISTS idx_net_worth ON game_scores(final_net_worth DESC);
+          CREATE INDEX IF NOT EXISTS idx_roi ON game_scores(roi DESC);
+          CREATE INDEX IF NOT EXISTS idx_player ON game_scores(player_name);
+          CREATE INDEX IF NOT EXISTS idx_difficulty ON game_scores(difficulty);
+          EOF
+          fi
+      
+      - name: Deploy to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          datasette publish vercel leaderboard.db \
+            --project=unicorn-leaderboard \
+            --token=$VERCEL_TOKEN \
+            --install=datasette-cors \
+            --metadata=datasette-metadata.json \
+            --setting sql_time_limit_ms 3500 \
+            --setting allow_download off
