@@ -156,11 +156,28 @@ func playFounderTurn(fs *founder.FounderState) {
 		fmt.Println(" (flat)")
 	}
 	
-	fmt.Printf("👥 Customers: %d | ", fs.Customers)
-	fmt.Printf("💸 Avg Deal: $%s/mo\n", formatFounderCurrency(fs.AvgDealSize))
+	// Show MRR breakdown if affiliate program is active
+	if fs.AffiliateProgram != nil && fs.AffiliateMRR > 0 {
+		fmt.Printf("   Direct: $%s | Affiliate: $%s\n", 
+			formatFounderCurrency(fs.DirectMRR), formatFounderCurrency(fs.AffiliateMRR))
+	}
+	
+	fmt.Printf("👥 Customers: %d", fs.Customers)
+	if fs.AffiliateProgram != nil && fs.AffiliateCustomers > 0 {
+		fmt.Printf(" (Direct: %d | Affiliate: %d)", fs.DirectCustomers, fs.AffiliateCustomers)
+	}
+	fmt.Println()
+	
+	fmt.Printf("💸 Deal Size: $%s/mo avg", formatFounderCurrency(fs.AvgDealSize))
+	if fs.MinDealSize > 0 && fs.MaxDealSize > fs.MinDealSize {
+		fmt.Printf(" | Range: $%s - $%s/mo\n", 
+			formatFounderCurrency(fs.MinDealSize), formatFounderCurrency(fs.MaxDealSize))
+	} else {
+		fmt.Println()
+	}
 	fmt.Printf("🔄 Churn Rate: %.1f%% | ", fs.CustomerChurnRate*100)
 	fmt.Printf("📦 Product Maturity: %.0f%%\n", fs.ProductMaturity*100)
-	fmt.Printf("💼 Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
+	fmt.Printf("💼 Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityPool)
 
 	// Show team
 	fmt.Println("\n" + strings.Repeat("─", 70))
@@ -1089,7 +1106,7 @@ func handleBoardAndEquity(fs *founder.FounderState) {
 	
 	fmt.Printf("\nCurrent Board Seats: %d\n", fs.BoardSeats)
 	fmt.Printf("Employee Equity Pool: %.1f%%\n", fs.EquityPool)
-	fmt.Printf("Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
+	fmt.Printf("Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityPool)
 
 	fmt.Println("\nOptions:")
 	fmt.Println("1. Add Board Seat (costs ~2% from equity pool)")
@@ -1127,7 +1144,7 @@ func handleBoardAndEquity(fs *founder.FounderState) {
 		fs.ExpandEquityPool(pct)
 		color.Green("\n✓ Expanded equity pool by %.1f%%", pct)
 		fmt.Printf("  New equity pool: %.1f%%\n", fs.EquityPool)
-		fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
+		fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityPool)
 
 	case "0":
 		fmt.Println("\nCanceled")

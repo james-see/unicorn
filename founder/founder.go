@@ -72,32 +72,38 @@ type StartupTemplate struct {
 
 // FounderState represents the current state of your startup
 type FounderState struct {
-	FounderName       string
-	CompanyName       string
-	Category          string
-	StartupType       string
-	Description       string
-	Cash              int64
-	MRR               int64 // Monthly Recurring Revenue
-	Customers         int
-	AvgDealSize       int64
-	ChurnRate         float64
-	CustomerChurnRate float64 // Alias for ChurnRate
-	BaseCAC           int64   // Base customer acquisition cost for this business
-	Team              Team
-	Turn              int
-	MaxTurns          int
-	ProductMaturity   float64 // 0-1, affects sales velocity
-	MarketPenetration float64 // 0-1, % of target market captured
-	TargetMarketSize  int
-	CompetitionLevel  string
-	FundingRounds     []FundingRound
-	EquityGivenAway   float64 // Total % equity given to investors
-	BoardSeats        int     // Board seats given to investors
-	AcquisitionOffers []AcquisitionOffer
-	CashRunwayMonths  int
-	MonthlyTeamCost   int64 // Cached monthly team cost
-	FounderSalary     int64 // $150k/year = $12,500/month
+	FounderName        string
+	CompanyName        string
+	Category           string
+	StartupType        string
+	Description        string
+	Cash               int64
+	MRR                int64 // Monthly Recurring Revenue
+	DirectMRR          int64 // MRR from direct customers (excludes affiliate)
+	AffiliateMRR       int64 // MRR from affiliate customers
+	Customers          int
+	DirectCustomers    int // Customers acquired directly (excludes affiliate)
+	AffiliateCustomers int // Customers acquired via affiliate program
+	AvgDealSize        int64
+	MinDealSize        int64 // Minimum deal size (for display)
+	MaxDealSize        int64 // Maximum deal size (for display)
+	ChurnRate          float64
+	CustomerChurnRate  float64 // Alias for ChurnRate
+	BaseCAC            int64   // Base customer acquisition cost for this business
+	Team               Team
+	Turn               int
+	MaxTurns           int
+	ProductMaturity    float64 // 0-1, affects sales velocity
+	MarketPenetration  float64 // 0-1, % of target market captured
+	TargetMarketSize   int
+	CompetitionLevel   string
+	FundingRounds      []FundingRound
+	EquityGivenAway    float64 // Total % equity given to investors
+	BoardSeats         int     // Board seats given to investors
+	AcquisitionOffers  []AcquisitionOffer
+	CashRunwayMonths   int
+	MonthlyTeamCost    int64 // Cached monthly team cost
+	FounderSalary      int64 // $150k/year = $12,500/month
 
 	// Growth metrics
 	MonthlyGrowthRate       float64
@@ -264,27 +270,75 @@ func LoadFounderStartups(filename string) ([]StartupTemplate, error) {
 	return templates, nil
 }
 
+// generateDealSize creates a variable deal size based on avg, with realistic distribution
+// Returns a deal size between 50% and 200% of avg, weighted toward avg
+func generateDealSize(avgDealSize int64) int64 {
+	// Use normal distribution approximation: 70% chance within ±30%, 30% chance outside
+	// Most deals cluster around avg, but some are much larger/smaller
+	var dealSize int64
+
+	if rand.Float64() < 0.7 {
+		// 70% of deals: within ±30% of avg
+		variation := -0.3 + rand.Float64()*0.6 // -30% to +30%
+		dealSize = int64(float64(avgDealSize) * (1.0 + variation))
+	} else {
+		// 30% of deals: wider range
+		if rand.Float64() < 0.5 {
+			// Smaller deals: 50% to 70% of avg
+			variation := 0.5 + rand.Float64()*0.2
+			dealSize = int64(float64(avgDealSize) * variation)
+		} else {
+			// Larger deals: 130% to 200% of avg (enterprise deals)
+			variation := 1.3 + rand.Float64()*0.7
+			dealSize = int64(float64(avgDealSize) * variation)
+		}
+	}
+
+	// Ensure minimum deal size (at least 10% of avg)
+	if dealSize < avgDealSize/10 {
+		dealSize = avgDealSize / 10
+	}
+
+	return dealSize
+}
+
+// updateDealSizeRange updates min/max deal size tracking
+func (fs *FounderState) updateDealSizeRange(newDealSize int64) {
+	if fs.MinDealSize == 0 || newDealSize < fs.MinDealSize {
+		fs.MinDealSize = newDealSize
+	}
+	if newDealSize > fs.MaxDealSize {
+		fs.MaxDealSize = newDealSize
+	}
+}
+
 // NewFounderGame initializes a new founder mode game
 func NewFounderGame(founderName string, template StartupTemplate) *FounderState {
 	fs := &FounderState{
-		FounderName:       founderName,
-		CompanyName:       template.Name,
-		Category:          template.Type,
-		StartupType:       template.Type,
-		Description:       template.Description,
-		Cash:              template.InitialCash,
-		MRR:               template.InitialMRR,
-		Customers:         template.InitialCustomers,
-		AvgDealSize:       template.AvgDealSize,
-		ChurnRate:         template.BaseChurnRate,
-		CustomerChurnRate: template.BaseChurnRate,
-		BaseCAC:           template.BaseCAC,
-		Turn:              1,
-		MaxTurns:          60,  // 5 years
-		ProductMaturity:   0.3, // Start at 30% product maturity
-		MarketPenetration: float64(template.InitialCustomers) / float64(template.TargetMarketSize),
-		TargetMarketSize:  template.TargetMarketSize,
-		CompetitionLevel:  template.CompetitionLevel,
+		FounderName:        founderName,
+		CompanyName:        template.Name,
+		Category:           template.Type,
+		StartupType:        template.Type,
+		Description:        template.Description,
+		Cash:               template.InitialCash,
+		MRR:                template.InitialMRR,
+		DirectMRR:          template.InitialMRR, // Initial MRR is all direct
+		AffiliateMRR:       0,
+		Customers:          template.InitialCustomers,
+		DirectCustomers:    template.InitialCustomers, // Initial customers are all direct
+		AffiliateCustomers: 0,
+		AvgDealSize:        template.AvgDealSize,
+		MinDealSize:        template.AvgDealSize, // Will be updated as deals are made
+		MaxDealSize:        template.AvgDealSize, // Will be updated as deals are made
+		ChurnRate:          template.BaseChurnRate,
+		CustomerChurnRate:  template.BaseChurnRate,
+		BaseCAC:            template.BaseCAC,
+		Turn:               1,
+		MaxTurns:           60,  // 5 years
+		ProductMaturity:    0.3, // Start at 30% product maturity
+		MarketPenetration:  float64(template.InitialCustomers) / float64(template.TargetMarketSize),
+		TargetMarketSize:   template.TargetMarketSize,
+		CompetitionLevel:   template.CompetitionLevel,
 
 		// Initialize advanced features
 		Partnerships:       []Partnership{},
@@ -466,7 +520,7 @@ func (fs *FounderState) IsGameOver() bool {
 
 // GetFinalScore calculates the final outcome
 func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founderEquity float64) {
-	founderEquity = 100.0 - fs.EquityGivenAway
+	founderEquity = 100.0 - fs.EquityGivenAway - fs.EquityPool
 
 	// Calculate final valuation based on MRR
 	if fs.MRR > 0 {
@@ -798,9 +852,25 @@ func (fs *FounderState) SpendOnMarketing(amount int64) int {
 	fs.UpdateCAC()
 
 	newCustomers := int(amount / fs.CustomerAcquisitionCost)
+
+	// Calculate MRR with variable deal sizes
+	var totalMRR int64
+	for i := 0; i < newCustomers; i++ {
+		dealSize := generateDealSize(fs.AvgDealSize)
+		fs.updateDealSizeRange(dealSize)
+		totalMRR += dealSize
+	}
+
+	// These are direct customers (not from affiliate program)
 	fs.Customers += newCustomers
-	newMRR := int64(newCustomers) * fs.AvgDealSize
-	fs.MRR += newMRR
+	fs.DirectCustomers += newCustomers
+	fs.MRR += totalMRR
+	fs.DirectMRR += totalMRR
+
+	// Recalculate average deal size
+	if fs.Customers > 0 {
+		fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+	}
 
 	fs.CalculateRunway()
 
@@ -908,8 +978,22 @@ func (fs *FounderState) ProcessMonth() []string {
 	newRevenue := int64(float64(fs.MRR) * actualGrowth)
 	fs.MRR += newRevenue
 
+	// Apply growth proportionally to direct and affiliate MRR
+	if fs.MRR > 0 {
+		directRatio := float64(fs.DirectMRR) / float64(fs.MRR-newRevenue)
+		affiliateRatio := float64(fs.AffiliateMRR) / float64(fs.MRR-newRevenue)
+		if fs.MRR-newRevenue == 0 {
+			directRatio = 1.0
+			affiliateRatio = 0.0
+		}
+		fs.DirectMRR += int64(float64(newRevenue) * directRatio)
+		fs.AffiliateMRR += int64(float64(newRevenue) * affiliateRatio)
+	}
+
 	// 2. Process churn (only if we have customers)
 	var lostCustomers int
+	var lostDirectCustomers int
+	var lostAffiliateCustomers int
 	var actualChurn float64
 	if fs.Customers > 0 {
 		baseChurn := fs.CustomerChurnRate
@@ -927,16 +1011,49 @@ func (fs *FounderState) ProcessMonth() []string {
 		}
 		actualChurn = math.Max(0.01, baseChurn-csImpact)
 
+		// Calculate total churn loss
 		churnLoss := int64(float64(fs.MRR) * actualChurn)
-		fs.MRR -= churnLoss
 		lostCustomers = int(float64(fs.Customers) * actualChurn)
+
+		// Apply churn proportionally to direct and affiliate customers
+		if fs.Customers > 0 {
+			directChurnLoss := int64(float64(fs.DirectMRR) * actualChurn)
+			affiliateChurnLoss := int64(float64(fs.AffiliateMRR) * actualChurn)
+
+			lostDirectCustomers = int(float64(fs.DirectCustomers) * actualChurn)
+			lostAffiliateCustomers = int(float64(fs.AffiliateCustomers) * actualChurn)
+
+			fs.DirectMRR -= directChurnLoss
+			fs.AffiliateMRR -= affiliateChurnLoss
+			fs.DirectCustomers -= lostDirectCustomers
+			fs.AffiliateCustomers -= lostAffiliateCustomers
+		}
+
+		fs.MRR -= churnLoss
 		fs.Customers -= lostCustomers
 
 		if fs.MRR < 0 {
 			fs.MRR = 0
 		}
+		if fs.DirectMRR < 0 {
+			fs.DirectMRR = 0
+		}
+		if fs.AffiliateMRR < 0 {
+			fs.AffiliateMRR = 0
+		}
 		if fs.Customers < 0 {
 			fs.Customers = 0
+		}
+		if fs.DirectCustomers < 0 {
+			fs.DirectCustomers = 0
+		}
+		if fs.AffiliateCustomers < 0 {
+			fs.AffiliateCustomers = 0
+		}
+
+		// Recalculate average deal size after churn
+		if fs.Customers > 0 {
+			fs.AvgDealSize = fs.MRR / int64(fs.Customers)
 		}
 	}
 
@@ -1197,18 +1314,33 @@ func (fs *FounderState) UpdateAffiliateProgram() []string {
 	}
 
 	if newCustomers > 0 {
-		newMRR := int64(newCustomers) * fs.AvgDealSize
-		commissionPaid := int64(float64(newMRR) * prog.Commission)
+		// Calculate MRR with variable deal sizes
+		var totalMRR int64
+		for i := 0; i < newCustomers; i++ {
+			dealSize := generateDealSize(fs.AvgDealSize)
+			fs.updateDealSizeRange(dealSize)
+			totalMRR += dealSize
+		}
 
+		commissionPaid := int64(float64(totalMRR) * prog.Commission)
+
+		// These are affiliate customers
 		fs.Customers += newCustomers
-		fs.MRR += newMRR
+		fs.AffiliateCustomers += newCustomers
+		fs.MRR += totalMRR
+		fs.AffiliateMRR += totalMRR
 		fs.Cash -= commissionPaid
 
 		prog.CustomersAcquired += newCustomers
-		prog.MonthlyRevenue += newMRR
+		prog.MonthlyRevenue += totalMRR
+
+		// Recalculate average deal size
+		if fs.Customers > 0 {
+			fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+		}
 
 		messages = append(messages, fmt.Sprintf("🤝 Affiliates brought %d customers ($%s MRR, $%s commission)",
-			newCustomers, formatCurrency(newMRR), formatCurrency(commissionPaid)))
+			newCustomers, formatCurrency(totalMRR), formatCurrency(commissionPaid)))
 
 		// Affiliates grow over time if successful
 		if rand.Float64() < 0.2 {
@@ -1310,12 +1442,28 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 
 		// Merge customer bases
 		newCustomers := int(float64(fs.Customers) * comp.MarketShare)
+
+		// Calculate MRR with variable deal sizes
+		var totalMRR int64
+		for i := 0; i < newCustomers; i++ {
+			dealSize := generateDealSize(fs.AvgDealSize)
+			fs.updateDealSizeRange(dealSize)
+			totalMRR += dealSize
+		}
+
+		// These are direct customers (acquired via partnership)
 		fs.Customers += newCustomers
-		newMRR := int64(newCustomers) * fs.AvgDealSize
-		fs.MRR += newMRR
+		fs.DirectCustomers += newCustomers
+		fs.MRR += totalMRR
+		fs.DirectMRR += totalMRR
+
+		// Recalculate average deal size
+		if fs.Customers > 0 {
+			fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+		}
 
 		return fmt.Sprintf("Partnered with %s! Cost: $%s. Gained %d customers (+$%s MRR)",
-			comp.Name, formatCurrency(cost), newCustomers, formatCurrency(newMRR)), nil
+			comp.Name, formatCurrency(cost), newCustomers, formatCurrency(totalMRR)), nil
 
 	default:
 		return "", fmt.Errorf("unknown strategy: %s", strategy)
@@ -1444,7 +1592,13 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 		initialCustomers = 1 // At least 1 customer
 	}
 
-	initialMRR := int64(initialCustomers) * fs.AvgDealSize
+	// Calculate MRR with variable deal sizes
+	var initialMRR int64
+	for i := 0; i < initialCustomers; i++ {
+		dealSize := generateDealSize(fs.AvgDealSize)
+		fs.updateDealSizeRange(dealSize)
+		initialMRR += dealSize
+	}
 
 	market := Market{
 		Region:           region,
@@ -1459,8 +1613,16 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 	}
 
 	fs.GlobalMarkets = append(fs.GlobalMarkets, market)
+	// These are direct customers (from market expansion)
 	fs.Customers += initialCustomers
+	fs.DirectCustomers += initialCustomers
 	fs.MRR += initialMRR
+	fs.DirectMRR += initialMRR
+
+	// Recalculate average deal size
+	if fs.Customers > 0 {
+		fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+	}
 
 	// Increase global churn rate due to operational complexity
 
@@ -1510,11 +1672,21 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		// Process churn first
 		customersLost := int(float64(m.CustomerCount) * marketChurn)
 		if customersLost > 0 {
-			m.CustomerCount -= customersLost
+			// Estimate MRR lost using average deal size
 			mrrLost := int64(customersLost) * fs.AvgDealSize
+
+			m.CustomerCount -= customersLost
 			m.MRR -= mrrLost
+			// These are direct customers (from market expansion)
 			fs.MRR -= mrrLost
+			fs.DirectMRR -= mrrLost
 			fs.Customers -= customersLost
+			fs.DirectCustomers -= customersLost
+
+			// Recalculate average deal size
+			if fs.Customers > 0 {
+				fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+			}
 
 			messages = append(messages, fmt.Sprintf("📉 %s: Lost %d customers (%.1f%% churn)",
 				m.Region, customersLost, marketChurn*100))
@@ -1529,11 +1701,21 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 			if comp.Strategy == "ignore" && len(fs.Team.Sales) < 3 {
 				competitorSteal := int(float64(m.CustomerCount) * comp.MarketShare * 0.15) // 15% of their market share
 				if competitorSteal > 0 {
-					m.CustomerCount -= competitorSteal
+					// Estimate MRR stolen using average deal size
 					stolenMRR := int64(competitorSteal) * fs.AvgDealSize
+
+					m.CustomerCount -= competitorSteal
 					m.MRR -= stolenMRR
+					// These are direct customers (from market expansion)
 					fs.MRR -= stolenMRR
+					fs.DirectMRR -= stolenMRR
 					fs.Customers -= competitorSteal
+					fs.DirectCustomers -= competitorSteal
+
+					// Recalculate average deal size
+					if fs.Customers > 0 {
+						fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+					}
 
 					messages = append(messages, fmt.Sprintf("⚠️  %s took %d customers in %s",
 						comp.Name, competitorSteal, m.Region))
@@ -1583,11 +1765,26 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		}
 
 		if newCustomers > 0 {
+			// Calculate MRR with variable deal sizes
+			var totalMRR int64
+			for i := 0; i < newCustomers; i++ {
+				dealSize := generateDealSize(fs.AvgDealSize)
+				fs.updateDealSizeRange(dealSize)
+				totalMRR += dealSize
+			}
+
 			m.CustomerCount += newCustomers
-			newMRR := int64(newCustomers) * fs.AvgDealSize
-			m.MRR += newMRR
-			fs.MRR += newMRR
+			m.MRR += totalMRR
+			// These are direct customers (from market expansion)
+			fs.MRR += totalMRR
+			fs.DirectMRR += totalMRR
 			fs.Customers += newCustomers
+			fs.DirectCustomers += newCustomers
+
+			// Recalculate average deal size
+			if fs.Customers > 0 {
+				fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+			}
 
 			m.Penetration = float64(m.CustomerCount) / float64(m.MarketSize)
 
@@ -1621,9 +1818,25 @@ func (fs *FounderState) ExecutePivot(toStrategy string, reason string) (*Pivot, 
 	// Lose customers during pivot (20-50%)
 	churnRate := 0.20 + rand.Float64()*0.30
 	customersLost := int(float64(fs.Customers) * churnRate)
-	fs.Customers -= customersLost
 	mrrLost := int64(customersLost) * fs.AvgDealSize
+
+	// Apply churn proportionally to direct and affiliate customers
+	directCustomersLost := int(float64(fs.DirectCustomers) * churnRate)
+	affiliateCustomersLost := int(float64(fs.AffiliateCustomers) * churnRate)
+	directMRRLost := int64(float64(fs.DirectMRR) * churnRate)
+	affiliateMRRLost := int64(float64(fs.AffiliateMRR) * churnRate)
+
+	fs.Customers -= customersLost
+	fs.DirectCustomers -= directCustomersLost
+	fs.AffiliateCustomers -= affiliateCustomersLost
 	fs.MRR -= mrrLost
+	fs.DirectMRR -= directMRRLost
+	fs.AffiliateMRR -= affiliateMRRLost
+
+	// Recalculate average deal size
+	if fs.Customers > 0 {
+		fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+	}
 
 	// Success rate depends on product maturity and timing
 	successChance := 0.30 // Base 30%
@@ -1721,8 +1934,7 @@ func (fs *FounderState) AddBoardSeat(reason string) {
 // ExpandEquityPool increases employee equity pool (dilutes founder)
 func (fs *FounderState) ExpandEquityPool(percentToAdd float64) {
 	fs.EquityPool += percentToAdd
-	// This dilutes everyone proportionally
-	fs.EquityGivenAway = fs.EquityGivenAway * (100.0 / (100.0 + percentToAdd))
+	// Dilution happens automatically because founder equity = 100 - EquityGivenAway - EquityPool
 }
 
 // ============================================================================

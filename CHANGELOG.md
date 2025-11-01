@@ -1,5 +1,45 @@
 # Changelog
 
+## Version 3.7.0 - Founder Mode: Enhanced Metrics & Equity Fixes (2025-01-XX)
+
+### Major Features Added
+
+#### 📊 Enhanced Customer & Revenue Tracking
+- **Separate Affiliate Tracking** - Direct customers and MRR tracked separately from affiliate customers/MRR
+- **Variable Deal Sizes** - Realistic pricing variation (50-200% of average deal size)
+  - 70% of deals within ±30% of average
+  - 30% are wider range (smaller or enterprise deals)
+- **Deal Size Range Display** - Shows min/max deal sizes alongside average
+- **Affiliate Breakdown** - Clear visibility into revenue sources (direct vs affiliate)
+
+#### 💼 Equity Pool Fixes
+- **Proper Dilution** - Expanding equity pool now correctly dilutes founder equity
+- **Accurate Calculations** - Founder equity = 100% - EquityGivenAway - EquityPool
+- **Consistent Display** - Equity calculations updated across all screens
+
+### Technical Changes
+
+#### Modified Files
+- `founder/founder.go` - Added separate tracking fields, variable deal size generation, fixed equity calculations
+- `founder_ui.go` - Enhanced metrics display with breakdowns and min/max ranges
+
+#### New Fields
+- `DirectMRR`, `AffiliateMRR` - Separate MRR tracking
+- `DirectCustomers`, `AffiliateCustomers` - Separate customer tracking
+- `MinDealSize`, `MaxDealSize` - Deal size range tracking
+
+#### New Functions
+- `generateDealSize()` - Creates realistic variable deal sizes
+- `updateDealSizeRange()` - Tracks min/max deal sizes
+
+### Gameplay Impact
+- **More Realistic** - Deal sizes vary like real SaaS pricing (tiers, discounts, enterprise deals)
+- **Better Visibility** - Clear breakdown of revenue sources and customer acquisition channels
+- **Proper Dilution** - Equity pool expansion correctly affects founder ownership
+- **Accurate Metrics** - Can now see exactly where revenue is coming from
+
+---
+
 ## Version 3.6.0 - Founder Mode: Realistic Financials & Cap Table (2025-11-01)
 
 ### Major Features Added
