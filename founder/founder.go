@@ -639,26 +639,30 @@ func (fs *FounderState) ProcessMonth() []string {
 	newRevenue := int64(float64(fs.MRR) * actualGrowth)
 	fs.MRR += newRevenue
 	
-	// 2. Process churn
-	baseChurn := fs.CustomerChurnRate
-	
-	// CS team reduces churn
-	csImpact := 0.0
-	for _, cs := range fs.Team.CustomerSuccess {
-		csImpact += (cs.Impact * 0.02) // Each CS rep reduces churn by ~2%
-	}
-	actualChurn := math.Max(0.01, baseChurn-csImpact)
-	
-	churnLoss := int64(float64(fs.MRR) * actualChurn)
-	fs.MRR -= churnLoss
-	lostCustomers := int(float64(fs.Customers) * actualChurn)
-	fs.Customers -= lostCustomers
-	
-	if fs.MRR < 0 {
-		fs.MRR = 0
-	}
-	if fs.Customers < 0 {
-		fs.Customers = 0
+	// 2. Process churn (only if we have customers)
+	var lostCustomers int
+	var actualChurn float64
+	if fs.Customers > 0 {
+		baseChurn := fs.CustomerChurnRate
+		
+		// CS team reduces churn
+		csImpact := 0.0
+		for _, cs := range fs.Team.CustomerSuccess {
+			csImpact += (cs.Impact * 0.02) // Each CS rep reduces churn by ~2%
+		}
+		actualChurn = math.Max(0.01, baseChurn-csImpact)
+		
+		churnLoss := int64(float64(fs.MRR) * actualChurn)
+		fs.MRR -= churnLoss
+		lostCustomers = int(float64(fs.Customers) * actualChurn)
+		fs.Customers -= lostCustomers
+		
+		if fs.MRR < 0 {
+			fs.MRR = 0
+		}
+		if fs.Customers < 0 {
+			fs.Customers = 0
+		}
 	}
 	
 	// 3. Calculate costs
@@ -673,15 +677,22 @@ func (fs *FounderState) ProcessMonth() []string {
 	// 5. Update growth rate for next month
 	if oldMRR > 0 {
 		fs.MonthlyGrowthRate = float64(fs.MRR-oldMRR) / float64(oldMRR)
+	} else if fs.MRR > 0 {
+		// First customers! Set initial growth rate
+		fs.MonthlyGrowthRate = 0.10 // Start with 10% base growth
 	}
 	
 	// 6. Generate messages
-	if fs.MRR > oldMRR {
+	if fs.MRR > 0 && oldMRR == 0 {
+		messages = append(messages, fmt.Sprintf("🎉 FIRST REVENUE! MRR: $%s", formatCurrency(fs.MRR)))
+	} else if fs.MRR > oldMRR && oldMRR > 0 {
 		pctGrowth := ((float64(fs.MRR) - float64(oldMRR)) / float64(oldMRR)) * 100
 		messages = append(messages, fmt.Sprintf("💰 MRR grew %.1f%% to $%s", pctGrowth, formatCurrency(fs.MRR)))
-	} else if fs.MRR < oldMRR {
+	} else if fs.MRR < oldMRR && oldMRR > 0 {
 		pctDecline := ((float64(oldMRR) - float64(fs.MRR)) / float64(oldMRR)) * 100
 		messages = append(messages, fmt.Sprintf("⚠️  MRR declined %.1f%% to $%s", pctDecline, formatCurrency(fs.MRR)))
+	} else if fs.MRR == 0 && fs.Turn > 3 {
+		messages = append(messages, "⚠️  Still no revenue! Hire sales or spend on marketing!")
 	}
 	
 	if lostCustomers > 0 {
