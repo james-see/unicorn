@@ -341,7 +341,140 @@
             .stats { gap: 1rem; }
             .download-btn { padding: 1rem 2rem; font-size: 1.1rem; }
         }
+
+        /* Leaderboard Styles */
+        #leaderboard-container table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        #leaderboard-container table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        #leaderboard-container table th {
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
     </style>
+    <script type="module">
+        // Simple leaderboard loader
+        async function loadLeaderboard() {
+            const container = document.getElementById('leaderboard-container');
+            
+            try {
+                const response = await fetch('leaderboard.json');
+                if (!response.ok) {
+                    throw new Error('Leaderboard file not found');
+                }
+                
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>No scores yet! Be the first to submit!</p></div>';
+                    return;
+                }
+                
+                // Sort by net worth descending
+                data.sort((a, b) => b.final_net_worth - a.final_net_worth);
+                
+                // Create table
+                let html = `
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+                            <thead>
+                                <tr style="background: rgba(255, 255, 255, 0.1); border-bottom: 2px solid rgba(255, 255, 255, 0.3);">
+                                    <th style="padding: 0.75rem; text-align: left;">Rank</th>
+                                    <th style="padding: 0.75rem; text-align: left;">Player</th>
+                                    <th style="padding: 0.75rem; text-align: right;">Net Worth</th>
+                                    <th style="padding: 0.75rem; text-align: right;">ROI</th>
+                                    <th style="padding: 0.75rem; text-align: center;">Exits</th>
+                                    <th style="padding: 0.75rem; text-align: left;">Difficulty</th>
+                                    <th style="padding: 0.75rem; text-align: left;">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                data.slice(0, 50).forEach((score, index) => {
+                    const rankEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+                    const roiColor = score.roi >= 0 ? '#4ade80' : '#f87171';
+                    
+                    html += `
+                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                            <td style="padding: 0.75rem;">
+                                <strong>${rankEmoji} ${index + 1}</strong>
+                            </td>
+                            <td style="padding: 0.75rem; font-weight: 600;">${escapeHtml(score.player_name)}</td>
+                            <td style="padding: 0.75rem; text-align: right; font-weight: 600; color: #ffd700;">
+                                $${formatMoney(score.final_net_worth)}
+                            </td>
+                            <td style="padding: 0.75rem; text-align: right; color: ${roiColor};">
+                                ${score.roi >= 0 ? '+' : ''}${score.roi.toFixed(1)}%
+                            </td>
+                            <td style="padding: 0.75rem; text-align: center;">${score.successful_exits}</td>
+                            <td style="padding: 0.75rem;">${escapeHtml(score.difficulty)}</td>
+                            <td style="padding: 0.75rem; opacity: 0.8; font-size: 0.9rem;">
+                                ${formatDate(score.played_at)}
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 2rem;">
+                        <p>Leaderboard is being set up. Check back soon!</p>
+                        <p style="margin-top: 1rem; opacity: 0.8;">
+                            <a href="https://github.com/jamesacampbell/unicorn/issues/new" 
+                               target="_blank" 
+                               style="color: #ffd700; text-decoration: none; font-weight: 600;">
+                                Submit your score →
+                            </a>
+                        </p>
+                    </div>
+                `;
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function formatMoney(amount) {
+            return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+        
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+            } catch {
+                return dateStr;
+            }
+        }
+        
+        // Load leaderboard when page loads
+        loadLeaderboard();
+    </script>
 </head>
 <body>
     <!-- Flying Unicorns -->
@@ -489,6 +622,24 @@
             <p style="margin-top: 2rem; opacity: 0.8;">
                 Made with ❤️ by <a href="https://github.com/jamesacampbell" style="color: #ffd700; text-decoration: none; font-weight: 600;" target="_blank">@jamesacampbell</a>
             </p>
+        </div>
+
+        <div class="card">
+            <h2>🏆 Global Leaderboard</h2>
+            <p style="margin-bottom: 1.5rem;">
+                Compete globally! Submit your scores after completing a game to appear on the leaderboard.
+                <a href="https://github.com/jamesacampbell/unicorn/issues/new?template=score-submission.md" 
+                   target="_blank" 
+                   style="color: #ffd700; text-decoration: none; font-weight: 600;">
+                    Submit your score →
+                </a>
+            </p>
+            
+            <div id="leaderboard-container" style="min-height: 400px;">
+                <div style="text-align: center; padding: 2rem;">
+                    <p>Loading leaderboard...</p>
+                </div>
+            </div>
         </div>
 
         <footer>

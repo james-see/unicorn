@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatih/color"
 	achievements "github.com/jamesacampbell/unicorn/achievements"
+	api "github.com/jamesacampbell/unicorn/api"
 	ascii "github.com/jamesacampbell/unicorn/ascii"
 
 	// analytics "github.com/jamesacampbell/unicorn/analytics"
@@ -282,16 +283,16 @@ func displayFinalScore(gs *game.GameState) {
 	roiColor.Printf("%s Return on Investment: %.2f%%\n", ascii.Chart, roi)
 	fmt.Printf("%s Successful Exits (5x+): %d\n", ascii.Rocket, successfulExits)
 
-	fmt.Println("\n" + strings.Repeat("═", 50))
+	fmt.Println("\n" + strings.Repeat("?", 50))
 	fmt.Println("FINAL PORTFOLIO:")
 	for _, inv := range gs.Portfolio.Investments {
 		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
-		fmt.Printf("   %s: $%s → $%s\n",
+		fmt.Printf("   %s: $%s ? $%s\n",
 			inv.CompanyName, formatMoney(inv.AmountInvested), formatMoney(value))
 	}
 
 	// Performance rating
-	fmt.Println("\n" + strings.Repeat("═", 50))
+	fmt.Println("\n" + strings.Repeat("?", 50))
 	var rating string
 	var icon string
 	if roi >= 1000 {
@@ -316,7 +317,7 @@ func displayFinalScore(gs *game.GameState) {
 
 	yellow := color.New(color.FgYellow, color.Bold)
 	yellow.Printf("Rating: %s %s\n", icon, rating)
-	fmt.Println(strings.Repeat("═", 50) + "\n")
+	fmt.Println(strings.Repeat("?", 50) + "\n")
 }
 
 func main() {
@@ -365,7 +366,7 @@ func displayMainMenu() string {
 	yellow := color.New(color.FgYellow)
 
 	cyan.Println("\n" + strings.Repeat("=", 50))
-	cyan.Println("           ★ UNICORN - MAIN MENU ★")
+	cyan.Println("           ? UNICORN - MAIN MENU ?")
 	cyan.Println(strings.Repeat("=", 50))
 
 	yellow.Println("\n1. New Game")
@@ -482,8 +483,67 @@ func playNewGame() {
 	// Check for achievements
 	checkAndUnlockAchievements(gs)
 
+	// Ask if player wants to submit score to global leaderboard
+	askForScoreSubmission(score)
+
 	fmt.Print("\nPress 'Enter' to return to main menu...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func askForScoreSubmission(score db.GameScore) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	fmt.Println("\n" + strings.Repeat("?", 60))
+	cyan.Println("          ?? GLOBAL LEADERBOARD SUBMISSION")
+	fmt.Println(strings.Repeat("?", 60))
+	
+	fmt.Println("\nWould you like to submit your score to the global leaderboard?")
+	fmt.Println("Your score will be visible on the GitHub page!")
+	
+	fmt.Print("\nSubmit to global leaderboard? (y/n, default: n): ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(strings.ToLower(choice))
+	
+	if choice != "y" && choice != "yes" {
+		return
+	}
+	
+	// Get GitHub token from environment or prompt
+	githubToken := os.Getenv("GITHUB_TOKEN")
+	if githubToken == "" {
+		yellow.Println("\n??  GITHUB_TOKEN not set. To submit scores:")
+		fmt.Println("1. Create a GitHub Personal Access Token")
+		fmt.Println("2. Set it: export GITHUB_TOKEN=your_token_here")
+		fmt.Println("3. Or submit manually via GitHub Issues:")
+		fmt.Printf("   https://github.com/jamesacampbell/unicorn/issues/new\n")
+		fmt.Println("\nAlternatively, you can submit via the GitHub page directly!")
+		return
+	}
+	
+	cyan.Println("\nSubmitting score to global leaderboard...")
+	
+	submission := api.ScoreSubmission{
+		PlayerName:      score.PlayerName,
+		FinalNetWorth:   score.FinalNetWorth,
+		ROI:             score.ROI,
+		SuccessfulExits: score.SuccessfulExits,
+		TurnsPlayed:     score.TurnsPlayed,
+		Difficulty:      score.Difficulty,
+		PlayedAt:        score.PlayedAt,
+	}
+	
+	err := api.SubmitScoreToGitHub("jamesacampbell", "unicorn", githubToken, submission)
+	if err != nil {
+		color.Red("\n? Failed to submit score: %v", err)
+		yellow.Println("\nYou can also submit manually via GitHub Issues:")
+		fmt.Println("https://github.com/jamesacampbell/unicorn/issues/new")
+	} else {
+		color.Green("\n? Score submitted successfully!")
+		fmt.Println("Your score will appear on the global leaderboard soon!")
+		fmt.Println("View it at: https://jamesacampbell.github.io/unicorn/")
+	}
 }
 
 func checkAndUnlockAchievements(gs *game.GameState) {
@@ -555,9 +615,9 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		cyan := color.New(color.FgCyan, color.Bold)
 		yellow := color.New(color.FgYellow)
 
-		fmt.Println("\n" + strings.Repeat("═", 60))
+		fmt.Println("\n" + strings.Repeat("?", 60))
 		cyan.Printf("     %s NEW ACHIEVEMENTS UNLOCKED! %s\n", ascii.Star, ascii.Star)
-		fmt.Println(strings.Repeat("═", 60))
+		fmt.Println(strings.Repeat("?", 60))
 
 		for _, ach := range newAchievements {
 			// Save to database
@@ -741,9 +801,9 @@ func displayPlayerStats() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 
-	cyan.Println("\n" + strings.Repeat("═", 50))
+	cyan.Println("\n" + strings.Repeat("?", 50))
 	cyan.Println("           PLAYER STATISTICS")
-	cyan.Println(strings.Repeat("═", 50))
+	cyan.Println(strings.Repeat("?", 50))
 
 	fmt.Print("\nEnter player name: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -1038,9 +1098,9 @@ func displayHelpGuide() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 
-	cyan.Println("\n" + strings.Repeat("═", 70))
+	cyan.Println("\n" + strings.Repeat("?", 70))
 	cyan.Println("              HELP & INFORMATION")
-	cyan.Println(strings.Repeat("═", 70))
+	cyan.Println(strings.Repeat("?", 70))
 
 	yellow.Printf("\n%s GAME OVERVIEW\n", ascii.Lightbulb)
 	fmt.Println("You're a VC investor with limited capital. Invest in 15 randomly")
@@ -1082,9 +1142,9 @@ func displayHelpGuide() {
 	yellow.Printf("\n%s AVAILABLE COMPANIES\n", ascii.Building)
 	fmt.Println("30 diverse startups across 12+ sectors:")
 	fmt.Println("Each game randomly selects 15 companies from the pool.")
-	fmt.Println("FinTech • BioTech • CleanTech • HealthTech • EdTech")
-	fmt.Println("Robotics • Security • Gaming • LegalTech • AgriTech")
-	fmt.Println("Logistics • IoT • Creative • CloudTech • and more!")
+	fmt.Println("FinTech ? BioTech ? CleanTech ? HealthTech ? EdTech")
+	fmt.Println("Robotics ? Security ? Gaming ? LegalTech ? AgriTech")
+	fmt.Println("Logistics ? IoT ? Creative ? CloudTech ? and more!")
 	fmt.Println("Includes LOW risk stable companies and VERY HIGH risk moonshots!")
 
 	yellow.Printf("\n%s RANDOM EVENTS\n", ascii.News)

@@ -1,0 +1,163 @@
+name: Process Score Submissions
+
+on:
+  issues:
+    types: [opened, edited]
+  workflow_dispatch:
+
+jobs:
+  process-scores:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      
+      - name: Install dependencies
+        run: |
+          go mod download
+      
+      - name: Extract score from issue
+        id: extract-score
+        if: github.event_name == 'issues'
+        run: |
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          
+          # Extract JSON from code block
+          JSON_DATA=$(echo "$ISSUE_BODY" | grep -A 20 "```json" | grep -v "```json" | grep -v "```" | tr -d '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          
+          if [ -z "$JSON_DATA" ]; then
+            echo "No JSON data found in issue"
+            echo "has_score=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "has_score=true" >> $GITHUB_OUTPUT
+          echo "score_data<<EOF" >> $GITHUB_OUTPUT
+          echo "$JSON_DATA" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Initialize database
+        if: github.event_name == 'issues' && steps.extract-score.outputs.has_score == 'true'
+        run: |
+          cat > init_db.go << 'EOF'
+          package main
+          import (
+              "database/sql"
+              "fmt"
+              "os"
+              _ "github.com/mattn/go-sqlite3"
+          )
+          func main() {
+              db, err := sql.Open("sqlite3", "leaderboard.db")
+              if err != nil {
+                  fmt.Printf("Error: %v\n", err)
+                  os.Exit(1)
+              }
+              defer db.Close()
+              _, err = db.Exec(`CREATE TABLE IF NOT EXISTS game_scores (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  player_name TEXT NOT NULL,
+                  final_net_worth INTEGER NOT NULL,
+                  roi REAL NOT NULL,
+                  successful_exits INTEGER NOT NULL,
+                  turns_played INTEGER NOT NULL,
+                  difficulty TEXT NOT NULL,
+                  played_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              )`)
+              if err != nil {
+                  fmt.Printf("Error: %v\n", err)
+                  os.Exit(1)
+              }
+              fmt.Println("Database initialized")
+          }
+          EOF
+          go run init_db.go
+      
+      - name: Add score to database
+        if: github.event_name == 'issues' && steps.extract-score.outputs.has_score == 'true'
+        run: |
+          cat > add_score.go << 'EOF'
+          package main
+          import (
+              "database/sql"
+              "encoding/json"
+              "fmt"
+              "os"
+              "time"
+              _ "github.com/mattn/go-sqlite3"
+          )
+          type ScoreData struct {
+              PlayerName      string  `json:"player_name"`
+              FinalNetWorth   int64   `json:"final_net_worth"`
+              ROI             float64 `json:"roi"`
+              SuccessfulExits int     `json:"successful_exits"`
+              TurnsPlayed     int     `json:"turns_played"`
+              Difficulty      string  `json:"difficulty"`
+              PlayedAt        string  `json:"played_at"`
+          }
+          func main() {
+              if len(os.Args) < 3 {
+                  fmt.Println("Usage: go run add_score.go <db_path> <json_data>")
+                  os.Exit(1)
+              }
+              dbPath := os.Args[1]
+              jsonData := os.Args[2]
+              db, err := sql.Open("sqlite3", dbPath)
+              if err != nil {
+                  fmt.Printf("Error: %v\n", err)
+                  os.Exit(1)
+              }
+              defer db.Close()
+              var score ScoreData
+              if err := json.Unmarshal([]byte(jsonData), &score); err != nil {
+                  fmt.Printf("Error parsing JSON: %v\n", err)
+                  os.Exit(1)
+              }
+              var playedAt time.Time
+              if score.PlayedAt != "" {
+                  playedAt, _ = time.Parse(time.RFC3339, score.PlayedAt)
+              } else {
+                  playedAt = time.Now()
+              }
+              _, err = db.Exec(`
+                  INSERT INTO game_scores 
+                  (player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, played_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?)
+              `, score.PlayerName, score.FinalNetWorth, score.ROI, score.SuccessfulExits, 
+                  score.TurnsPlayed, score.Difficulty, playedAt)
+              if err != nil {
+                  fmt.Printf("Error inserting score: %v\n", err)
+                  os.Exit(1)
+              }
+              fmt.Println("Score added successfully")
+          }
+          EOF
+          go run add_score.go leaderboard.db '${{ steps.extract-score.outputs.score_data }}'
+      
+      - name: Export leaderboard JSON
+        run: |
+          if [ -f "leaderboard.db" ]; then
+            go run scripts/export_db.go leaderboard.db docs/leaderboard.json || echo "[]" > docs/leaderboard.json
+          else
+            echo "[]" > docs/leaderboard.json
+          fi
+      
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/leaderboard.json
+          if [ -f "leaderboard.db" ]; then
+            git add leaderboard.db
+          fi
+          git commit -m "Update leaderboard from score submission" || exit 0
+          git push
