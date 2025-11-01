@@ -78,15 +78,23 @@ func askForAutomatedMode() bool {
 func displayWelcome(username string, difficulty game.Difficulty) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
+	magenta := color.New(color.FgMagenta, color.Bold)
 
 	cyan.Printf("\n%s, welcome to your investment journey!\n", username)
 	fmt.Printf("\nDifficulty: ")
 	yellow.Printf("%s\n", difficulty.Name)
-	fmt.Printf("Starting Cash: $%s\n", formatMoney(difficulty.StartingCash))
+	fmt.Printf("Fund Size: $%s\n", formatMoney(difficulty.StartingCash))
+	fmt.Printf("Management Fee: 2%% annually ($%s/year)\n", formatMoney(int64(float64(difficulty.StartingCash)*0.02)))
 	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
 
 	fmt.Println("\nEach turn = 1 month. Choose your investments wisely!")
-	fmt.Println("Random events will affect valuations throughout the game.")
+	fmt.Println("Random events and funding rounds will affect valuations.")
+	fmt.Println("Watch out for dilution when companies raise new rounds!")
+	
+	magenta.Println("\n?? COMPETING AGAINST:")
+	fmt.Println("   ? CARL (Sterling & Cooper) - Conservative")
+	fmt.Println("   ? Sarah Chen (Accel Partners) - Aggressive")
+	fmt.Println("   ? Marcus Williams (Sequoia Capital) - Balanced")
 
 	fmt.Print("\nPress 'Enter' to see available startups...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
@@ -144,6 +152,7 @@ func investmentPhase(gs *game.GameState) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	cyan.Print(ascii.InvestmentHeader)
 	green.Printf("\nTurn %d/%d\n", gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
+	fmt.Printf("Fund Size: $%s\n", formatMoney(gs.Portfolio.InitialFundSize))
 	fmt.Printf("Cash Available: $%s\n", formatMoney(gs.Portfolio.Cash))
 	fmt.Printf("Portfolio Value: $%s\n", formatMoney(gs.GetPortfolioValue()))
 	fmt.Printf("Net Worth: $%s\n", formatMoney(gs.Portfolio.NetWorth))
@@ -172,6 +181,9 @@ func investmentPhase(gs *game.GameState) {
 		input = strings.TrimSpace(input)
 
 		if input == "done" || input == "" {
+			// Have AI players make their investments too
+			gs.AIPlayerMakeInvestments()
+			color.Green("\n? AI players have made their investments!")
 			break
 		}
 
@@ -236,8 +248,14 @@ func playTurn(gs *game.GameState, autoMode bool) {
 				profitSign = ""
 			}
 
-			fmt.Printf("   %s: $%s invested, %.2f%% equity\n",
-				inv.CompanyName, formatMoney(inv.AmountInvested), inv.EquityPercent)
+			// Show dilution if applicable
+			dilutionInfo := ""
+			if len(inv.Rounds) > 0 {
+				dilutionInfo = fmt.Sprintf(" (was %.2f%%, %d rounds)", inv.InitialEquity, len(inv.Rounds))
+			}
+			
+			fmt.Printf("   %s: $%s invested, %.2f%% equity%s\n",
+				inv.CompanyName, formatMoney(inv.AmountInvested), inv.EquityPercent, dilutionInfo)
 			fmt.Printf("      Current Value: $%s ", formatMoney(value))
 			profitColor.Printf("(%s$%s)\n", profitSign, formatMoney(abs(profit)))
 
@@ -248,7 +266,13 @@ func playTurn(gs *game.GameState, autoMode bool) {
 		yellow.Printf("\n   Total Company Valuation: $%s\n", formatMoney(totalCompanyValuation))
 	}
 
-	fmt.Printf("\n%s Net Worth: $%s\n", ascii.Money, formatMoney(gs.Portfolio.NetWorth))
+	fmt.Printf("\n%s Net Worth: $%s", ascii.Money, formatMoney(gs.Portfolio.NetWorth))
+	fmt.Printf(" | Management Fees Paid: $%s\n", formatMoney(gs.Portfolio.ManagementFeesCharged))
+	
+	// Show competitive leaderboard every quarter
+	if gs.Portfolio.Turn%3 == 0 {
+		displayMiniLeaderboard(gs)
+	}
 
 	// Always wait for user input when there are news messages, otherwise use auto mode logic
 	if len(messages) > 0 {
@@ -265,13 +289,15 @@ func playTurn(gs *game.GameState, autoMode bool) {
 func displayFinalScore(gs *game.GameState) {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
+	magenta := color.New(color.FgMagenta, color.Bold)
 
 	cyan.Print(ascii.GameOverHeader)
 
 	netWorth, roi, successfulExits := gs.GetFinalScore()
 
 	fmt.Printf("\n%s Player: %s\n", ascii.Star, gs.PlayerName)
-	fmt.Printf("%s Turns Played: %d\n\n", ascii.Calendar, gs.Portfolio.Turn-1)
+	fmt.Printf("%s Turns Played: %d\n", ascii.Calendar, gs.Portfolio.Turn-1)
+	fmt.Printf("%s Management Fees Paid: $%s\n\n", ascii.Money, formatMoney(gs.Portfolio.ManagementFeesCharged))
 
 	green := color.New(color.FgGreen, color.Bold)
 	green.Printf("%s Final Net Worth: $%s\n", ascii.Money, formatMoney(netWorth))
@@ -282,6 +308,48 @@ func displayFinalScore(gs *game.GameState) {
 	}
 	roiColor.Printf("%s Return on Investment: %.2f%%\n", ascii.Chart, roi)
 	fmt.Printf("%s Successful Exits (5x+): %d\n", ascii.Rocket, successfulExits)
+	
+	// Show competitive results
+	magenta.Println("\n" + strings.Repeat("=", 70))
+	magenta.Println("                   FINAL LEADERBOARD")
+	magenta.Println(strings.Repeat("=", 70))
+	
+	leaderboard := gs.GetLeaderboard()
+	fmt.Printf("\n%-5s %-25s %-25s %-15s %-10s\n", "RANK", "INVESTOR", "FIRM", "NET WORTH", "ROI")
+	fmt.Println(strings.Repeat("-", 90))
+	
+	for i, entry := range leaderboard {
+		rankColor := color.New(color.FgWhite)
+		if i == 0 {
+			rankColor = color.New(color.FgYellow, color.Bold)
+		} else if i == 1 {
+			rankColor = color.New(color.FgCyan)
+		} else if i == 2 {
+			rankColor = color.New(color.FgGreen)
+		}
+		
+		playerMarker := ""
+		if entry.IsPlayer {
+			playerMarker = " ? YOU"
+		}
+		
+		roiColorEntry := color.New(color.FgGreen)
+		if entry.ROI < 0 {
+			roiColorEntry = color.New(color.FgRed)
+		}
+		
+		rankColor.Printf("%-5d ", i+1)
+		fmt.Printf("%-25s ", entry.Name+playerMarker)
+		fmt.Printf("%-25s ", entry.Firm)
+		fmt.Printf("$%-14s ", formatMoney(entry.NetWorth))
+		roiColorEntry.Printf("%.1f%%\n", entry.ROI)
+	}
+	
+	if leaderboard[0].IsPlayer {
+		magenta.Println("\n?? CONGRATULATIONS! You beat all the AI investors!")
+	} else {
+		magenta.Printf("\nYou finished in position #%d. Better luck next time!\n", findPlayerRank(leaderboard))
+	}
 
 	fmt.Println("\n" + strings.Repeat("?", 50))
 	fmt.Println("FINAL PORTFOLIO:")
@@ -317,7 +385,36 @@ func displayFinalScore(gs *game.GameState) {
 
 	yellow := color.New(color.FgYellow, color.Bold)
 	yellow.Printf("Rating: %s %s\n", icon, rating)
-	fmt.Println(strings.Repeat("?", 50) + "\n")
+	fmt.Println(strings.Repeat("=", 70) + "\n")
+}
+
+func displayMiniLeaderboard(gs *game.GameState) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	cyan.Println("\n?? Current Standings:")
+	leaderboard := gs.GetLeaderboard()
+	
+	for i, entry := range leaderboard {
+		marker := "  "
+		if entry.IsPlayer {
+			marker = "? "
+			yellow.Printf("%s%d. %s (%s): $%s (ROI: %.1f%%)\n",
+				marker, i+1, entry.Name, entry.Firm, formatMoney(entry.NetWorth), entry.ROI)
+		} else {
+			fmt.Printf("%s%d. %s (%s): $%s (ROI: %.1f%%)\n",
+				marker, i+1, entry.Name, entry.Firm, formatMoney(entry.NetWorth), entry.ROI)
+		}
+	}
+}
+
+func findPlayerRank(leaderboard []game.PlayerScore) int {
+	for i, entry := range leaderboard {
+		if entry.IsPlayer {
+			return i + 1
+		}
+	}
+	return len(leaderboard)
 }
 
 func main() {
@@ -1125,10 +1222,10 @@ func displayHelpGuide() {
 	fmt.Printf("%s Rating: Based on ROI (Unicorn Hunter = 1000%%+)\n", ascii.Crown)
 
 	yellow.Printf("\n%s DIFFICULTY LEVELS\n", ascii.Shield)
-	fmt.Printf("%s Easy: $500k, 20%% events, 3%% volatility\n", ascii.Check)
-	fmt.Printf("%s Medium: $250k, 30%% events, 5%% volatility\n", ascii.Star)
-	fmt.Printf("%s Hard: $150k, 40%% events, 7%% volatility\n", ascii.Warning)
-	fmt.Printf("%s Expert: $100k, 50%% events, 10%% volatility, 90 turns\n", ascii.Zap)
+	fmt.Printf("%s Easy: $1M fund, 20%% events, 3%% volatility\n", ascii.Check)
+	fmt.Printf("%s Medium: $750k fund, 30%% events, 5%% volatility\n", ascii.Star)
+	fmt.Printf("%s Hard: $500k fund, 40%% events, 7%% volatility\n", ascii.Warning)
+	fmt.Printf("%s Expert: $500k fund, 50%% events, 10%% volatility, 90 turns\n", ascii.Zap)
 
 	yellow.Printf("\n%s ANALYTICS\n", ascii.Chart)
 	fmt.Println("After each game, view detailed portfolio analytics:")
@@ -1153,12 +1250,23 @@ func displayHelpGuide() {
 	fmt.Printf("%s Scandals & regulatory issues\n", ascii.Warning)
 	fmt.Printf("%s Market conditions & competition\n", ascii.Chart)
 
+	yellow.Printf("\n%s REALISTIC VC MECHANICS\n", ascii.Money)
+	fmt.Printf("%s Management Fees: 2%% annual fee charged monthly\n", ascii.Coin)
+	fmt.Printf("%s Multiple Rounds: Companies raise Seed, Series A/B/C\n", ascii.Rocket)
+	fmt.Printf("%s Dilution: Your equity %% decreases with new rounds\n", ascii.Warning)
+	fmt.Printf("%s Post-Money Valuation: Pre-money + investment\n", ascii.Chart)
+	fmt.Printf("%s AI Competition: Play against 3 AI VCs\n", ascii.Trophy)
+	fmt.Println("   \u2022 CARL (Sterling & Cooper) - Conservative")
+	fmt.Println("   \u2022 Sarah Chen (Accel) - Aggressive")
+	fmt.Println("   \u2022 Marcus Williams (Sequoia) - Balanced")
+	
 	yellow.Printf("\n%s STRATEGY TIPS\n", ascii.Lightbulb)
 	fmt.Printf("%s Diversify: Don't put everything in one company\n", ascii.Portfolio)
 	fmt.Printf("%s Balance: Mix high-risk and low-risk investments\n", ascii.Shield)
 	fmt.Printf("%s Sectors: Different industries perform differently\n", ascii.Building)
 	fmt.Printf("%s Research: Read company metrics carefully\n", ascii.Star)
-	fmt.Printf("%s Patience: Some companies take time to grow\n", ascii.Calendar)
+	fmt.Printf("%s Early Entry: Invest before dilution hits\n", ascii.Target)
+	fmt.Printf("%s Management Fees: Factor in 2%% annual costs\n", ascii.Coin)
 
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	fmt.Print("\nPress 'Enter' to return to menu...")
