@@ -619,6 +619,43 @@ func playNewGame() {
 	username := initMenu()
 	clear.ClearIt()
 
+	// Select game mode
+	gameMode := askForGameMode()
+	clear.ClearIt()
+
+	if gameMode == "founder" {
+		playFounderMode(username)
+	} else {
+		playVCMode(username)
+	}
+}
+
+func askForGameMode() string {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+
+	cyan.Println("\n" + strings.Repeat("=", 60))
+	cyan.Println("                 GAME MODE SELECTION")
+	cyan.Println(strings.Repeat("=", 60))
+
+	yellow.Println("\n1. VC Investor Mode (Classic)")
+	fmt.Println("   Build a portfolio of startups and compete against AI investors")
+	
+	yellow.Println("\n2. Startup Founder Mode (New!)")
+	fmt.Println("   Build your own startup from the ground up")
+
+	fmt.Print("\nEnter your choice (1-2, default 1): ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	if choice == "2" {
+		return "founder"
+	}
+	return "vc"
+}
+
+func playVCMode(username string) {
 	// Select difficulty
 	difficulty := selectDifficulty()
 	clear.ClearIt()
