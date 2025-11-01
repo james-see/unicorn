@@ -28,7 +28,7 @@ text based startup adventure - play as vc and make bets on startups or try to be
 
 ## Nutshell
 
-You start out as a VC with $250,000 USD. Your goal is to invest and make as much money as you can by the end of 10 years (120 turns). Each turn represents 1 month - random events affect your portfolio companies, and you'll see your investments grow or decline. Make strategic decisions about which startups to back based on their risk profiles and growth potential.
+You manage a realistic VC fund ($500K-$1M) competing against AI investors like CARL from Sterling & Cooper! Over 10 years (120 turns), navigate multiple funding rounds, manage dilution, and pay 2% annual management fees while building your portfolio. Each month brings events, company funding rounds, and competitive rankings. Will you beat the AI VCs and become the top investor?
 
 ## Features
 
@@ -40,11 +40,21 @@ You start out as a VC with $250,000 USD. Your goal is to invest and make as much
 - **Performance Ratings:** From "Unicorn Hunter" (1000%+ ROI) to "Lost Money"
 - **Advanced Analytics:** Sector breakdown, best/worst performers (NEW!)
 
-### 🏆 Difficulty Levels (NEW!)
-- **Easy:** $500k starting cash, 20% event chance, 3% volatility
-- **Medium:** $250k starting cash, 30% event chance, 5% volatility  
-- **Hard:** $150k starting cash, 40% event chance, 7% volatility
-- **Expert:** $100k starting cash, 50% event chance, 10% volatility, only 90 turns!
+### 💰 Realistic VC Mechanics (NEW!)
+- **Management Fees:** 2% annual fee charged monthly (just like real VC funds!)
+- **Multiple Funding Rounds:** Companies raise Seed, Series A, B, C rounds
+- **Dilution System:** Your equity % decreases with each new round
+- **Post-Money Valuation:** Realistic pre-money + investment calculations
+- **AI Competition:** Play against 3 AI VCs with different strategies
+  - **CARL** (Sterling & Cooper) - Conservative investor
+  - **Sarah Chen** (Accel Partners) - Aggressive growth hunter
+  - **Marcus Williams** (Sequoia Capital) - Balanced approach
+
+### 🏆 Difficulty Levels
+- **Easy:** $1M fund, 20% event chance, 3% volatility
+- **Medium:** $750k fund, 30% event chance, 5% volatility  
+- **Hard:** $500k fund, 40% event chance, 7% volatility
+- **Expert:** $500k fund, 50% event chance, 10% volatility, only 90 turns!
 
 ### 📊 Persistence & Competition (NEW!)
 - **Leaderboards:** Track top 10 scores by net worth or ROI
@@ -118,7 +128,16 @@ go build -o unicorn
 
 ## What's New
 
-### Phase 4 - Achievements & Progression! (LATEST)
+### Phase 5 - Realistic VC Fund Simulation! (LATEST)
+🎯 **AI Competition** - Play against 3 computer VCs with different strategies
+💰 **Management Fees** - 2% annual fees reduce your capital (realistic!)
+📊 **Multiple Funding Rounds** - Companies raise Seed, Series A/B/C
+📉 **Dilution Mechanics** - Your ownership % decreases with new rounds
+🏆 **Competitive Leaderboard** - See how you rank vs AI investors
+💼 **Larger Funds** - $500K-$1M fund sizes (realistic VC scale)
+📈 **Post-Money Valuations** - Proper pre/post money calculations
+
+### Phase 4 - Achievements & Progression!
 ✅ **35+ Achievements** across 6 categories (Wealth, Performance, Strategy, Career, Challenge, Special)
 ✅ **11 Career Levels** from Intern to Legendary Investor
 ✅ **Point-Based Progression** - Earn points, level up, unlock titles
