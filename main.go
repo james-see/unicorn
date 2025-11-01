@@ -84,12 +84,14 @@ func displayWelcome(username string, difficulty game.Difficulty) {
 	fmt.Printf("\nDifficulty: ")
 	yellow.Printf("%s\n", difficulty.Name)
 	fmt.Printf("Fund Size: $%s\n", formatMoney(difficulty.StartingCash))
+	fmt.Printf("Follow-on Reserve: $%s (for investing in new funding rounds)\n", formatMoney(int64(100000)))
 	fmt.Printf("Management Fee: 2%% annually ($%s/year)\n", formatMoney(int64(float64(difficulty.StartingCash)*0.02)))
 	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
 
 	fmt.Println("\nEach turn = 1 month. Choose your investments wisely!")
 	fmt.Println("Random events and funding rounds will affect valuations.")
 	fmt.Println("Watch out for dilution when companies raise new rounds!")
+	fmt.Println("You can invest more from your follow-on reserve when companies raise Series rounds!")
 	
 	magenta.Println("\n?? COMPETING AGAINST:")
 	fmt.Println("   ? CARL (Sterling & Cooper) - Conservative")
@@ -146,6 +148,66 @@ func displayStartup(s game.Startup, index int) {
 	growthColor.Printf(" | Growth Potential: %s\n", growthLabel)
 }
 
+func handleFollowOnOpportunities(gs *game.GameState, opportunities []game.FollowOnOpportunity) {
+	green := color.New(color.FgGreen, color.Bold)
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow, color.Bold)
+	
+	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("         ?? FOLLOW-ON INVESTMENT OPPORTUNITY!")
+	cyan.Println(strings.Repeat("?", 70))
+	
+	for _, opp := range opportunities {
+		fmt.Printf("\n%s %s is raising a %s round!\n", ascii.Rocket, opp.CompanyName, opp.RoundName)
+		fmt.Printf("   Pre-money Valuation: $%s\n", formatMoney(opp.PreMoneyVal))
+		fmt.Printf("   Post-money Valuation: $%s\n", formatMoney(opp.PostMoneyVal))
+		fmt.Printf("   Your Current Equity: %.2f%%\n", opp.CurrentEquity)
+		fmt.Printf("   Follow-on Reserve Available: $%s\n", formatMoney(gs.Portfolio.FollowOnReserve))
+		
+		yellow.Println("\nWould you like to invest more to maintain/increase your ownership?")
+		fmt.Printf("You can invest between $%s and $%s\n", 
+			formatMoney(opp.MinInvestment), formatMoney(opp.MaxInvestment))
+		
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("\nEnter investment amount (or 0 to skip): $")
+		amountStr, _ := reader.ReadString('\n')
+		amountStr = strings.TrimSpace(amountStr)
+		
+		amount, err := strconv.ParseInt(amountStr, 10, 64)
+		if err != nil || amount < 0 {
+			color.Yellow("Invalid amount, skipping.")
+			continue
+		}
+		
+		if amount == 0 {
+			color.Yellow("Skipping follow-on investment.")
+			continue
+		}
+		
+		if amount < opp.MinInvestment {
+			color.Red("Amount below minimum investment of $%s", formatMoney(opp.MinInvestment))
+			continue
+		}
+		
+		if amount > opp.MaxInvestment {
+			color.Red("Amount exceeds maximum investment of $%s", formatMoney(opp.MaxInvestment))
+			continue
+		}
+		
+		err = gs.MakeFollowOnInvestment(opp.CompanyName, amount)
+		if err != nil {
+			color.Red("Error: %v", err)
+		} else {
+			green.Printf("\n%s Follow-on investment successful! Invested $%s in %s\n", 
+				ascii.Check, formatMoney(amount), opp.CompanyName)
+			fmt.Printf("Follow-on Reserve Remaining: $%s\n", formatMoney(gs.Portfolio.FollowOnReserve))
+		}
+	}
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
 func investmentPhase(gs *game.GameState) {
 	clear.ClearIt()
 	green := color.New(color.FgGreen, color.Bold)
@@ -154,6 +216,7 @@ func investmentPhase(gs *game.GameState) {
 	green.Printf("\nTurn %d/%d\n", gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
 	fmt.Printf("Fund Size: $%s\n", formatMoney(gs.Portfolio.InitialFundSize))
 	fmt.Printf("Cash Available: $%s\n", formatMoney(gs.Portfolio.Cash))
+	fmt.Printf("Follow-on Reserve: $%s\n", formatMoney(gs.Portfolio.FollowOnReserve))
 	fmt.Printf("Portfolio Value: $%s\n", formatMoney(gs.GetPortfolioValue()))
 	fmt.Printf("Net Worth: $%s\n", formatMoney(gs.Portfolio.NetWorth))
 
@@ -221,6 +284,12 @@ func playTurn(gs *game.GameState, autoMode bool) {
 	fmt.Println(strings.Repeat("=", 70))
 	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
 
+	// Check for follow-on investment opportunities before processing turn
+	opportunities := gs.GetFollowOnOpportunities()
+	if len(opportunities) > 0 && !autoMode {
+		handleFollowOnOpportunities(gs, opportunities)
+	}
+
 	messages := gs.ProcessTurn()
 
 	if len(messages) > 0 {
@@ -267,7 +336,9 @@ func playTurn(gs *game.GameState, autoMode bool) {
 	}
 
 	fmt.Printf("\n%s Net Worth: $%s", ascii.Money, formatMoney(gs.Portfolio.NetWorth))
-	fmt.Printf(" | Management Fees Paid: $%s\n", formatMoney(gs.Portfolio.ManagementFeesCharged))
+	fmt.Printf(" | Cash: $%s | Follow-on Reserve: $%s\n", 
+		formatMoney(gs.Portfolio.Cash), formatMoney(gs.Portfolio.FollowOnReserve))
+	fmt.Printf("   Management Fees Paid: $%s\n", formatMoney(gs.Portfolio.ManagementFeesCharged))
 	
 	// Show competitive leaderboard every quarter
 	if gs.Portfolio.Turn%3 == 0 {
@@ -375,7 +446,10 @@ func displayFinalScore(gs *game.GameState) {
 	} else if roi >= 50 {
 		rating = "Solid Performance - Good!"
 		icon = ascii.Check
-	} else if roi >= 0 {
+	} else if roi >= 10 {
+		rating = "Profitable - Not Bad"
+		icon = ascii.Check
+	} else if roi >= -10 {
 		rating = "Break Even - Not Bad"
 		icon = "="
 	} else {

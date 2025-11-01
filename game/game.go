@@ -42,6 +42,7 @@ type Portfolio struct {
 	InitialFundSize     int64   // Original fund size
 	ManagementFeesCharged int64 // Total management fees paid
 	AnnualManagementFee float64 // Annual management fee rate (e.g., 0.02 for 2%)
+	FollowOnReserve     int64   // Reserve fund for follow-on investments
 }
 
 // Startup represents a company available for investment
@@ -106,6 +107,17 @@ type FundingRoundEvent struct {
 	RaiseAmount int64
 }
 
+// FollowOnOpportunity represents a chance to invest more in a company raising a round
+type FollowOnOpportunity struct {
+	CompanyName      string
+	RoundName        string
+	PreMoneyVal      int64
+	PostMoneyVal     int64
+	CurrentEquity    float64
+	MinInvestment    int64
+	MaxInvestment    int64
+}
+
 // Predefined difficulty levels
 var (
 	EasyDifficulty = Difficulty{
@@ -159,6 +171,7 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 			MaxTurns:            difficulty.MaxTurns,
 			InitialFundSize:     difficulty.StartingCash,
 			AnnualManagementFee: 0.02, // 2% annual management fee
+			FollowOnReserve:     100000, // $100k for follow-on investments
 		},
 	}
 	
@@ -250,6 +263,13 @@ func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
 	
 	startup := gs.AvailableStartups[startupIndex]
 	
+	// Check if already invested in this company
+	for _, inv := range gs.Portfolio.Investments {
+		if inv.CompanyName == startup.Name {
+			return fmt.Errorf("you have already invested in %s", startup.Name)
+		}
+	}
+	
 	// Calculate equity percentage (simple: investment / valuation)
 	equityPercent := (float64(amount) / float64(startup.Valuation)) * 100.0
 	
@@ -271,6 +291,86 @@ func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
 	gs.updateNetWorth()
 	
 	return nil
+}
+
+// GetFollowOnOpportunities returns any follow-on investment opportunities for this turn
+func (gs *GameState) GetFollowOnOpportunities() []FollowOnOpportunity {
+	opportunities := []FollowOnOpportunity{}
+	
+	for _, event := range gs.FundingRoundQueue {
+		if event.ScheduledTurn == gs.Portfolio.Turn {
+			// Check if player has invested in this company
+			for _, inv := range gs.Portfolio.Investments {
+				if inv.CompanyName == event.CompanyName {
+					// Find the startup
+					for _, startup := range gs.AvailableStartups {
+						if startup.Name == event.CompanyName {
+							preMoneyVal := startup.Valuation
+							postMoneyVal := preMoneyVal + event.RaiseAmount
+							
+							// Calculate min/max investment amounts
+							minInvestment := int64(10000) // $10k minimum
+							maxInvestment := gs.Portfolio.FollowOnReserve
+							if maxInvestment > event.RaiseAmount / 2 {
+								maxInvestment = event.RaiseAmount / 2 // Can't invest more than half the round
+							}
+							
+							opportunities = append(opportunities, FollowOnOpportunity{
+								CompanyName:   event.CompanyName,
+								RoundName:     event.RoundName,
+								PreMoneyVal:   preMoneyVal,
+								PostMoneyVal:  postMoneyVal,
+								CurrentEquity: inv.EquityPercent,
+								MinInvestment: minInvestment,
+								MaxInvestment: maxInvestment,
+							})
+							break
+						}
+					}
+					break
+				}
+			}
+		}
+	}
+	
+	return opportunities
+}
+
+// MakeFollowOnInvestment allows investing more in a company during a funding round
+func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) error {
+	if amount <= 0 {
+		return fmt.Errorf("investment amount must be positive")
+	}
+	
+	if amount > gs.Portfolio.FollowOnReserve {
+		return fmt.Errorf("insufficient follow-on funds (have $%d, need $%d)", gs.Portfolio.FollowOnReserve, amount)
+	}
+	
+	// Find the investment
+	for i := range gs.Portfolio.Investments {
+		if gs.Portfolio.Investments[i].CompanyName == companyName {
+			inv := &gs.Portfolio.Investments[i]
+			
+			// Find the company valuation
+			for _, startup := range gs.AvailableStartups {
+				if startup.Name == companyName {
+					// Calculate additional equity gained
+					// New equity = (investment / post-money valuation) * 100
+					additionalEquity := (float64(amount) / float64(startup.Valuation)) * 100.0
+					
+					inv.AmountInvested += amount
+					inv.EquityPercent += additionalEquity
+					gs.Portfolio.FollowOnReserve -= amount
+					gs.updateNetWorth()
+					
+					return nil
+				}
+			}
+			return fmt.Errorf("company not found")
+		}
+	}
+	
+	return fmt.Errorf("you have not invested in %s", companyName)
 }
 
 // ProcessTurn simulates one month of game time
@@ -336,7 +436,7 @@ func (gs *GameState) ProcessTurn() []string {
 
 // updateNetWorth calculates current net worth
 func (gs *GameState) updateNetWorth() {
-	netWorth := gs.Portfolio.Cash
+	netWorth := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
 	
 	for _, inv := range gs.Portfolio.Investments {
 		// Value of investment = (equity % / 100) * current valuation
@@ -395,6 +495,7 @@ func (gs *GameState) InitializeAIPlayers() {
 				MaxTurns:            gs.Difficulty.MaxTurns,
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
+				FollowOnReserve:     100000,
 			},
 		},
 		{
@@ -409,6 +510,7 @@ func (gs *GameState) InitializeAIPlayers() {
 				MaxTurns:            gs.Difficulty.MaxTurns,
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
+				FollowOnReserve:     100000,
 			},
 		},
 		{
@@ -423,6 +525,7 @@ func (gs *GameState) InitializeAIPlayers() {
 				MaxTurns:            gs.Difficulty.MaxTurns,
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
+				FollowOnReserve:     100000,
 			},
 		},
 	}
@@ -676,7 +779,7 @@ func (gs *GameState) AIPlayerMakeInvestments() {
 // updateAINetWorth calculates AI player net worth
 func (gs *GameState) updateAINetWorth(aiIndex int) {
 	ai := &gs.AIPlayers[aiIndex]
-	netWorth := ai.Portfolio.Cash
+	netWorth := ai.Portfolio.Cash + ai.Portfolio.FollowOnReserve
 	
 	for _, inv := range ai.Portfolio.Investments {
 		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
