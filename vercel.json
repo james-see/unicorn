@@ -11,6 +11,10 @@
     {
       "src": "/leaderboard/game_scores.json",
       "dest": "/api/get-leaderboard"
+    },
+    {
+      "src": "/api/clear-test-data",
+      "dest": "/api/clear-test-data"
     }
   ]
 }
