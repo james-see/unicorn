@@ -9,25 +9,80 @@ import (
 	"time"
 )
 
+// InvestmentRound represents a funding round
+type InvestmentRound struct {
+	RoundType        string  // "Seed", "Series A", "Series B", etc.
+	PreMoneyValuation int64  // Valuation before this round
+	PostMoneyValuation int64  // Valuation after this round
+	AmountRaised     int64   // Total amount raised in this round
+	InvestorName     string  // Who invested
+	AmountInvested   int64   // Amount this investor put in
+	EquityPercent    float64 // Percentage owned after this round
+	MonthOccurred    int     // Which month this round happened
+}
+
+// CompanyInvestment tracks all investments in a company across all rounds
+type CompanyInvestment struct {
+	CompanyName      string
+	Category         string
+	InitialValuation int64   // Seed/pre-money valuation
+	CurrentValuation int64   // Current post-money valuation
+	Rounds           []InvestmentRound
+	TotalRaised      int64   // Total raised across all rounds
+	MonthsOld        int
+	NegativeNewsSent bool
+}
+
 // Investment represents a player's investment in a startup
 type Investment struct {
 	CompanyName      string
 	AmountInvested   int64
-	EquityPercent    float64
+	EquityPercent    float64 // Current ownership after dilution
+	InitialEquityPercent float64 // Original ownership before dilution
 	InitialValuation int64
 	CurrentValuation int64
+	PostMoneyValuation int64 // Post-money valuation at time of investment
 	MonthsHeld       int
 	Category         string
-	NegativeNewsSent bool // Track if we've already sent negative news for this investment
+	NegativeNewsSent bool
+	RoundType        string // Which round this investment was made in
 }
 
 // Portfolio tracks all player investments
 type Portfolio struct {
-	Cash        int64
-	Investments []Investment
-	NetWorth    int64
-	Turn        int
-	MaxTurns    int
+	Cash            int64
+	FundSize        int64 // Total fund size (for management fee calculation)
+	ManagementFee   float64 // Annual management fee percentage (e.g., 2.5%)
+	ManagementFeesPaid int64 // Total management fees paid
+	Investments     []Investment
+	NetWorth        int64
+	Turn            int
+	MaxTurns        int
+}
+
+// ComputerPlayer represents an AI VC player
+type ComputerPlayer struct {
+	Name            string
+	Cash            int64
+	FundSize        int64
+	ManagementFee   float64
+	ManagementFeesPaid int64
+	Investments     []Investment
+	NetWorth        int64
+	Personality     string // "Conservative", "Aggressive", "Balanced"
+}
+
+// CompanyState tracks the state of each company with all investors
+type CompanyState struct {
+	CompanyName      string
+	InitialValuation int64
+	CurrentValuation int64
+	PostMoneyValuation int64
+	TotalInvestments []InvestmentRound // All investments across all rounds
+	Ownership        map[string]float64 // Map of investor name to ownership %
+	Category         string
+	MonthsOld        int
+	RoundNumber      int // Current round number (0=Seed, 1=Series A, etc.)
 }
 
 // Startup represents a company available for investment
@@ -57,7 +112,8 @@ type GameEvent struct {
 // Difficulty represents game difficulty level
 type Difficulty struct {
 	Name              string
-	StartingCash      int64
+	StartingCash      int64   // Fund size
+	ManagementFee     float64 // Annual management fee as percentage (e.g., 2.5 for 2.5%)
 	EventFrequency    float64 // 0-1, chance of event per turn
 	Volatility        float64 // 0-1, market volatility
 	MaxTurns          int
@@ -71,43 +127,49 @@ type GameState struct {
 	AvailableStartups []Startup
 	EventPool         []GameEvent
 	Difficulty        Difficulty
+	ComputerPlayers   []ComputerPlayer
+	CompanyStates     map[string]*CompanyState // Track state of each company
 }
 
 // Predefined difficulty levels
 var (
 	EasyDifficulty = Difficulty{
-		Name:           "Easy",
-		StartingCash:   500000,
-		EventFrequency: 0.20, // 20% chance
-		Volatility:     0.03, // 3% volatility
+		Name:          "Easy",
+		StartingCash:  1000000, // $1M fund
+		ManagementFee: 2.0,     // 2% annual management fee
+		EventFrequency: 0.20,   // 20% chance
+		Volatility:     0.03,    // 3% volatility
 		MaxTurns:       120,
 		Description:    "More cash, lower volatility, fewer bad events",
 	}
 	
 	MediumDifficulty = Difficulty{
-		Name:           "Medium",
-		StartingCash:   250000,
-		EventFrequency: 0.30, // 30% chance
-		Volatility:     0.05, // 5% volatility
+		Name:          "Medium",
+		StartingCash:  500000,  // $500k fund
+		ManagementFee: 2.5,     // 2.5% annual management fee
+		EventFrequency: 0.30,   // 30% chance
+		Volatility:     0.05,   // 5% volatility
 		MaxTurns:       120,
 		Description:    "Standard experience - balanced challenge",
 	}
 	
 	HardDifficulty = Difficulty{
-		Name:           "Hard",
-		StartingCash:   150000,
-		EventFrequency: 0.40, // 40% chance
-		Volatility:     0.07, // 7% volatility
+		Name:          "Hard",
+		StartingCash:  500000,  // $500k fund
+		ManagementFee: 2.5,     // 2.5% annual management fee
+		EventFrequency: 0.40,   // 40% chance
+		Volatility:     0.07,   // 7% volatility
 		MaxTurns:       120,
 		Description:    "Less cash, higher volatility, more events",
 	}
 	
 	ExpertDifficulty = Difficulty{
-		Name:           "Expert",
-		StartingCash:   100000,
-		EventFrequency: 0.50, // 50% chance
-		Volatility:     0.10, // 10% volatility
-		MaxTurns:       90,   // Only 7.5 years!
+		Name:          "Expert",
+		StartingCash:  500000,  // $500k fund
+		ManagementFee: 2.5,     // 2.5% annual management fee
+		EventFrequency: 0.50,   // 50% chance
+		Volatility:     0.10,   // 10% volatility
+		MaxTurns:       90,     // Only 7.5 years!
 		Description:    "Brutal - minimal cash, extreme volatility, shorter time",
 	}
 )
@@ -120,17 +182,68 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 		PlayerName: playerName,
 		Difficulty: difficulty,
 		Portfolio: Portfolio{
-			Cash:     difficulty.StartingCash,
-			NetWorth: difficulty.StartingCash,
-			Turn:     1,
-			MaxTurns: difficulty.MaxTurns,
+			Cash:          difficulty.StartingCash,
+			FundSize:      difficulty.StartingCash,
+			ManagementFee: difficulty.ManagementFee,
+			NetWorth:      difficulty.StartingCash,
+			Turn:          1,
+			MaxTurns:      difficulty.MaxTurns,
 		},
+		CompanyStates: make(map[string]*CompanyState),
 	}
 	
 	gs.LoadStartups()
 	gs.LoadEvents()
+	gs.InitializeComputerPlayers()
 	
 	return gs
+}
+
+// InitializeComputerPlayers creates AI VC players
+func (gs *GameState) InitializeComputerPlayers() {
+	// CARL - Default computer player
+	carl := ComputerPlayer{
+		Name:          "CARL (LP at Sterling and Cooper)",
+		Cash:          gs.Difficulty.StartingCash,
+		FundSize:      gs.Difficulty.StartingCash,
+		ManagementFee: gs.Difficulty.ManagementFee,
+		Personality:   "Balanced",
+		Investments:   []Investment{},
+		NetWorth:      gs.Difficulty.StartingCash,
+	}
+	
+	// Add 1-2 more computer players with different personalities
+	players := []ComputerPlayer{carl}
+	
+	// Add aggressive player
+	if rand.Float64() < 0.7 {
+		aggressive := ComputerPlayer{
+			Name:          "TechVentures Fund",
+			Cash:          gs.Difficulty.StartingCash,
+			FundSize:      gs.Difficulty.StartingCash,
+			ManagementFee: gs.Difficulty.ManagementFee,
+			Personality:   "Aggressive",
+			Investments:   []Investment{},
+			NetWorth:      gs.Difficulty.StartingCash,
+		}
+		players = append(players, aggressive)
+	}
+	
+	// Add conservative player
+	if rand.Float64() < 0.7 {
+		conservative := ComputerPlayer{
+			Name:          "Stable Capital Partners",
+			Cash:          gs.Difficulty.StartingCash,
+			FundSize:      gs.Difficulty.StartingCash,
+			ManagementFee: gs.Difficulty.ManagementFee,
+			Personality:   "Conservative",
+			Investments:   []Investment{},
+			NetWorth:      gs.Difficulty.StartingCash,
+		}
+		players = append(players, conservative)
+	}
+	
+	gs.ComputerPlayers = players
 }
 
 // LoadStartups loads 15 randomly selected startup companies from 30 available JSON files
@@ -213,18 +326,78 @@ func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
 	
 	startup := gs.AvailableStartups[startupIndex]
 	
-	// Calculate equity percentage (simple: investment / valuation)
-	equityPercent := (float64(amount) / float64(startup.Valuation)) * 100.0
+	// Get or create company state
+	companyState, exists := gs.CompanyStates[startup.Name]
+	if !exists {
+		companyState = &CompanyState{
+			CompanyName:      startup.Name,
+			InitialValuation: startup.Valuation,
+			CurrentValuation: startup.Valuation,
+			PostMoneyValuation: startup.Valuation,
+			Category:         startup.Category,
+			Ownership:        make(map[string]float64),
+			RoundNumber:      0, // Start at Seed round
+		}
+		gs.CompanyStates[startup.Name] = companyState
+	}
 	
-	investment := Investment{
-		CompanyName:      startup.Name,
+	// Determine round type
+	roundType := "Seed"
+	if companyState.RoundNumber == 1 {
+		roundType = "Series A"
+	} else if companyState.RoundNumber == 2 {
+		roundType = "Series B"
+	} else if companyState.RoundNumber >= 3 {
+		roundType = fmt.Sprintf("Series %c", 'A'+rune(companyState.RoundNumber))
+	}
+	
+	// Pre-money valuation is current valuation
+	preMoneyValuation := companyState.CurrentValuation
+	
+	// Calculate post-money valuation (pre-money + amount invested)
+	postMoneyValuation := preMoneyValuation + amount
+	
+	// Calculate equity percentage based on post-money valuation
+	equityPercent := (float64(amount) / float64(postMoneyValuation)) * 100.0
+	
+	// Create investment round record
+	round := InvestmentRound{
+		RoundType:         roundType,
+		PreMoneyValuation: preMoneyValuation,
+		PostMoneyValuation: postMoneyValuation,
+		AmountRaised:     amount,
+		InvestorName:     gs.PlayerName,
 		AmountInvested:   amount,
 		EquityPercent:    equityPercent,
-		InitialValuation: startup.Valuation,
-		CurrentValuation: startup.Valuation,
-		MonthsHeld:       0,
-		Category:         startup.Category,
-		NegativeNewsSent: false,
+		MonthOccurred:    gs.Portfolio.Turn,
+	}
+	
+	// Apply dilution to existing investors
+	gs.applyDilution(startup.Name, postMoneyValuation)
+	
+	// Update company state
+	companyState.PostMoneyValuation = postMoneyValuation
+	companyState.CurrentValuation = postMoneyValuation
+	companyState.TotalInvestments = append(companyState.TotalInvestments, round)
+	if companyState.Ownership[gs.PlayerName] == 0 {
+		companyState.Ownership[gs.PlayerName] = equityPercent
+	} else {
+		companyState.Ownership[gs.PlayerName] += equityPercent
+	}
+	
+	// Create investment record
+	investment := Investment{
+		CompanyName:        startup.Name,
+		AmountInvested:     amount,
+		EquityPercent:      equityPercent,
+		InitialEquityPercent: equityPercent,
+		InitialValuation:   preMoneyValuation,
+		CurrentValuation:   postMoneyValuation,
+		PostMoneyValuation: postMoneyValuation,
+		MonthsHeld:         0,
+		Category:           startup.Category,
+		NegativeNewsSent:   false,
+		RoundType:          roundType,
 	}
 	
 	gs.Portfolio.Investments = append(gs.Portfolio.Investments, investment)
@@ -234,54 +407,333 @@ func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
 	return nil
 }
 
+// applyDilution applies dilution to all existing investors when a new round occurs
+func (gs *GameState) applyDilution(companyName string, newPostMoneyValuation int64) {
+	// Dilute player's investments
+	for i := range gs.Portfolio.Investments {
+		if gs.Portfolio.Investments[i].CompanyName == companyName {
+			inv := &gs.Portfolio.Investments[i]
+			// Dilution: new ownership = old ownership * (old post-money / new post-money)
+			oldPostMoney := inv.PostMoneyValuation
+			if oldPostMoney > 0 {
+				inv.EquityPercent = inv.EquityPercent * (float64(oldPostMoney) / float64(newPostMoneyValuation))
+				inv.PostMoneyValuation = newPostMoneyValuation
+			}
+		}
+	}
+	
+	// Dilute computer players' investments
+	for p := range gs.ComputerPlayers {
+		for i := range gs.ComputerPlayers[p].Investments {
+			if gs.ComputerPlayers[p].Investments[i].CompanyName == companyName {
+				inv := &gs.ComputerPlayers[p].Investments[i]
+				oldPostMoney := inv.PostMoneyValuation
+				if oldPostMoney > 0 {
+					inv.EquityPercent = inv.EquityPercent * (float64(oldPostMoney) / float64(newPostMoneyValuation))
+					inv.PostMoneyValuation = newPostMoneyValuation
+				}
+			}
+		}
+	}
+}
+
 // ProcessTurn simulates one month of game time
 func (gs *GameState) ProcessTurn() []string {
 	messages := []string{}
 	
-	// Apply random events to each investment
-	for i := range gs.Portfolio.Investments {
-		inv := &gs.Portfolio.Investments[i]
-		inv.MonthsHeld++
+	// Pay management fees annually (every 12 months)
+	if gs.Portfolio.Turn%12 == 0 {
+		monthlyFee := (gs.Portfolio.ManagementFee / 100.0) * float64(gs.Portfolio.FundSize) / 12.0
+		feeAmount := int64(monthlyFee)
+		if gs.Portfolio.Cash >= feeAmount {
+			gs.Portfolio.Cash -= feeAmount
+			gs.Portfolio.ManagementFeesPaid += feeAmount
+			messages = append(messages, fmt.Sprintf("?? Management fee: -$%d (%.1f%% annually)", feeAmount, gs.Portfolio.ManagementFee))
+		}
 		
-		wasAboveInitial := inv.CurrentValuation >= inv.InitialValuation
+		// Pay fees for computer players
+		for p := range gs.ComputerPlayers {
+			cp := &gs.ComputerPlayers[p]
+			cpMonthlyFee := (cp.ManagementFee / 100.0) * float64(cp.FundSize) / 12.0
+			cpFeeAmount := int64(cpMonthlyFee)
+			if cp.Cash >= cpFeeAmount {
+				cp.Cash -= cpFeeAmount
+				cp.ManagementFeesPaid += cpFeeAmount
+			}
+		}
+	}
+	
+	// Let computer players make investments (at start of game and periodically)
+	if gs.Portfolio.Turn == 1 || (gs.Portfolio.Turn > 1 && rand.Float64() < 0.15) {
+		gs.processComputerPlayerInvestments(messages)
+	}
+	
+	// Process each company's valuation changes
+	for companyName, companyState := range gs.CompanyStates {
+		companyState.MonthsOld++
+		
+		oldValuation := companyState.CurrentValuation
 		
 		// Random chance of an event happening (based on difficulty)
 		if rand.Float64() < gs.Difficulty.EventFrequency && len(gs.EventPool) > 0 {
 			event := gs.EventPool[rand.Intn(len(gs.EventPool))]
 			
-			oldVal := inv.CurrentValuation
-			inv.CurrentValuation = int64(float64(inv.CurrentValuation) * event.Change)
+			companyState.CurrentValuation = int64(float64(companyState.CurrentValuation) * event.Change)
 			
 			// Prevent negative valuations
-			if inv.CurrentValuation < 0 {
-				inv.CurrentValuation = 0
+			if companyState.CurrentValuation < 0 {
+				companyState.CurrentValuation = 0
 			}
 			
-			change := inv.CurrentValuation - oldVal
+			change := companyState.CurrentValuation - oldValuation
 			if change > 0 {
-				messages = append(messages, fmt.Sprintf("📰 %s: %s (+$%d)", inv.CompanyName, event.Event, change))
+				messages = append(messages, fmt.Sprintf("?? %s: %s (+$%d)", companyName, event.Event, change))
 			} else {
-				messages = append(messages, fmt.Sprintf("📰 %s: %s ($%d)", inv.CompanyName, event.Event, change))
+				messages = append(messages, fmt.Sprintf("?? %s: %s ($%d)", companyName, event.Event, change))
 			}
 		} else {
 			// Natural growth/decline (random walk) - volatility based on difficulty
 			change := (rand.Float64()*2 - 1) * gs.Difficulty.Volatility
-			inv.CurrentValuation = int64(float64(inv.CurrentValuation) * (1 + change))
+			companyState.CurrentValuation = int64(float64(companyState.CurrentValuation) * (1 + change))
 		}
 		
-		// Check if investment just went negative and generate news
-		nowBelowInitial := inv.CurrentValuation < inv.InitialValuation
-		if wasAboveInitial && nowBelowInitial && !inv.NegativeNewsSent {
-			inv.NegativeNewsSent = true
-			news := gs.generateNegativeNews(inv)
-			messages = append(messages, news)
+		// Update all investments in this company
+		gs.updateCompanyInvestments(companyName, companyState.CurrentValuation)
+		
+		// Chance for new funding round (Series A, B, etc.)
+		if companyState.MonthsOld >= 6 && rand.Float64() < 0.05 {
+			gs.processNewFundingRound(companyName, messages)
 		}
 	}
 	
 	gs.Portfolio.Turn++
 	gs.updateNetWorth()
+	gs.updateComputerPlayerNetWorth()
 	
 	return messages
+}
+
+// processComputerPlayerInvestments allows AI players to make investments
+func (gs *GameState) processComputerPlayerInvestments(messages []string) {
+	for p := range gs.ComputerPlayers {
+		cp := &gs.ComputerPlayers[p]
+		
+		// Skip if no cash
+		if cp.Cash < 10000 {
+			continue
+		}
+		
+		// AI decision making based on personality
+		for i, startup := range gs.AvailableStartups {
+			// Check if already invested in this company
+			alreadyInvested := false
+			for _, inv := range cp.Investments {
+				if inv.CompanyName == startup.Name {
+					alreadyInvested = true
+					break
+				}
+			}
+			
+			if alreadyInvested {
+				continue
+			}
+			
+			shouldInvest := false
+			investmentAmount := int64(0)
+			
+			switch cp.Personality {
+			case "Aggressive":
+				// Aggressive: Invest in high-growth, high-risk companies
+				if startup.GrowthPotential > 0.6 && cp.Cash >= 50000 {
+					shouldInvest = true
+					investmentAmount = int64(float64(cp.Cash) * 0.15) // 15% of cash
+					if investmentAmount < 50000 {
+						investmentAmount = 50000
+					}
+				}
+			case "Conservative":
+				// Conservative: Invest in low-risk, stable companies
+				if startup.RiskScore < 0.4 && cp.Cash >= 30000 {
+					shouldInvest = true
+					investmentAmount = int64(float64(cp.Cash) * 0.10) // 10% of cash
+					if investmentAmount < 30000 {
+						investmentAmount = 30000
+					}
+				}
+			case "Balanced":
+				// Balanced: Mix of risk and growth
+				if startup.GrowthPotential > 0.5 && startup.RiskScore < 0.7 && cp.Cash >= 40000 {
+					shouldInvest = true
+					investmentAmount = int64(float64(cp.Cash) * 0.12) // 12% of cash
+					if investmentAmount < 40000 {
+						investmentAmount = 40000
+					}
+				}
+			}
+			
+			if shouldInvest && investmentAmount <= cp.Cash {
+				// Make the investment similar to player investment
+				startup := gs.AvailableStartups[i]
+				companyState, exists := gs.CompanyStates[startup.Name]
+				if !exists {
+					companyState = &CompanyState{
+						CompanyName:      startup.Name,
+						InitialValuation: startup.Valuation,
+						CurrentValuation: startup.Valuation,
+						PostMoneyValuation: startup.Valuation,
+						Category:         startup.Category,
+						Ownership:        make(map[string]float64),
+						RoundNumber:      0,
+					}
+					gs.CompanyStates[startup.Name] = companyState
+				}
+				
+				roundType := "Seed"
+				if companyState.RoundNumber == 1 {
+					roundType = "Series A"
+				} else if companyState.RoundNumber >= 2 {
+					roundType = fmt.Sprintf("Series %c", 'A'+rune(companyState.RoundNumber))
+				}
+				
+				preMoneyValuation := companyState.CurrentValuation
+				postMoneyValuation := preMoneyValuation + investmentAmount
+				equityPercent := (float64(investmentAmount) / float64(postMoneyValuation)) * 100.0
+				
+				// Apply dilution
+				gs.applyDilution(startup.Name, postMoneyValuation)
+				
+				// Update company state
+				companyState.PostMoneyValuation = postMoneyValuation
+				companyState.CurrentValuation = postMoneyValuation
+				companyState.TotalInvestments = append(companyState.TotalInvestments, InvestmentRound{
+					RoundType:         roundType,
+					PreMoneyValuation: preMoneyValuation,
+					PostMoneyValuation: postMoneyValuation,
+					AmountRaised:     investmentAmount,
+					InvestorName:     cp.Name,
+					AmountInvested:   investmentAmount,
+					EquityPercent:    equityPercent,
+					MonthOccurred:    gs.Portfolio.Turn,
+				})
+				if companyState.Ownership[cp.Name] == 0 {
+					companyState.Ownership[cp.Name] = equityPercent
+				} else {
+					companyState.Ownership[cp.Name] += equityPercent
+				}
+				
+				// Create investment record
+				investment := Investment{
+					CompanyName:        startup.Name,
+					AmountInvested:     investmentAmount,
+					EquityPercent:      equityPercent,
+					InitialEquityPercent: equityPercent,
+					InitialValuation:   preMoneyValuation,
+					CurrentValuation:   postMoneyValuation,
+					PostMoneyValuation: postMoneyValuation,
+					MonthsHeld:         0,
+					Category:           startup.Category,
+					NegativeNewsSent:   false,
+					RoundType:          roundType,
+				}
+				
+				cp.Investments = append(cp.Investments, investment)
+				cp.Cash -= investmentAmount
+				
+				messages = append(messages, fmt.Sprintf("?? %s invested $%d in %s (%s round)", cp.Name, investmentAmount, startup.Name, roundType))
+			}
+		}
+	}
+}
+
+// processNewFundingRound handles a new funding round for a company
+func (gs *GameState) processNewFundingRound(companyName string, messages []string) {
+	companyState, exists := gs.CompanyStates[companyName]
+	if !exists {
+		return
+	}
+	
+	// Advance to next round
+	companyState.RoundNumber++
+	roundType := "Series A"
+	if companyState.RoundNumber == 2 {
+		roundType = "Series B"
+	} else if companyState.RoundNumber >= 3 {
+		roundType = fmt.Sprintf("Series %c", 'A'+rune(companyState.RoundNumber))
+	}
+	
+	// New round typically raises 2-5x the current valuation
+	preMoneyValuation := companyState.CurrentValuation
+	roundMultiplier := 1.5 + rand.Float64()*3.5 // 1.5x to 5x
+	amountRaised := int64(float64(preMoneyValuation) * roundMultiplier)
+	postMoneyValuation := preMoneyValuation + amountRaised
+	
+	// Apply dilution
+	gs.applyDilution(companyName, postMoneyValuation)
+	
+	// Update company state
+	companyState.PostMoneyValuation = postMoneyValuation
+	companyState.CurrentValuation = postMoneyValuation
+	
+	// Randomly assign new investors (could be computer players or external)
+	investors := []string{"External VC", "Corporate Investor", "Strategic Partner"}
+	if len(gs.ComputerPlayers) > 0 {
+		investors = append(investors, gs.ComputerPlayers[rand.Intn(len(gs.ComputerPlayers))].Name)
+	}
+	
+	investorName := investors[rand.Intn(len(investors))]
+	equityPercent := (float64(amountRaised) / float64(postMoneyValuation)) * 100.0
+	
+	companyState.TotalInvestments = append(companyState.TotalInvestments, InvestmentRound{
+		RoundType:         roundType,
+		PreMoneyValuation: preMoneyValuation,
+		PostMoneyValuation: postMoneyValuation,
+		AmountRaised:     amountRaised,
+		InvestorName:     investorName,
+		AmountInvested:   amountRaised,
+		EquityPercent:    equityPercent,
+		MonthOccurred:    gs.Portfolio.Turn,
+	})
+	
+	messages = append(messages, fmt.Sprintf("?? %s raised $%d in %s (pre-money: $%d, post-money: $%d) - Your ownership diluted!", companyName, amountRaised, roundType, preMoneyValuation, postMoneyValuation))
+}
+
+// updateCompanyInvestments updates all investments for a company when valuation changes
+func (gs *GameState) updateCompanyInvestments(companyName string, newValuation int64) {
+	// Update player investments
+	for i := range gs.Portfolio.Investments {
+		if gs.Portfolio.Investments[i].CompanyName == companyName {
+			gs.Portfolio.Investments[i].CurrentValuation = newValuation
+			gs.Portfolio.Investments[i].MonthsHeld++
+		}
+	}
+	
+	// Update computer player investments
+	for p := range gs.ComputerPlayers {
+		for i := range gs.ComputerPlayers[p].Investments {
+			if gs.ComputerPlayers[p].Investments[i].CompanyName == companyName {
+				gs.ComputerPlayers[p].Investments[i].CurrentValuation = newValuation
+				gs.ComputerPlayers[p].Investments[i].MonthsHeld++
+			}
+		}
+	}
+	
+	// Update company state
+	if companyState, exists := gs.CompanyStates[companyName]; exists {
+		companyState.CurrentValuation = newValuation
+	}
+}
+
+// updateComputerPlayerNetWorth updates net worth for all computer players
+func (gs *GameState) updateComputerPlayerNetWorth() {
+	for p := range gs.ComputerPlayers {
+		cp := &gs.ComputerPlayers[p]
+		cp.NetWorth = cp.Cash
+		
+		for _, inv := range cp.Investments {
+			value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
+			cp.NetWorth += value
+		}
+	}
 }
 
 // updateNetWorth calculates current net worth
@@ -305,6 +757,48 @@ func (gs *GameState) GetPortfolioValue() int64 {
 		total += value
 	}
 	return total
+}
+
+// GetCompanyOwnership returns ownership percentages for all investors in a company
+func (gs *GameState) GetCompanyOwnership(companyName string) map[string]float64 {
+	if companyState, exists := gs.CompanyStates[companyName]; exists {
+		return companyState.Ownership
+	}
+	return make(map[string]float64)
+}
+
+// GetVCLeaderboard returns all VCs sorted by net worth
+func (gs *GameState) GetVCLeaderboard() []struct {
+	Name     string
+	NetWorth int64
+	IsPlayer bool
+} {
+	leaderboard := []struct {
+		Name     string
+		NetWorth int64
+		IsPlayer bool
+	}{
+		{Name: gs.PlayerName, NetWorth: gs.Portfolio.NetWorth, IsPlayer: true},
+	}
+	
+	for _, cp := range gs.ComputerPlayers {
+		leaderboard = append(leaderboard, struct {
+			Name     string
+			NetWorth int64
+			IsPlayer bool
+		}{Name: cp.Name, NetWorth: cp.NetWorth, IsPlayer: false})
+	}
+	
+	// Sort by net worth (descending)
+	for i := 0; i < len(leaderboard)-1; i++ {
+		for j := i + 1; j < len(leaderboard); j++ {
+			if leaderboard[j].NetWorth > leaderboard[i].NetWorth {
+				leaderboard[i], leaderboard[j] = leaderboard[j], leaderboard[i]
+			}
+		}
+	}
+	
+	return leaderboard
 }
 
 // IsGameOver checks if game has ended
@@ -534,5 +1028,5 @@ func (gs *GameState) generateNegativeNews(inv *Investment) string {
 	// Select random reason
 	reason := reasons[rand.Intn(len(reasons))]
 	
-	return fmt.Sprintf("📰 %s: Valuation dropped below initial investment. %s", inv.CompanyName, reason)
+	return fmt.Sprintf("?? %s: Valuation dropped below initial investment. %s", inv.CompanyName, reason)
 }

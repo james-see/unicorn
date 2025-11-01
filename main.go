@@ -78,16 +78,19 @@ func askForAutomatedMode() bool {
 func displayWelcome(username string, difficulty game.Difficulty) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-
-	cyan.Printf("\n%s, welcome to your investment journey!\n", username)
+	
+	cyan.Printf("\n%s, welcome to your VC fund!\n", username)
 	fmt.Printf("\nDifficulty: ")
 	yellow.Printf("%s\n", difficulty.Name)
-	fmt.Printf("Starting Cash: $%s\n", formatMoney(difficulty.StartingCash))
+	fmt.Printf("Fund Size: $%s\n", formatMoney(difficulty.StartingCash))
+	fmt.Printf("Management Fee: %.1f%% annually\n", difficulty.ManagementFee)
 	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
-
+	
 	fmt.Println("\nEach turn = 1 month. Choose your investments wisely!")
-	fmt.Println("Random events will affect valuations throughout the game.")
-
+	fmt.Println("You'll compete against other VC funds including CARL (LP at Sterling and Cooper).")
+	fmt.Println("Watch for dilution when companies raise new rounds!")
+	fmt.Println("Management fees are deducted annually from your fund.")
+	
 	fmt.Print("\nPress 'Enter' to see available startups...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
@@ -142,18 +145,22 @@ func investmentPhase(gs *game.GameState) {
 	clear.ClearIt()
 	green := color.New(color.FgGreen, color.Bold)
 	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
 	cyan.Print(ascii.InvestmentHeader)
 	green.Printf("\nTurn %d/%d\n", gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
+	fmt.Printf("Fund Size: $%s\n", formatMoney(gs.Portfolio.FundSize))
 	fmt.Printf("Cash Available: $%s\n", formatMoney(gs.Portfolio.Cash))
 	fmt.Printf("Portfolio Value: $%s\n", formatMoney(gs.GetPortfolioValue()))
 	fmt.Printf("Net Worth: $%s\n", formatMoney(gs.Portfolio.NetWorth))
+	if gs.Portfolio.ManagementFeesPaid > 0 {
+		yellow.Printf("Management Fees Paid: $%s\n", formatMoney(gs.Portfolio.ManagementFeesPaid))
+	}
 
 	// Calculate and display total company valuation
 	totalValuation := int64(0)
 	for _, startup := range gs.AvailableStartups {
 		totalValuation += startup.Valuation
 	}
-	yellow := color.New(color.FgYellow)
 	yellow.Printf("Total Company Valuation: $%s\n", formatMoney(totalValuation))
 
 	// Show available startups
@@ -204,13 +211,14 @@ func investmentPhase(gs *game.GameState) {
 func playTurn(gs *game.GameState, autoMode bool) {
 	yellow := color.New(color.FgYellow, color.Bold)
 	cyan := color.New(color.FgCyan, color.Bold)
-
+	magenta := color.New(color.FgMagenta)
+	
 	// Print separator line instead of clearing screen
 	fmt.Println(strings.Repeat("=", 70))
 	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
-
+	
 	messages := gs.ProcessTurn()
-
+	
 	if len(messages) > 0 {
 		cyan.Print(ascii.NewsHeader)
 		for _, msg := range messages {
@@ -218,7 +226,7 @@ func playTurn(gs *game.GameState, autoMode bool) {
 		}
 		fmt.Println() // Add spacing after news
 	}
-
+	
 	// Show portfolio status
 	cyan.Print(ascii.PortfolioHeader)
 	if len(gs.Portfolio.Investments) == 0 {
@@ -235,21 +243,62 @@ func playTurn(gs *game.GameState, autoMode bool) {
 				profitColor = color.New(color.FgRed)
 				profitSign = ""
 			}
-
-			fmt.Printf("   %s: $%s invested, %.2f%% equity\n",
-				inv.CompanyName, formatMoney(inv.AmountInvested), inv.EquityPercent)
-			fmt.Printf("      Current Value: $%s ", formatMoney(value))
+			
+			fmt.Printf("   %s: $%s invested, %.2f%% equity (%s)\n",
+				inv.CompanyName, formatMoney(inv.AmountInvested), inv.EquityPercent, inv.RoundType)
+			fmt.Printf("      Post-Money: $%s | Current Value: $%s ",
+				formatMoney(inv.PostMoneyValuation), formatMoney(value))
 			profitColor.Printf("(%s$%s)\n", profitSign, formatMoney(abs(profit)))
-
+			
+			// Show ownership vs other VCs
+			ownership := gs.GetCompanyOwnership(inv.CompanyName)
+			if len(ownership) > 1 {
+				fmt.Print("      Ownership: ")
+				first := true
+				for owner, pct := range ownership {
+					if !first {
+						fmt.Print(" | ")
+					}
+					if owner == gs.PlayerName {
+						cyan.Printf("%s: %.1f%%", owner, pct)
+					} else {
+						fmt.Printf("%s: %.1f%%", owner, pct)
+					}
+					first = false
+				}
+				fmt.Println()
+			}
+			
 			totalCompanyValuation += inv.CurrentValuation
 		}
-
+		
 		// Display total company valuation
 		yellow.Printf("\n   Total Company Valuation: $%s\n", formatMoney(totalCompanyValuation))
 	}
-
+	
 	fmt.Printf("\n%s Net Worth: $%s\n", ascii.Money, formatMoney(gs.Portfolio.NetWorth))
-
+	
+	// Show VC leaderboard
+	leaderboard := gs.GetVCLeaderboard()
+	if len(leaderboard) > 1 {
+		magenta.Printf("\n%s VC Rankings:\n", ascii.Trophy)
+		for i, vc := range leaderboard {
+			rankIcon := "  "
+			if i == 0 {
+				rankIcon = "??"
+			} else if i == 1 {
+				rankIcon = "??"
+			} else if i == 2 {
+				rankIcon = "??"
+			}
+			if vc.IsPlayer {
+				cyan.Printf("%s %d. %s: $%s (YOU)\n", rankIcon, i+1, vc.Name, formatMoney(vc.NetWorth))
+			} else {
+				fmt.Printf("%s %d. %s: $%s\n", rankIcon, i+1, vc.Name, formatMoney(vc.NetWorth))
+			}
+		}
+	}
+	
 	// Always wait for user input when there are news messages, otherwise use auto mode logic
 	if len(messages) > 0 {
 		fmt.Print("\nPress 'Enter' to continue to next month...")
@@ -396,23 +445,23 @@ func selectDifficulty() game.Difficulty {
 
 	green.Printf("\n1. Easy")
 	fmt.Printf(" - %s\n", game.EasyDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
-		formatMoney(game.EasyDifficulty.StartingCash), game.EasyDifficulty.MaxTurns)
+	fmt.Printf("   Fund Size: $%s | Management Fee: %.1f%% | Max Turns: %d\n",
+		formatMoney(game.EasyDifficulty.StartingCash), game.EasyDifficulty.ManagementFee, game.EasyDifficulty.MaxTurns)
 
 	yellow.Printf("\n2. Medium")
 	fmt.Printf(" - %s\n", game.MediumDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
-		formatMoney(game.MediumDifficulty.StartingCash), game.MediumDifficulty.MaxTurns)
+	fmt.Printf("   Fund Size: $%s | Management Fee: %.1f%% | Max Turns: %d\n",
+		formatMoney(game.MediumDifficulty.StartingCash), game.MediumDifficulty.ManagementFee, game.MediumDifficulty.MaxTurns)
 
 	red.Printf("\n3. Hard")
 	fmt.Printf(" - %s\n", game.HardDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
-		formatMoney(game.HardDifficulty.StartingCash), game.HardDifficulty.MaxTurns)
+	fmt.Printf("   Fund Size: $%s | Management Fee: %.1f%% | Max Turns: %d\n",
+		formatMoney(game.HardDifficulty.StartingCash), game.HardDifficulty.ManagementFee, game.HardDifficulty.MaxTurns)
 
 	magenta.Printf("\n4. Expert")
 	fmt.Printf(" - %s\n", game.ExpertDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
-		formatMoney(game.ExpertDifficulty.StartingCash), game.ExpertDifficulty.MaxTurns)
+	fmt.Printf("   Fund Size: $%s | Management Fee: %.1f%% | Max Turns: %d\n",
+		formatMoney(game.ExpertDifficulty.StartingCash), game.ExpertDifficulty.ManagementFee, game.ExpertDifficulty.MaxTurns)
 
 	fmt.Print("\nEnter your choice (1-4): ")
 	reader := bufio.NewReader(os.Stdin)
