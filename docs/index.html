@@ -333,6 +333,97 @@
             text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
         }
 
+        /* Leaderboard Styles */
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .leaderboard-table th {
+            background: rgba(255, 215, 0, 0.2);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 700;
+            border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+        }
+
+        .leaderboard-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .leaderboard-table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .rank-1 { color: #ffd700; font-weight: 900; }
+        .rank-2 { color: #c0c0c0; font-weight: 700; }
+        .rank-3 { color: #cd7f32; font-weight: 700; }
+
+        .positive-roi { color: #4ade80; }
+        .negative-roi { color: #f87171; }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            font-size: 1.2rem;
+            opacity: 0.8;
+        }
+
+        .error-message {
+            background: rgba(248, 113, 113, 0.2);
+            border: 2px solid rgba(248, 113, 113, 0.5);
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .filter-tab:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .filter-tab.active {
+            background: rgba(255, 215, 0, 0.3);
+            border-color: rgba(255, 215, 0, 0.6);
+        }
+
+        .refresh-btn {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            margin-bottom: 1rem;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
         @media (max-width: 768px) {
             h1 { font-size: 2.5rem; }
             .tagline { font-size: 1.2rem; }
@@ -434,6 +525,30 @@
             </p>
         </div>
 
+        <div class="card" id="global-leaderboard">
+            <h2>🏆 Global Leaderboard</h2>
+            <p style="margin-bottom: 1rem;">Compete with players worldwide! Top scores updated in real-time.</p>
+            
+            <div class="filter-tabs">
+                <button class="filter-tab active" onclick="loadLeaderboard('all', 'net_worth')">Top by Net Worth</button>
+                <button class="filter-tab" onclick="loadLeaderboard('all', 'roi')">Top by ROI</button>
+                <button class="filter-tab" onclick="loadLeaderboard('Easy', 'net_worth')">Easy</button>
+                <button class="filter-tab" onclick="loadLeaderboard('Medium', 'net_worth')">Medium</button>
+                <button class="filter-tab" onclick="loadLeaderboard('Hard', 'net_worth')">Hard</button>
+                <button class="filter-tab" onclick="loadLeaderboard('Expert', 'net_worth')">Expert</button>
+            </div>
+
+            <button class="refresh-btn" onclick="loadLeaderboard()">🔄 Refresh</button>
+
+            <div id="leaderboard-content">
+                <div class="loading">Loading global leaderboard...</div>
+            </div>
+
+            <p style="margin-top: 2rem; opacity: 0.8; text-align: center;">
+                Powered by <a href="https://datasette.io" target="_blank" style="color: #ffd700; text-decoration: none; font-weight: 600;">Datasette</a>
+            </p>
+        </div>
+
         <div class="card">
             <h2>✨ Features</h2>
             <div class="features">
@@ -496,6 +611,125 @@
             <p style="margin-top: 1rem;">Play • Invest • Build Your Empire 🚀</p>
         </footer>
     </div>
+
+    <script>
+        // Datasette API endpoint
+        const DATASETTE_URL = 'https://unicorn-leaderboard.vercel.app/leaderboard/game_scores.json';
+        
+        let currentFilter = 'all';
+        let currentSort = 'net_worth';
+
+        // Format money with commas
+        function formatMoney(amount) {
+            return '$' + amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        // Format date
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        // Load leaderboard data
+        async function loadLeaderboard(difficulty = currentFilter, sortBy = currentSort) {
+            currentFilter = difficulty;
+            currentSort = sortBy;
+            
+            const content = document.getElementById('leaderboard-content');
+            content.innerHTML = '<div class="loading">Loading...</div>';
+
+            // Update active tab
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event?.target?.classList.add('active');
+
+            try {
+                // Build query parameters
+                let url = DATASETTE_URL + '?_size=10&_sort_desc=' + (sortBy === 'roi' ? 'roi' : 'final_net_worth');
+                
+                if (difficulty !== 'all') {
+                    url += '&difficulty=' + encodeURIComponent(difficulty);
+                }
+
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch leaderboard data');
+                }
+
+                const data = await response.json();
+                
+                if (!data.rows || data.rows.length === 0) {
+                    content.innerHTML = '<p style="text-align: center; padding: 2rem;">No scores yet. Be the first!</p>';
+                    return;
+                }
+
+                // Build table
+                let html = '<table class="leaderboard-table">';
+                html += '<thead><tr>';
+                html += '<th>Rank</th>';
+                html += '<th>Player</th>';
+                html += '<th>Net Worth</th>';
+                html += '<th>ROI</th>';
+                html += '<th>Exits</th>';
+                html += '<th>Difficulty</th>';
+                html += '<th>Date</th>';
+                html += '</tr></thead>';
+                html += '<tbody>';
+
+                data.rows.forEach((row, index) => {
+                    const [id, playerName, netWorth, roi, exits, turns, difficulty, playedAt] = row;
+                    const rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : '';
+                    const roiClass = roi >= 0 ? 'positive-roi' : 'negative-roi';
+                    
+                    html += '<tr>';
+                    html += `<td class="${rankClass}">${index + 1}</td>`;
+                    html += `<td>${playerName}</td>`;
+                    html += `<td>${formatMoney(netWorth)}</td>`;
+                    html += `<td class="${roiClass}">${roi.toFixed(1)}%</td>`;
+                    html += `<td>${exits}</td>`;
+                    html += `<td>${difficulty}</td>`;
+                    html += `<td>${formatDate(playedAt)}</td>`;
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                content.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+                content.innerHTML = `
+                    <div class="error-message">
+                        <p><strong>⚠️ Could not load global leaderboard</strong></p>
+                        <p>The leaderboard service may not be deployed yet.</p>
+                        <p style="margin-top: 1rem; font-size: 0.9rem;">To enable the global leaderboard:</p>
+                        <ol style="margin-left: 1.5rem; margin-top: 0.5rem; font-size: 0.9rem;">
+                            <li>Install Vercel CLI: <code>npm i -g vercel</code></li>
+                            <li>Deploy the API: <code>vercel deploy --prod</code></li>
+                            <li>Update the Datasette URL in this page</li>
+                        </ol>
+                    </div>
+                `;
+            }
+        }
+
+        // Load leaderboard on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadLeaderboard('all', 'net_worth');
+        });
+
+        // Smooth scroll to leaderboard
+        if (window.location.hash === '#leaderboard') {
+            setTimeout(() => {
+                document.getElementById('global-leaderboard')?.scrollIntoView({ behavior: 'smooth' });
+            }, 500);
+        }
+    </script>
 </body>
 </html>
 

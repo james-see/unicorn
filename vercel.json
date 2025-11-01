@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/submit-score.go": {
+      "runtime": "go1.x"
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/submit-score",
+      "dest": "/api/submit-score.go"
+    }
+  ]
+}

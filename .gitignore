@@ -1,18 +1,41 @@
-# Binaries for programs and plugins
+# Binaries
+unicorn
+unicorn-*
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-unicorn
 
-# Test binary, build with `go test -c`
+# Test binary
 *.test
 
-# Output of the go coverage tool, specifically when used with LiteIDE
+# Output of the go coverage tool
 *.out
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Database files (keep leaderboard.db for deployment)
+unicorn_scores.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Vercel
+.vercel
+.env*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
