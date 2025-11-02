@@ -234,9 +234,14 @@ func handleFollowOnOpportunities(gs *game.GameState, opportunities []game.Follow
 			formatMoney(opp.MinInvestment), formatMoney(opp.MaxInvestment))
 		
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("\n?? Enter amount to invest (or 0 to skip): $")
+		fmt.Print("\n💰 Enter amount to invest (0 or Enter to skip): $")
 		amountStr, _ := reader.ReadString('\n')
 		amountStr = strings.TrimSpace(amountStr)
+		
+		if amountStr == "" || amountStr == "0" {
+			color.Yellow("Skipping follow-on investment.")
+			continue
+		}
 		
 		amount, err := strconv.ParseInt(amountStr, 10, 64)
 		if err != nil || amount < 0 {
@@ -273,6 +278,58 @@ func handleFollowOnOpportunities(gs *game.GameState, opportunities []game.Follow
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
+func selectInvestmentTerms(gs *game.GameState, startup *game.Startup, amount int64) game.InvestmentTerms {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                      INVESTMENT TERMS")
+	fmt.Println(strings.Repeat("=", 70))
+	
+	options := gs.GenerateTermOptions(startup, amount)
+	
+	fmt.Println("\nSelect your investment structure:")
+	for i, opt := range options {
+		fmt.Printf("\n%d. %s\n", i+1, opt.Type)
+		if opt.HasProRataRights {
+			green.Println("   ✓ Pro-Rata Rights (participate in future rounds)")
+		}
+		if opt.HasInfoRights {
+			green.Println("   ✓ Information Rights (quarterly financials)")
+		}
+		if opt.HasBoardSeat {
+			green.Println("   ✓ Board Observer Seat")
+		}
+		if opt.LiquidationPref > 0 {
+			green.Printf("   ✓ %dx Liquidation Preference (get paid first)\n", int(opt.LiquidationPref))
+		}
+		if opt.HasAntiDilution {
+			green.Println("   ✓ Anti-Dilution Protection (protect from down rounds)")
+		}
+		if opt.ConversionDiscount > 0 {
+			green.Printf("   ✓ %.0f%% Conversion Discount (bonus equity)\n", opt.ConversionDiscount*100)
+		}
+	}
+	
+	fmt.Print("\nSelect terms (1-3, or Enter for Preferred): ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	if choice == "" {
+		choice = "1"
+	}
+	
+	choiceNum, err := strconv.Atoi(choice)
+	if err != nil || choiceNum < 1 || choiceNum > len(options) {
+		yellow.Println("Invalid choice, using Preferred Stock")
+		return options[0]
+	}
+	
+	return options[choiceNum-1]
+}
+
 func investmentPhase(gs *game.GameState) {
 	clear.ClearIt()
 	green := color.New(color.FgGreen, color.Bold)
@@ -304,14 +361,22 @@ func investmentPhase(gs *game.GameState) {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Printf("\nEnter company number (1-%d) to invest, or 'done' to continue: ", len(gs.AvailableStartups))
+		// Auto-start if out of money
+		if gs.Portfolio.Cash <= 0 {
+			color.Yellow("\n⚠️  Out of investment capital! Starting game...")
+			gs.AIPlayerMakeInvestments()
+			time.Sleep(2 * time.Second)
+			break
+		}
+
+		fmt.Printf("\nEnter company number (1-%d) to invest, or press Enter to start: ", len(gs.AvailableStartups))
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 
 		if input == "done" || input == "" {
 			// Have AI players make their investments too
 			gs.AIPlayerMakeInvestments()
-			color.Green("\n? AI players have made their investments!")
+			color.Green("\n✓ AI players have made their investments!")
 			break
 		}
 
@@ -321,22 +386,50 @@ func investmentPhase(gs *game.GameState) {
 			continue
 		}
 
-		fmt.Printf("Enter investment amount ($): ")
+		fmt.Printf("Enter investment amount ($ or 0 to skip): ")
 		amountStr, _ := reader.ReadString('\n')
 		amountStr = strings.TrimSpace(amountStr)
+		
+		if amountStr == "" || amountStr == "0" {
+			color.Yellow("Skipped investment in this company.")
+			continue
+		}
+		
 		amount, err := strconv.ParseInt(amountStr, 10, 64)
 
 		if err != nil {
 			color.Red("Invalid amount!")
 			continue
 		}
+		
+		if amount == 0 {
+			color.Yellow("Skipped investment in this company.")
+			continue
+		}
 
-		err = gs.MakeInvestment(companyNum-1, amount)
+		// Show term options for investments $50k+
+		var selectedTerms game.InvestmentTerms
+		if amount >= 50000 {
+			selectedTerms = selectInvestmentTerms(gs, &gs.AvailableStartups[companyNum-1], amount)
+		} else {
+			// Default terms for smaller investments
+			selectedTerms = game.InvestmentTerms{
+				Type:             "Common Stock",
+				HasProRataRights: false,
+				HasInfoRights:    false,
+				HasBoardSeat:     false,
+				LiquidationPref:  0.0,
+				HasAntiDilution:  false,
+			}
+		}
+		
+		err = gs.MakeInvestmentWithTerms(companyNum-1, amount, selectedTerms)
 		if err != nil {
 			color.Red("Error: %v", err)
 		} else {
 			color.Green("%s Investment successful!", ascii.Check)
 			fmt.Printf("Cash remaining: $%s\n", formatMoney(gs.Portfolio.Cash))
+			fmt.Printf("Terms: %s\n", selectedTerms.Type)
 		}
 	}
 }
@@ -362,14 +455,23 @@ func playTurn(gs *game.GameState, autoMode bool) {
 	// Separate critical messages (that need pause) from informational messages
 	criticalMessages := []string{}
 	infoMessages := []string{}
+	hasExitEvent := false
 	
 	for _, msg := range messages {
-		// Critical messages: funding rounds, acquisitions, negative news
-		// Non-critical: 409A, growth news, management fees
-		if strings.Contains(msg, "raised") || 
+		// Check for exit events (ACQUIRED, IPO, etc.)
+		if strings.Contains(msg, "ACQUIRED") || strings.Contains(msg, "acquisition") {
+			hasExitEvent = true
+			criticalMessages = append(criticalMessages, msg)
+		// Check for dramatic events (scandals, co-founder splits, fraud, etc.)
+		} else if strings.Contains(msg, "💔") || strings.Contains(msg, "🔥") || 
+		   strings.Contains(msg, "⚖️") || strings.Contains(msg, "🚨") || 
+		   strings.Contains(msg, "🔓") || strings.Contains(msg, "👋") ||
+		   strings.Contains(msg, "📋") || strings.Contains(msg, "🔄") ||
+		   strings.Contains(msg, "⚔️") || strings.Contains(msg, "💥") {
+			criticalMessages = append(criticalMessages, msg)
+		// Critical messages: funding rounds, dilution, negative news, down rounds
+		} else if strings.Contains(msg, "raised") || 
 		   strings.Contains(msg, "diluted") || 
-		   strings.Contains(msg, "acquisition") || 
-		   strings.Contains(msg, "acquired") ||
 		   strings.Contains(msg, "DOWN ROUND") {
 			criticalMessages = append(criticalMessages, msg)
 		} else {
@@ -431,8 +533,14 @@ func playTurn(gs *game.GameState, autoMode bool) {
 		displayMiniLeaderboard(gs)
 	}
 
-	// Only pause for critical messages in auto mode; informational messages don't pause
-	if len(criticalMessages) > 0 {
+	// Always pause for exit events, even in auto mode
+	if hasExitEvent {
+		magenta := color.New(color.FgMagenta, color.Bold)
+		magenta.Println("\n🎉 COMPANY EXIT EVENT! 🎉")
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+	// Only pause for other critical messages in auto mode; informational messages don't pause
+	} else if len(criticalMessages) > 0 {
 		// Critical message - always pause
 		fmt.Print("\nPress 'Enter' to continue to next month...")
 		bufio.NewReader(os.Stdin).ReadBytes('\n')
@@ -1388,13 +1496,149 @@ func askToSubmitToGlobalLeaderboard(score db.GameScore) {
 	yellow.Println("https://jamesacampbell.github.io/unicorn")
 }
 
+func displayInvestingFAQ() {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("              STARTUP INVESTING FAQ")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	yellow.Println("\n💰 INVESTMENT TERMS")
+	fmt.Println()
+	fmt.Println("Q: What's the difference between Preferred and Common Stock?")
+	green.Println("A: Preferred Stock gives you:")
+	fmt.Println("   • Liquidation preference (get paid back first in exit)")
+	fmt.Println("   • Anti-dilution protection (protects value in down rounds)")
+	fmt.Println("   • Information rights (quarterly financial updates)")
+	fmt.Println("   • Pro-rata rights (right to invest in future rounds)")
+	fmt.Println("   Common Stock has none of these protections.")
+	
+	fmt.Println("\nQ: What is a SAFE?")
+	green.Println("A: Simple Agreement for Future Equity:")
+	fmt.Println("   • Converts to equity in the next priced round")
+	fmt.Println("   • Usually includes a 15-20% discount")
+	fmt.Println("   • No liquidation preference")
+	fmt.Println("   • Simpler than convertible notes")
+	fmt.Println("   • Popular for early-stage investing")
+	
+	fmt.Println("\nQ: What are Pro-Rata Rights?")
+	green.Println("A: The right to maintain your ownership % in future rounds:")
+	fmt.Println("   • When a company raises Series A, you can invest more")
+	fmt.Println("   • Prevents dilution of your stake")
+	fmt.Println("   • Requires additional capital from follow-on reserve")
+	fmt.Println("   • Essential for successful investments")
+	
+	yellow.Println("\n📊 VALUATION & EQUITY")
+	fmt.Println()
+	fmt.Println("Q: How is equity calculated?")
+	green.Println("A: Your ownership % = (Your Investment / Post-Money Valuation) × 100")
+	fmt.Println("   Example: $100k into $1M valuation = 10% ownership")
+	fmt.Println("   Post-Money = Pre-Money + Total Round Size")
+	
+	fmt.Println("\nQ: What is dilution?")
+	green.Println("A: When a company raises new funding, all existing shareholders")
+	fmt.Println("   get diluted unless they invest more (pro-rata rights):")
+	fmt.Println("   • You own 10% after your investment")
+	fmt.Println("   • Company raises Series A ($10M)")
+	fmt.Println("   • Your 10% becomes ~7% (30% dilution)")
+	fmt.Println("   • Your $ value may still increase if valuation grows")
+	
+	yellow.Println("\n🚀 FUNDING ROUNDS")
+	fmt.Println()
+	fmt.Println("Q: What are the typical funding stages?")
+	green.Println("A: Pre-Seed → Seed → Series A → Series B → Series C → IPO")
+	fmt.Println("   • Pre-Seed: $250k-$1M (you invest here)")
+	fmt.Println("   • Seed: $2M-$5M (3-9 months)")
+	fmt.Println("   • Series A: $10M-$20M (12-24 months)")
+	fmt.Println("   • Series B: $30M-$50M (30-48 months)")
+	fmt.Println("   • Series C+: $50M-$100M+ (48+ months)")
+	
+	fmt.Println("\nQ: What is a down round?")
+	green.Println("A: When a company raises at a LOWER valuation:")
+	fmt.Println("   • Bad signal to market")
+	fmt.Println("   • Heavy dilution for existing investors")
+	fmt.Println("   • Anti-dilution protection helps here")
+	fmt.Println("   • Happens ~20% of the time")
+	
+	yellow.Println("\n💼 EXIT STRATEGIES")
+	fmt.Println()
+	fmt.Println("Q: How do I make money?")
+	green.Println("A: Three main exits:")
+	fmt.Println("   • Acquisition: Company gets bought (most common)")
+	fmt.Println("   • IPO: Company goes public (rare but huge)")
+	fmt.Println("   • Secondary Sale: Sell shares to another investor")
+	
+	fmt.Println("\nQ: What's a good return?")
+	green.Println("A: VC benchmarks:")
+	fmt.Println("   • 3x: Good return")
+	fmt.Println("   • 5x: Great return")
+	fmt.Println("   • 10x: Excellent return")
+	fmt.Println("   • 100x: Unicorn! (1 in 1000 startups)")
+	
+	yellow.Println("\n⚠️  RISK MANAGEMENT")
+	fmt.Println()
+	fmt.Println("Q: How should I diversify?")
+	green.Println("A: Rule of thumb:")
+	fmt.Println("   • Invest in 8-12 companies minimum")
+	fmt.Println("   • Mix of high-risk/high-reward and safer bets")
+	fmt.Println("   • Different sectors (FinTech, BioTech, etc.)")
+	fmt.Println("   • ~70% of startups will fail or break even")
+	fmt.Println("   • You need 1-2 big winners to make up for losses")
+	
+	fmt.Println("\nQ: What kills startups?")
+	green.Println("A: Top reasons:")
+	fmt.Println("   • Running out of cash (38%)")
+	fmt.Println("   • No market need (35%)")
+	fmt.Println("   • Competition (20%)")
+	fmt.Println("   • Bad timing (17%)")
+	fmt.Println("   • Co-founder conflicts (13%)")
+	
+	yellow.Println("\n📈 KEY METRICS")
+	fmt.Println()
+	fmt.Println("Q: What metrics matter?")
+	green.Println("A: Watch these:")
+	fmt.Println("   • Monthly Recurring Revenue (MRR) - predictable income")
+	fmt.Println("   • Burn Rate - how fast they spend cash")
+	fmt.Println("   • Customer Acquisition Cost (CAC) - cost per customer")
+	fmt.Println("   • Lifetime Value (LTV) - revenue per customer")
+	fmt.Println("   • LTV:CAC Ratio - should be 3:1 or better")
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	fmt.Print("\nPress 'Enter' to return...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
 func displayHelpGuide() {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 
-	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Println("              HELP & INFORMATION")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	fmt.Println("\n1. Game Overview & Rules")
+	fmt.Println("2. Startup Investing FAQ")
+	fmt.Println("3. Back to Main Menu")
+	
+	fmt.Print("\nEnter your choice: ")
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	if choice == "2" {
+		displayInvestingFAQ()
+		return
+	} else if choice == "3" {
+		return
+	}
+	
+	clear.ClearIt()
+	cyan.Println("\n" + strings.Repeat("?", 70))
+	cyan.Println("              GAME OVERVIEW & RULES")
 	cyan.Println(strings.Repeat("?", 70))
 
 	yellow.Printf("\n%s GAME OVERVIEW\n", ascii.Lightbulb)
