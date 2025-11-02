@@ -464,27 +464,44 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 		return fmt.Errorf("insufficient follow-on funds (have $%d, need $%d)", gs.Portfolio.FollowOnReserve, amount)
 	}
 	
+	// Find the funding round event for this turn to get the post-money valuation
+	var postMoneyVal int64
+	foundRound := false
+	
+	for _, event := range gs.FundingRoundQueue {
+		if event.ScheduledTurn == gs.Portfolio.Turn && event.CompanyName == companyName {
+			// Find the company
+			for _, startup := range gs.AvailableStartups {
+				if startup.Name == companyName {
+					preMoneyVal := startup.Valuation
+					postMoneyVal = preMoneyVal + event.RaiseAmount
+					foundRound = true
+					break
+				}
+			}
+			break
+		}
+	}
+	
+	if !foundRound {
+		return fmt.Errorf("no funding round happening for %s this turn", companyName)
+	}
+	
 	// Find the investment
 	for i := range gs.Portfolio.Investments {
 		if gs.Portfolio.Investments[i].CompanyName == companyName {
 			inv := &gs.Portfolio.Investments[i]
 			
-			// Find the company valuation
-			for _, startup := range gs.AvailableStartups {
-				if startup.Name == companyName {
-					// Calculate additional equity gained
-					// New equity = (investment / post-money valuation) * 100
-					additionalEquity := (float64(amount) / float64(startup.Valuation)) * 100.0
-					
-					inv.AmountInvested += amount
-					inv.EquityPercent += additionalEquity
-					gs.Portfolio.FollowOnReserve -= amount
-					gs.updateNetWorth()
-					
-					return nil
-				}
-			}
-			return fmt.Errorf("company not found")
+			// Calculate additional equity gained based on POST-MONEY valuation
+			// Your new equity from this investment = (your investment / post-money valuation) * 100
+			additionalEquity := (float64(amount) / float64(postMoneyVal)) * 100.0
+			
+			inv.AmountInvested += amount
+			inv.EquityPercent += additionalEquity
+			gs.Portfolio.FollowOnReserve -= amount
+			gs.updateNetWorth()
+			
+			return nil
 		}
 	}
 	

@@ -1,5 +1,30 @@
 # Changelog
 
+## Version 3.10.1 - Critical Bug Fix: Follow-On Investment Equity (2025-11-02)
+
+### Bug Fixes
+
+#### 🐛 Fixed Follow-On Investment Equity Calculation
+- **CRITICAL FIX**: Follow-on investments were calculating equity based on current valuation instead of post-money valuation
+- **Impact**: This caused equity percentages to exceed 100% (impossible scenario)
+- **Example of Bug**:
+  - User invests $500k in follow-on round
+  - Equity incorrectly jumped from 52% to 112% (based on old $830k valuation)
+  - Should have calculated based on new $3.4M post-money valuation
+- **Fix**: Now correctly uses post-money valuation from the funding round event
+- **Result**: Realistic equity percentages that properly reflect your stake in the new round
+
+### Technical Changes
+
+#### Modified Files
+- `game/game.go`:
+  - Updated `MakeFollowOnInvestment()` to look up funding round event
+  - Calculate additional equity using post-money valuation (pre-money + raise amount)
+  - Added validation to ensure funding round exists for the turn
+  - Formula: `additionalEquity = (investment / postMoneyValuation) * 100`
+
+---
+
 ## Version 3.10.0 - VC Mode: Investment Terms & Dramatic Events (2025-11-02)
 
 ### Major Features Added
