@@ -1,5 +1,31 @@
 # Changelog
 
+## Version 3.11.1 - Bug Fix: Acquisition Payout Breakdown on Final Screen (2025-11-02)
+
+### Bug Fixes
+
+#### 🐛 Fixed Missing Acquisition Payout Breakdown
+- **Issue**: Acquisition payout breakdown was only shown when accepting the offer, not on the final results screen
+- **Impact**: Players couldn't see how the acquisition split among investors, executives, and employees at game end
+- **Fix**: Added complete cap table breakdown to final score screen for acquisition exits
+- **Now Shows**:
+  - Founder payout with equity %
+  - Each investor's payout (by name)
+  - Executive team payouts (with names like Gilfoyle, Jared Dunn, etc.)
+  - Employee equity payouts
+  - Unallocated employee pool
+  - Total validation showing 100% of acquisition price
+
+### Technical Changes
+
+#### Modified Files
+- `founder_ui.go`:
+  - Updated `displayFounderFinalScore()` to show cap table breakdown for acquisition exits
+  - Added same payout display logic as `displayAcquisitionOffer()`
+  - Maintains consistent formatting between offer screen and final results
+
+---
+
 ## Version 3.11.0 - Founder Mode: Enhanced Fundraising, Exit Details & Market Growth (2025-11-02)
 
 ### Major Features Added

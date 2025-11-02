@@ -1277,6 +1277,44 @@ func displayFounderFinalScore(fs *founder.FounderState) {
 		case "acquisition":
 			payout := int64(float64(fs.ExitValuation) * founderEquity / 100.0)
 			magenta.Printf("💵 Your Payout: $%s\n", formatFounderCurrency(payout))
+			
+			// Show complete cap table payout breakdown
+			fmt.Println("\n" + strings.Repeat("─", 70))
+			yellow.Println("💰 ACQUISITION PAYOUT BREAKDOWN")
+			fmt.Println(strings.Repeat("─", 70))
+			
+			white := color.New(color.FgWhite)
+			green.Printf("\n%-40s %8.2f%%  $%s\n", "You (Founder)", founderEquity, formatFounderCurrency(payout))
+			
+			// Calculate payouts for all cap table entries
+			totalShown := founderEquity
+			for _, entry := range fs.CapTable {
+				entryPayout := int64(float64(fs.ExitValuation) * entry.Equity / 100.0)
+				totalShown += entry.Equity
+				
+				// Color code by type
+				switch entry.Type {
+				case "investor":
+					white.Printf("%-40s %8.2f%%  $%s\n", entry.Name, entry.Equity, formatFounderCurrency(entryPayout))
+				case "executive":
+					cyan.Printf("%-40s %8.2f%%  $%s\n", entry.Name+" (Executive)", entry.Equity, formatFounderCurrency(entryPayout))
+				case "employee":
+					white.Printf("%-40s %8.2f%%  $%s\n", entry.Name+" (Employee)", entry.Equity, formatFounderCurrency(entryPayout))
+				case "advisor":
+					white.Printf("%-40s %8.2f%%  $%s\n", entry.Name+" (Advisor)", entry.Equity, formatFounderCurrency(entryPayout))
+				default:
+					white.Printf("%-40s %8.2f%%  $%s\n", entry.Name, entry.Equity, formatFounderCurrency(entryPayout))
+				}
+			}
+			
+			// Show remaining equity pool
+			if fs.EquityPool > 0 {
+				yellow.Printf("%-40s %8.2f%%  (unallocated)\n", "Employee Pool", fs.EquityPool)
+			}
+			
+			fmt.Println(strings.Repeat("─", 70))
+			fmt.Printf("%-40s %8.2f%%  $%s\n", "TOTAL", totalShown+fs.EquityPool, formatFounderCurrency(fs.ExitValuation))
+			
 		case "secondary":
 			sold := int64(float64(fs.ExitValuation) * founderEquity * 0.5 / 100.0)
 			remaining := int64(float64(fs.ExitValuation) * founderEquity * 0.5 / 100.0)
