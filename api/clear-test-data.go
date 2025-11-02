@@ -74,37 +74,42 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	// Get count before deletion
-	var countBefore int
-	err = db.QueryRow("SELECT COUNT(*) FROM game_scores").Scan(&countBefore)
+	// Get count before deletion from both tables
+	var vcCount, founderCount int
+	db.QueryRow("SELECT COUNT(*) FROM game_scores").Scan(&vcCount)
+	db.QueryRow("SELECT COUNT(*) FROM founder_scores").Scan(&founderCount)
+
+	// Delete all test data from both tables
+	vcResult, err := db.Exec("DELETE FROM game_scores")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ClearResponse{
 			Success: false,
-			Message: fmt.Sprintf("Failed to count records: %v", err),
+			Message: fmt.Sprintf("Failed to delete VC data: %v", err),
 		})
 		return
 	}
 
-	// Delete all test data
-	result, err := db.Exec("DELETE FROM game_scores")
+	founderResult, err := db.Exec("DELETE FROM founder_scores")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ClearResponse{
 			Success: false,
-			Message: fmt.Sprintf("Failed to delete data: %v", err),
+			Message: fmt.Sprintf("Failed to delete Founder data: %v", err),
 		})
 		return
 	}
 
-	rowsAffected, _ := result.RowsAffected()
+	vcDeleted, _ := vcResult.RowsAffected()
+	founderDeleted, _ := founderResult.RowsAffected()
+	totalDeleted := int(vcDeleted + founderDeleted)
 
 	// Success response
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ClearResponse{
 		Success: true,
-		Message: fmt.Sprintf("Successfully deleted all test data (%d records)", rowsAffected),
-		Deleted: int(rowsAffected),
+		Message: fmt.Sprintf("Successfully deleted all test data (VC: %d, Founder: %d, Total: %d)", vcDeleted, founderDeleted, totalDeleted),
+		Deleted: totalDeleted,
 	})
 }
 
