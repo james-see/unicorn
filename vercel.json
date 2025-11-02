@@ -9,8 +9,20 @@
       "dest": "/api/get-leaderboard"
     },
     {
+      "src": "/api/submit-founder-score",
+      "dest": "/api/submit-founder-score"
+    },
+    {
+      "src": "/api/get-founder-leaderboard",
+      "dest": "/api/get-founder-leaderboard"
+    },
+    {
       "src": "/leaderboard/game_scores.json",
       "dest": "/api/get-leaderboard"
+    },
+    {
+      "src": "/leaderboard/founder_scores.json",
+      "dest": "/api/get-founder-leaderboard"
     },
     {
       "src": "/api/clear-test-data",

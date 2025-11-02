@@ -537,19 +537,34 @@
         </div>
 
         <div class="card" id="global-leaderboard">
-            <h2>🏆 Global Leaderboard</h2>
+            <h2>🏆 Global Leaderboards</h2>
             <p style="margin-bottom: 1rem;">Compete with players worldwide! Top scores updated in real-time.</p>
             
-            <div class="filter-tabs">
-                <button class="filter-tab active" onclick="loadLeaderboard('all', 'net_worth', event)">Top by Net Worth</button>
-                <button class="filter-tab" onclick="loadLeaderboard('all', 'roi', event)">Top by ROI</button>
-                <button class="filter-tab" onclick="loadLeaderboard('Easy', 'net_worth', event)">Easy</button>
-                <button class="filter-tab" onclick="loadLeaderboard('Medium', 'net_worth', event)">Medium</button>
-                <button class="filter-tab" onclick="loadLeaderboard('Hard', 'net_worth', event)">Hard</button>
-                <button class="filter-tab" onclick="loadLeaderboard('Expert', 'net_worth', event)">Expert</button>
+            <!-- Mode Selection -->
+            <div class="filter-tabs" style="margin-bottom: 2rem;">
+                <button class="filter-tab active" onclick="switchLeaderboardMode('vc')">💼 VC Mode</button>
+                <button class="filter-tab" onclick="switchLeaderboardMode('founder')">🚀 Founder Mode</button>
+            </div>
+            
+            <!-- VC Mode Filters -->
+            <div id="vc-filters" class="filter-tabs">
+                <button class="filter-tab active" onclick="loadVCLeaderboard('all', 'net_worth', event)">Top by Net Worth</button>
+                <button class="filter-tab" onclick="loadVCLeaderboard('all', 'roi', event)">Top by ROI</button>
+                <button class="filter-tab" onclick="loadVCLeaderboard('Easy', 'net_worth', event)">Easy</button>
+                <button class="filter-tab" onclick="loadVCLeaderboard('Medium', 'net_worth', event)">Medium</button>
+                <button class="filter-tab" onclick="loadVCLeaderboard('Hard', 'net_worth', event)">Hard</button>
+                <button class="filter-tab" onclick="loadVCLeaderboard('Expert', 'net_worth', event)">Expert</button>
             </div>
 
-            <button class="refresh-btn" onclick="loadLeaderboard(currentFilter, currentSort, null)">🔄 Refresh</button>
+            <!-- Founder Mode Filters -->
+            <div id="founder-filters" class="filter-tabs" style="display: none;">
+                <button class="filter-tab active" onclick="loadFounderLeaderboard('', 'payout', event)">Top by Payout</button>
+                <button class="filter-tab" onclick="loadFounderLeaderboard('', 'valuation', event)">Top by Valuation</button>
+                <button class="filter-tab" onclick="loadFounderLeaderboard('', 'arr', event)">Top by ARR</button>
+                <button class="filter-tab" onclick="loadFounderLeaderboard('', 'equity', event)">Best Equity %</button>
+            </div>
+
+            <button class="refresh-btn" onclick="currentMode === 'vc' ? loadVCLeaderboard(currentFilter, currentSort, null) : loadFounderLeaderboard('', currentSort, null)">🔄 Refresh</button>
 
             <div id="leaderboard-content">
                 <div class="loading">Loading global leaderboard...</div>
@@ -677,10 +692,11 @@
     </div>
 
     <script>
-        // Leaderboard API endpoint - reads from Postgres
-        // Production URL: https://unicorn-green.vercel.app/leaderboard/game_scores.json
-        const DATASETTE_URL = 'https://unicorn-green.vercel.app/leaderboard/game_scores.json';
+        // Leaderboard API endpoints - reads from Postgres
+        const VC_LEADERBOARD_URL = 'https://unicorn-green.vercel.app/leaderboard/game_scores.json';
+        const FOUNDER_LEADERBOARD_URL = 'https://unicorn-green.vercel.app/api/get-founder-leaderboard';
         
+        let currentMode = 'vc'; // 'vc' or 'founder'
         let currentFilter = 'all';
         let currentSort = 'net_worth';
 
@@ -699,8 +715,38 @@
             });
         }
 
-        // Load leaderboard data
-        async function loadLeaderboard(difficulty = currentFilter, sortBy = currentSort, event = null) {
+        // Switch between VC and Founder leaderboards
+        function switchLeaderboardMode(mode) {
+            currentMode = mode;
+            
+            // Update mode tabs
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                const onclick = tab.getAttribute('onclick');
+                if (onclick && onclick.includes('switchLeaderboardMode')) {
+                    tab.classList.remove('active');
+                    if (onclick.includes(`'${mode}'`)) {
+                        tab.classList.add('active');
+                    }
+                }
+            });
+            
+            // Show/hide appropriate filters
+            const vcFilters = document.getElementById('vc-filters');
+            const founderFilters = document.getElementById('founder-filters');
+            
+            if (mode === 'vc') {
+                vcFilters.style.display = 'flex';
+                founderFilters.style.display = 'none';
+                loadVCLeaderboard('all', 'net_worth', null);
+            } else {
+                vcFilters.style.display = 'none';
+                founderFilters.style.display = 'flex';
+                loadFounderLeaderboard('', 'payout', null);
+            }
+        }
+        
+        // Load VC leaderboard data
+        async function loadVCLeaderboard(difficulty = currentFilter, sortBy = currentSort, event = null) {
             currentFilter = difficulty;
             currentSort = sortBy;
             
@@ -725,7 +771,7 @@
 
             try {
                 // Build query parameters
-                let url = DATASETTE_URL + '?_size=10&_sort_desc=' + (sortBy === 'roi' ? 'roi' : 'final_net_worth');
+                let url = VC_LEADERBOARD_URL + '?_size=10&_sort_desc=' + (sortBy === 'roi' ? 'roi' : 'final_net_worth');
                 
                 if (difficulty !== 'all') {
                     url += '&difficulty=' + encodeURIComponent(difficulty);
@@ -793,9 +839,78 @@
             }
         }
 
+        // Load Founder leaderboard data
+        async function loadFounderLeaderboard(template = '', sortBy = 'payout', event = null) {
+            const content = document.getElementById('leaderboard-content');
+            content.innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                // Build query parameters
+                let url = FOUNDER_LEADERBOARD_URL + '?limit=10&sort_by=' + sortBy;
+                
+                if (template) {
+                    url += '&template=' + encodeURIComponent(template);
+                }
+
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch founder leaderboard data');
+                }
+
+                const data = await response.json();
+                
+                if (!data.success || !data.scores || data.scores.length === 0) {
+                    content.innerHTML = '<p style="text-align: center; padding: 2rem;">No scores yet. Be the first!</p>';
+                    return;
+                }
+
+                // Build table
+                let html = '<table class="leaderboard-table">';
+                html += '<thead><tr>';
+                html += '<th>Rank</th>';
+                html += '<th>Founder</th>';
+                html += '<th>Valuation</th>';
+                html += '<th>Payout</th>';
+                html += '<th>Exit</th>';
+                html += '<th>Equity %</th>';
+                html += '<th>ARR</th>';
+                html += '<th>Template</th>';
+                html += '</tr></thead>';
+                html += '<tbody>';
+
+                data.scores.forEach((score, index) => {
+                    const rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : '';
+                    
+                    html += '<tr>';
+                    html += `<td class="${rankClass}">${index + 1}</td>`;
+                    html += `<td>${score.player_name}</td>`;
+                    html += `<td>${formatMoney(score.final_valuation)}</td>`;
+                    html += `<td class="positive-roi">${formatMoney(score.founder_payout)}</td>`;
+                    html += `<td>${score.exit_type === 'ipo' ? '🏛️  IPO' : score.exit_type === 'acquisition' ? '🤝 Acquired' : score.exit_type === 'secondary' ? '💼 Secondary' : '⏱️ Time'}</td>`;
+                    html += `<td>${score.founder_equity.toFixed(1)}%</td>`;
+                    html += `<td>${formatMoney(score.max_arr)}</td>`;
+                    html += `<td>${score.startup_template}</td>`;
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                content.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading founder leaderboard:', error);
+                content.innerHTML = `
+                    <div class="error-message">
+                        <p><strong>⚠️ Could not load founder leaderboard</strong></p>
+                        <p>The leaderboard service may not be deployed yet.</p>
+                    </div>
+                `;
+            }
+        }
+
         // Load leaderboard on page load
         function initLeaderboard() {
-            loadLeaderboard('all', 'net_worth');
+            loadVCLeaderboard('all', 'net_worth');
         }
 
         // Try multiple initialization methods to ensure it loads
