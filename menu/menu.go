@@ -29,7 +29,7 @@ type StartupData struct {
 // DisplayMenu ...
 func DisplayMenu(username string, pot int64) {
 	fmt.Printf("%v", username)
-	fmt.Printf("you have $%d to build your initial portfolio.\nEach turn is 1 month of time and you will face questions at each turn that will either increase or decrease your wealth. \nYour game ends after 10 years (roughly 120 turns).\n", pot)
+	fmt.Printf("you have $%d to build your initial portfolio.\nEach turn is 1 month of time and you will face questions at each turn that will either increase or decrease your wealth. \nYour game ends after 5 years (60 turns).\n", pot)
 	fmt.Print("Press 'Enter' to continue...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 	clear.ClearIt()

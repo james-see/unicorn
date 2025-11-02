@@ -31,7 +31,7 @@ text based startup adventure - play as vc and make bets on startups **OR** build
 **TWO GAME MODES:**
 
 ### 🎩 VC Investor Mode (Classic)
-You manage a realistic VC fund ($500K-$1M) competing against AI investors like CARL from Sterling & Cooper! Over 10 years (120 turns), navigate multiple funding rounds, manage dilution, and pay 2% annual management fees while building your portfolio. Each month brings events, company funding rounds, and competitive rankings. Will you beat the AI VCs and become the top investor?
+You manage a realistic VC fund ($500K-$1M) competing against AI investors like CARL from Sterling & Cooper! Over 5 years (60 turns), navigate multiple funding rounds, manage dilution, and pay 2% annual management fees while building your portfolio. Each month brings events, company funding rounds, and competitive rankings. Will you beat the AI VCs and become the top investor?
 
 ### 🚀 Startup Founder Mode (NEW!)
 **Build your own startup from the ground up!** Choose from 10 different startup templates (SaaS, DeepTech, GovTech, Hardware), hire your team, acquire customers, raise funding rounds, and navigate the challenges of being a founder. Make strategic decisions about product development, marketing, hiring, partnerships, and more. Can you grow to $20M ARR and IPO? Or will you get acquired along the way?
@@ -93,7 +93,7 @@ Three ways to exit and cash out:
 ### 🎮 Core Gameplay
 - **Investment Mechanics:** Invest any amount in 20 different startups (NEW!)
 - **Portfolio Tracking:** Real-time valuation of all your investments
-- **Turn-Based System:** 90-120 turns depending on difficulty
+- **Turn-Based System:** 60 turns (5 years) across all difficulty levels
 - **Random Events:** 60+ events that impact company valuations (NEW!)
 - **Performance Ratings:** From "Unicorn Hunter" (1000%+ ROI) to "Lost Money"
 - **Advanced Analytics:** Sector breakdown, best/worst performers (NEW!)
@@ -112,7 +112,7 @@ Three ways to exit and cash out:
 - **Easy:** $1M fund, 20% event chance, 3% volatility
 - **Medium:** $750k fund, 30% event chance, 5% volatility  
 - **Hard:** $500k fund, 40% event chance, 7% volatility
-- **Expert:** $500k fund, 50% event chance, 10% volatility, only 90 turns!
+- **Expert:** $500k fund, 50% event chance, 10% volatility
 
 ### 📊 Persistence & Competition (NEW!)
 - **Leaderboards:** Track top 10 scores by net worth or ROI
