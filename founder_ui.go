@@ -3,9 +3,11 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	ascii "github.com/jamesacampbell/unicorn/ascii"
@@ -32,16 +34,32 @@ func playFounderMode(username string) {
 	cyan.Println("              CHOOSE YOUR STARTUP")
 	cyan.Println(strings.Repeat("=", 70))
 
+	// Randomize competition levels and cash for display (and later use)
+	competitionLevels := []string{"low", "medium", "high", "very_high"}
+	rand.Seed(time.Now().UnixNano()) // Seed randomization
+
 	for i, s := range startups {
+		// Randomize competition level for display
+		randomCompetition := competitionLevels[rand.Intn(len(competitionLevels))]
+		
+		// Randomize cash (±20%)
+		cashVariance := 0.20
+		cashMultiplier := 1.0 + (rand.Float64()*cashVariance*2 - cashVariance) // 0.8 to 1.2
+		randomizedCash := int64(float64(s.InitialCash) * cashMultiplier)
+
 		yellow.Printf("\n%d. %s", i+1, s.Name)
 		fmt.Printf(" [%s]\n", s.Type)
 		fmt.Printf("   %s\n", s.Tagline)
 		fmt.Printf("   Cash: $%s | MRR: $%s | Customers: %d\n",
-			formatFounderCurrency(s.InitialCash),
+			formatFounderCurrency(randomizedCash),
 			formatFounderCurrency(s.InitialMRR),
 			s.InitialCustomers)
 		fmt.Printf("   Market Size: %d | Competition: %s\n",
-			s.TargetMarketSize, s.CompetitionLevel)
+			s.TargetMarketSize, randomCompetition)
+		
+		// Store randomized values back in template for use when game starts
+		startups[i].CompetitionLevel = randomCompetition
+		startups[i].InitialCash = randomizedCash
 	}
 
 	fmt.Print("\nSelect your startup (1-" + fmt.Sprintf("%d", len(startups)) + "): ")
@@ -117,13 +135,26 @@ func playFounderTurn(fs *founder.FounderState) {
 	cyan.Printf("\n[📅] MONTH %d of %d\n", fs.Turn, fs.MaxTurns)
 	fmt.Println(strings.Repeat("=", 70))
 
-	// Check for low cash warning
+	// Check for low cash warning (calculate accurate runway)
+	netRevenue := int64(float64(fs.MRR) * 0.67)
+	totalExpenses := fs.MonthlyTeamCost + fs.MonthlyComputeCost + fs.MonthlyODCCost
+	if fs.AffiliateProgram != nil {
+		totalExpenses += fs.AffiliateProgram.MonthlyPlatformFee
+		totalExpenses += int64(float64(fs.AffiliateMRR) * fs.AffiliateProgram.Commission)
+	}
+	for _, m := range fs.GlobalMarkets {
+		totalExpenses += m.MonthlyCost
+	}
+	netIncome := netRevenue - totalExpenses
+	
 	if fs.NeedsLowCashWarning() {
 		red.Println("\n⚠️  WARNING: Cash is running low!")
-		if fs.CashRunwayMonths < 0 {
+		if netIncome > 0 {
 			red.Printf("   Cash: $%s | Runway: ∞ (profitable)\n", formatFounderCurrency(fs.Cash))
 		} else {
-			red.Printf("   Cash: $%s | Runway: %d months\n", formatFounderCurrency(fs.Cash), fs.CashRunwayMonths)
+			burnRate := -netIncome
+			runway := int(float64(fs.Cash) / float64(burnRate))
+			red.Printf("   Cash: $%s | Runway: %d months\n", formatFounderCurrency(fs.Cash), runway)
 		}
 		yellow.Println("   Consider: Raise funding, cut costs, or speed up revenue growth!")
 	}
@@ -138,13 +169,35 @@ func playFounderTurn(fs *founder.FounderState) {
 	yellow.Println("📊 COMPANY METRICS")
 	fmt.Println(strings.Repeat("─", 70))
 	
+	// Calculate actual net income for accurate runway display
+	netRevenue2 := int64(float64(fs.MRR) * 0.67) // After 33% deductions
+	totalExpenses2 := fs.MonthlyTeamCost + fs.MonthlyComputeCost + fs.MonthlyODCCost
+	if fs.AffiliateProgram != nil {
+		totalExpenses2 += fs.AffiliateProgram.MonthlyPlatformFee
+		totalExpenses2 += int64(float64(fs.AffiliateMRR) * fs.AffiliateProgram.Commission)
+	}
+	for _, m := range fs.GlobalMarkets {
+		totalExpenses2 += m.MonthlyCost
+	}
+	netIncome2 := netRevenue2 - totalExpenses2
+	
 	fmt.Printf("💰 Cash: $%s", formatFounderCurrency(fs.Cash))
-	if fs.CashRunwayMonths < 0 {
+	if netIncome2 > 0 {
 		green.Printf(" (∞ runway - profitable!)\n")
-	} else if fs.CashRunwayMonths < 6 {
-		red.Printf(" (⚠️  %d months runway)\n", fs.CashRunwayMonths)
+	} else if netIncome2 < 0 {
+		burnRate := -netIncome2
+		runway := int(float64(fs.Cash) / float64(burnRate))
+		if runway == 0 {
+			red.Printf(" (⚠️  <1 month runway)\n")
+		} else if runway <= 3 {
+			red.Printf(" (⚠️  %d months runway)\n", runway)
+		} else if runway <= 6 {
+			yellow.Printf(" (%d months runway)\n", runway)
+		} else {
+			fmt.Printf(" (%d months runway)\n", runway)
+		}
 	} else {
-		fmt.Printf(" (%d months runway)\n", fs.CashRunwayMonths)
+		fmt.Printf(" (break-even)\n")
 	}
 	
 	fmt.Printf("📈 MRR: $%s", formatFounderCurrency(fs.MRR))
@@ -168,25 +221,346 @@ func playFounderTurn(fs *founder.FounderState) {
 	}
 	fmt.Println()
 	
-	fmt.Printf("💸 Deal Size: $%s/mo avg", formatFounderCurrency(fs.AvgDealSize))
-	if fs.MinDealSize > 0 && fs.MaxDealSize > fs.MinDealSize {
-		fmt.Printf(" | Range: $%s - $%s/mo\n", 
-			formatFounderCurrency(fs.MinDealSize), formatFounderCurrency(fs.MaxDealSize))
+	// Customer section
+	if fs.TotalCustomersEver > 0 {
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		yellow.Println("👥 CUSTOMERS")
+		fmt.Println(strings.Repeat("─", 70))
+		fmt.Printf("Active: %d | Churned: %d | Total Ever: %d\n", 
+			fs.Customers, fs.TotalChurned, fs.TotalCustomersEver)
+		if fs.Customers > 0 {
+			fmt.Printf("Active MRR: $%s | Avg Deal: $%s/mo", 
+				formatFounderCurrency(fs.MRR), formatFounderCurrency(fs.AvgDealSize))
+			if fs.MinDealSize > 0 && fs.MaxDealSize > fs.MinDealSize {
+				fmt.Printf(" | Range: $%s - $%s/mo\n", 
+					formatFounderCurrency(fs.MinDealSize), formatFounderCurrency(fs.MaxDealSize))
+			} else {
+				fmt.Println()
+			}
+		}
 	} else {
-		fmt.Println()
+		if fs.Customers > 0 {
+			fmt.Printf("💸 Deal Size: $%s/mo avg", formatFounderCurrency(fs.AvgDealSize))
+			if fs.MinDealSize > 0 && fs.MaxDealSize > fs.MinDealSize {
+				fmt.Printf(" | Range: $%s - $%s/mo\n", 
+					formatFounderCurrency(fs.MinDealSize), formatFounderCurrency(fs.MaxDealSize))
+			} else {
+				fmt.Println()
+			}
+		} else {
+			// Show expected deal size when no customers yet
+			fmt.Printf("💸 Expected Deal Size: $%s/mo\n", formatFounderCurrency(fs.AvgDealSize))
+		}
 	}
 	fmt.Printf("🔄 Churn Rate: %.1f%% | ", fs.CustomerChurnRate*100)
 	fmt.Printf("📦 Product Maturity: %.0f%%\n", fs.ProductMaturity*100)
-	fmt.Printf("💼 Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityPool)
+	fmt.Printf("💼 Your Equity: %.1f%%", 100.0-fs.EquityGivenAway-fs.EquityAllocated)
+	if fs.EquityAllocated > 0 {
+		fmt.Printf(" | Employee Pool: %.1f%% (%.1f%% allocated, %.1f%% available)\n",
+			fs.EquityPool, fs.EquityAllocated, fs.EquityPool-fs.EquityAllocated)
+	} else {
+		fmt.Println()
+	}
+	
+	// Show key metrics if we have meaningful data
+	if fs.Turn > 1 && fs.Customers > 0 {
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		yellow.Println("📊 KEY METRICS")
+		fmt.Println(strings.Repeat("─", 70))
+		
+		ltvCac := fs.CalculateLTVToCAC()
+		cacPayback := fs.CalculateCACPayback()
+		ruleOf40 := fs.CalculateRuleOf40()
+		burnMultiple := fs.CalculateBurnMultiple()
+		magicNumber := fs.CalculateMagicNumber()
+		
+		if ltvCac > 0 {
+			statusIcon := "🟢"
+			if ltvCac < 1 {
+				statusIcon = "🔴"
+			} else if ltvCac < 3 {
+				statusIcon = "🟡"
+			}
+			fmt.Printf("%s LTV:CAC Ratio: %.1f:1", statusIcon, ltvCac)
+			if ltvCac < 1 {
+				fmt.Print(" (losing money per customer!)")
+			} else if ltvCac < 3 {
+				fmt.Print(" (aim for 3:1+)")
+			} else {
+				fmt.Print(" (healthy)")
+			}
+			fmt.Println()
+		}
+		
+		if cacPayback > 0 {
+			statusIcon := "🟢"
+			if cacPayback > 18 {
+				statusIcon = "🔴"
+			} else if cacPayback > 12 {
+				statusIcon = "🟡"
+			}
+			fmt.Printf("%s CAC Payback: %.1f months", statusIcon, cacPayback)
+			if cacPayback > 18 {
+				fmt.Print(" (too long!)")
+			} else if cacPayback > 12 {
+				fmt.Print(" (aim for <12)")
+			} else {
+				fmt.Print(" (good)")
+			}
+			fmt.Println()
+		}
+		
+		if fs.MRR > 50000 {
+			statusIcon := "🟢"
+			if ruleOf40 < 0 {
+				statusIcon = "🔴"
+			} else if ruleOf40 < 40 {
+				statusIcon = "🟡"
+			}
+			fmt.Printf("%s Rule of 40: %.0f%%", statusIcon, ruleOf40)
+			if ruleOf40 < 0 {
+				fmt.Print(" (unprofitable & shrinking!)")
+			} else if ruleOf40 < 40 {
+				fmt.Print(" (aim for 40%+)")
+			} else {
+				fmt.Print(" (excellent)")
+			}
+			fmt.Println()
+		}
+		
+		if burnMultiple > 0 && burnMultiple < 999 {
+			statusIcon := "🟢"
+			if burnMultiple > 2 {
+				statusIcon = "🔴"
+			} else if burnMultiple > 1.5 {
+				statusIcon = "🟡"
+			}
+			fmt.Printf("%s Burn Multiple: %.1fx", statusIcon, burnMultiple)
+			if burnMultiple > 2 {
+				fmt.Print(" (burning too much per $ of growth!)")
+			} else if burnMultiple > 1.5 {
+				fmt.Print(" (room for improvement)")
+			} else {
+				fmt.Print(" (efficient)")
+			}
+			fmt.Println()
+		}
+		
+		if magicNumber > 0 {
+			statusIcon := "🟢"
+			if magicNumber < 0.75 {
+				statusIcon = "🔴"
+			} else if magicNumber < 1.0 {
+				statusIcon = "🟡"
+			}
+			fmt.Printf("%s Magic Number: %.2f", statusIcon, magicNumber)
+			if magicNumber < 0.75 {
+				fmt.Print(" (low sales efficiency)")
+			} else if magicNumber < 1.0 {
+				fmt.Print(" (aim for 1.0+)")
+			} else {
+				fmt.Print(" (strong sales efficiency)")
+			}
+			fmt.Println()
+		}
+	}
+	
+	// Show monthly highlights
+	highlights := fs.GenerateMonthlyHighlights()
+	if len(highlights) > 0 {
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		yellow.Println("⭐ MONTHLY HIGHLIGHTS")
+		fmt.Println(strings.Repeat("─", 70))
+		
+		wins := []founder.MonthlyHighlight{}
+		concerns := []founder.MonthlyHighlight{}
+		
+		for _, h := range highlights {
+			if h.Type == "win" {
+				wins = append(wins, h)
+			} else {
+				concerns = append(concerns, h)
+			}
+		}
+		
+		if len(wins) > 0 {
+			green := color.New(color.FgGreen)
+			green.Println("\n🎉 Wins:")
+			for _, w := range wins {
+				fmt.Printf("  • %s\n", w.Message)
+			}
+		}
+		
+		if len(concerns) > 0 {
+			red := color.New(color.FgRed)
+			red.Println("\n⚠️  Concerns:")
+			for _, c := range concerns {
+				fmt.Printf("  • %s\n", c.Message)
+			}
+		}
+	}
+
+	// Show customer health if we have customers
+	if fs.Customers > 0 {
+		healthy, atRisk, critical, atRiskMRR, criticalMRR := fs.GetCustomerHealthSegments()
+		if atRisk > 0 || critical > 0 {
+			fmt.Println("\n" + strings.Repeat("─", 70))
+			yellow.Println("❤️  CUSTOMER HEALTH")
+			fmt.Println(strings.Repeat("─", 70))
+			
+			if healthy > 0 {
+				green := color.New(color.FgGreen)
+				green.Printf("🟢 Healthy: %d customers (low churn risk)\n", healthy)
+			}
+			if atRisk > 0 {
+				yellow.Printf("🟡 At Risk: %d customers ($%s MRR at risk)\n", atRisk, formatFounderCurrency(atRiskMRR))
+			}
+			if critical > 0 {
+				red := color.New(color.FgRed)
+				red.Printf("🔴 Critical: %d customers ($%s MRR likely to churn)\n", critical, formatFounderCurrency(criticalMRR))
+			}
+			
+			// Advice
+			if critical > 0 || atRisk > 0 {
+				fmt.Println("\n💡 Tip: Hire CS team or COO to improve customer health")
+			}
+		}
+	}
+	
+	// Show board sentiment if raised funding
+	if len(fs.FundingRounds) > 0 && fs.BoardSentiment != "" {
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		yellow.Println("👔 BOARD / INVESTOR SENTIMENT")
+		fmt.Println(strings.Repeat("─", 70))
+		
+		sentimentIcon := "😐"
+		sentimentColor := color.New(color.FgYellow)
+		switch fs.BoardSentiment {
+		case "happy":
+			sentimentIcon = "😄"
+			sentimentColor = color.New(color.FgGreen)
+		case "pleased":
+			sentimentIcon = "🙂"
+			sentimentColor = color.New(color.FgGreen)
+		case "neutral":
+			sentimentIcon = "😐"
+			sentimentColor = color.New(color.FgYellow)
+		case "concerned":
+			sentimentIcon = "😟"
+			sentimentColor = color.New(color.FgRed)
+		case "angry":
+			sentimentIcon = "😡"
+			sentimentColor = color.New(color.FgRed)
+		}
+		
+		sentimentColor.Printf("%s Sentiment: %s", sentimentIcon, fs.BoardSentiment)
+		fmt.Printf(" | Pressure: %d/100\n", fs.BoardPressure)
+		
+		if fs.BoardPressure >= 75 {
+			red := color.New(color.FgRed)
+			red.Println("\n⚠️  Board is demanding faster progress - risk of founder replacement!")
+		} else if fs.BoardPressure >= 50 {
+			fmt.Println("\n💬 Board wants to see improved metrics soon")
+		} else if fs.BoardPressure <= 25 {
+			green := color.New(color.FgGreen)
+			green.Println("\n✓ Board is very supportive - keep up the good work!")
+		}
+	}
+	
+	// Show strategic opportunity if one is pending
+	if fs.PendingOpportunity != nil {
+		opp := fs.PendingOpportunity
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		cyan := color.New(color.FgCyan, color.Bold)
+		cyan.Println("💡 STRATEGIC OPPORTUNITY")
+		fmt.Println(strings.Repeat("─", 70))
+		
+		yellow.Printf("\n%s\n", opp.Title)
+		fmt.Printf("\n%s\n", opp.Description)
+		
+		green := color.New(color.FgGreen)
+		green.Printf("\n✓ Benefits: %s\n", opp.Benefit)
+		
+		red := color.New(color.FgRed)
+		red.Printf("⚠️  Risks: %s\n", opp.Risk)
+		
+		if opp.Cost > 0 {
+			fmt.Printf("💰 Cost: $%s\n", formatFounderCurrency(opp.Cost))
+		}
+		
+		fmt.Printf("\n⏰ Expires in %d month(s) - decide at end of this turn!\n", opp.ExpiresIn)
+	}
+
+	// Show partnerships if any are active
+	activePartnerships := []founder.Partnership{}
+	for _, p := range fs.Partnerships {
+		if p.Status == "active" {
+			activePartnerships = append(activePartnerships, p)
+		}
+	}
+	
+	if len(activePartnerships) > 0 {
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		yellow.Println("🤝 ACTIVE PARTNERSHIPS")
+		fmt.Println(strings.Repeat("─", 70))
+		
+		totalMRRBoost := int64(0)
+		totalChurnReduction := 0.0
+		
+		for _, p := range activePartnerships {
+			monthsRemaining := p.Duration - (fs.Turn - p.MonthStarted)
+			fmt.Printf("• %s (%s) - %d months remaining\n", p.Partner, p.Type, monthsRemaining)
+			
+			// Show benefits based on partnership type
+			switch p.Type {
+			case "distribution":
+				fmt.Printf("  └─ MRR Boost: +$%s/mo (customer acquisition)\n", 
+					formatFounderCurrency(p.MRRBoost))
+				totalMRRBoost += p.MRRBoost
+			case "technology":
+				fmt.Printf("  └─ Churn Reduction: -%.1f%% | Product Integration Boost: +$%s/mo\n", 
+					p.ChurnReduction*100, formatFounderCurrency(p.MRRBoost))
+				totalChurnReduction += p.ChurnReduction
+				totalMRRBoost += p.MRRBoost
+			case "co-marketing":
+				fmt.Printf("  └─ MRR Boost: +$%s/mo (marketing reach)\n", 
+					formatFounderCurrency(p.MRRBoost))
+				totalMRRBoost += p.MRRBoost
+			case "data":
+				fmt.Printf("  └─ Churn Reduction: -%.1f%% | Analytics Boost: +$%s/mo\n", 
+					p.ChurnReduction*100, formatFounderCurrency(p.MRRBoost))
+				totalChurnReduction += p.ChurnReduction
+				totalMRRBoost += p.MRRBoost
+			}
+		}
+		
+		// Show cumulative benefits
+		if len(activePartnerships) > 1 {
+			fmt.Printf("\nTotal Partnership Benefits:\n")
+			if totalMRRBoost > 0 {
+				fmt.Printf("  • Combined MRR Boost: +$%s/mo\n", formatFounderCurrency(totalMRRBoost))
+			}
+			if totalChurnReduction > 0 {
+				fmt.Printf("  • Combined Churn Reduction: -%.1f%%\n", totalChurnReduction*100)
+			}
+		}
+	}
 
 	// Show team
 	fmt.Println("\n" + strings.Repeat("─", 70))
 	yellow.Println("👥 TEAM")
 	fmt.Println(strings.Repeat("─", 70))
-	fmt.Printf("Engineers: %d | Sales: %d | CS: %d | Marketing: %d\n",
+	fmt.Printf("Engineers: %d | Sales: %d | CS: %d | Marketing: %d | C-Suite: %d\n",
 		len(fs.Team.Engineers), len(fs.Team.Sales),
-		len(fs.Team.CustomerSuccess), len(fs.Team.Marketing))
+		len(fs.Team.CustomerSuccess), len(fs.Team.Marketing), len(fs.Team.Executives))
 	fmt.Printf("Monthly Team Cost: $%s\n", formatFounderCurrency(fs.MonthlyTeamCost))
+	
+	// Show infrastructure costs if there are customers
+	if fs.Customers > 0 {
+		fmt.Printf("💻 Compute Cost: $%s/mo | 📦 ODC: $%s/mo\n",
+			formatFounderCurrency(fs.MonthlyComputeCost),
+			formatFounderCurrency(fs.MonthlyODCCost))
+	}
 
 	// Show funding history
 	if len(fs.FundingRounds) > 0 {
@@ -205,10 +579,12 @@ func playFounderTurn(fs *founder.FounderState) {
 	}
 
 	// Decision menu
+	// Capture MRR before any decisions are made (for comparison)
+	preDecisionMRR := fs.MRR
 	handleFounderDecisions(fs)
 
 	// Process month
-	messages := fs.ProcessMonth()
+	messages := fs.ProcessMonthWithBaseline(preDecisionMRR)
 
 	// Display month results
 	if len(messages) > 0 {
@@ -229,9 +605,11 @@ func handleFounderDecisions(fs *founder.FounderState) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("\n" + strings.Repeat("─", 70))
-	yellow.Println("🎯 DECISIONS FOR THIS MONTH")
-	fmt.Println(strings.Repeat("─", 70))
+	// Loop until user makes an action (not just viewing data)
+	for {
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		yellow.Println("🎯 DECISIONS FOR THIS MONTH")
+		fmt.Println(strings.Repeat("─", 70))
 	
 	cyan.Println("\n[TEAM & OPERATIONS]")
 	fmt.Println("1. Hire Team Member")
@@ -249,6 +627,8 @@ func handleFounderDecisions(fs *founder.FounderState) {
 	fmt.Println("7. Start Partnership")
 	if fs.AffiliateProgram == nil {
 		fmt.Println("8. Launch Affiliate Program")
+	} else {
+		fmt.Println("8. View Affiliate Program")
 	}
 	if len(fs.Competitors) > 0 {
 		fmt.Println("9. Handle Competitors")
@@ -256,43 +636,114 @@ func handleFounderDecisions(fs *founder.FounderState) {
 	fmt.Println("10. Expand to New Market")
 	fmt.Println("11. Execute Pivot/Strategy Change")
 	
+	// Show exit option if any exits are available
+	exits := fs.GetAvailableExits()
+	hasAvailableExit := false
+	for _, exit := range exits {
+		if exit.CanExit && exit.Type != "continue" {
+			hasAvailableExit = true
+			break
+		}
+	}
+	if hasAvailableExit {
+		green := color.New(color.FgGreen, color.Bold)
+		green.Println("17. 💰 Consider Exit Options (IPO/Acquisition/Secondary)")
+	}
+	if fs.PendingOpportunity != nil {
+		green := color.New(color.FgGreen, color.Bold)
+		green.Println("12. 💡 Respond to Strategic Opportunity")
+	}
+	
+	cyan.Println("\n[VIEW DATA]")
+	fmt.Println("13. View Team Roster")
+	fmt.Println("14. View Customer Deals")
+	fmt.Println("16. View Financials & Cash Flow")
+	if fs.Customers > 0 {
+		fmt.Println("15. Solicit Customer Feedback")
+	}
+	
 	fmt.Println("\n0. Skip (Do Nothing)")
+	
+	maxChoice := "11"
+	if fs.AffiliateProgram == nil {
+		maxChoice = "13"
+	} else if len(fs.Competitors) > 0 {
+		maxChoice = "13"
+	} else {
+		maxChoice = "13"
+	}
+		fmt.Printf("\nWhat would you like to do? (0-%s): ", maxChoice)
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
 
-	fmt.Print("\nWhat would you like to do? (0-11): ")
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
+		// View options - don't advance turn, loop back to menu
+		if choice == "13" || choice == "14" || choice == "16" {
+			switch choice {
+			case "13":
+				handleViewTeamRoster(fs)
+			case "14":
+				handleViewCustomerDeals(fs)
+			case "16":
+				handleViewFinancials(fs)
+			}
+			continue // Loop back to menu
+		}
 
-	switch choice {
-	case "1":
-		handleHiring(fs)
-	case "2":
-		handleFiring(fs)
-	case "3":
-		handleMarketing(fs)
-	case "4":
-		handleFundraising(fs)
-	case "5":
-		handleBuyback(fs)
-	case "6":
-		handleBoardAndEquity(fs)
-	case "7":
-		handlePartnership(fs)
-	case "8":
-		handleAffiliateLaunch(fs)
-	case "9":
-		handleCompetitorManagement(fs)
-	case "10":
-		handleGlobalExpansion(fs)
-	case "11":
-		handlePivot(fs)
-	case "0":
-		fmt.Println("\n✓ Focusing on operations this month...")
-	default:
-		fmt.Println("\nInvalid choice, skipping...")
+		// Action options - may return true to continue (cancelled) or false to process month
+		shouldContinue := false
+		switch choice {
+		case "1":
+			shouldContinue = handleHiring(fs)
+		case "2":
+			shouldContinue = handleFiring(fs)
+		case "3":
+			shouldContinue = handleMarketing(fs)
+		case "4":
+			shouldContinue = handleFundraising(fs)
+		case "5":
+			shouldContinue = handleBuyback(fs)
+		case "6":
+			shouldContinue = handleBoardAndEquity(fs)
+		case "7":
+			shouldContinue = handlePartnership(fs)
+		case "8":
+			if fs.AffiliateProgram != nil {
+				handleViewAffiliateProgram(fs)
+				shouldContinue = true // Viewing doesn't advance
+			} else {
+				shouldContinue = handleAffiliateLaunch(fs)
+			}
+		case "9":
+			shouldContinue = handleCompetitorManagement(fs)
+		case "10":
+			shouldContinue = handleGlobalExpansion(fs)
+		case "11":
+			shouldContinue = handlePivot(fs)
+		case "12":
+			shouldContinue = handleStrategicOpportunity(fs)
+		case "15":
+			shouldContinue = handleSolicitFeedback(fs)
+		case "17":
+			shouldContinue = handleExitOptions(fs)
+		case "0":
+			fmt.Println("\n✓ Focusing on operations this month...")
+			shouldContinue = false
+		default:
+			fmt.Println("\nInvalid choice, skipping...")
+			shouldContinue = false
+		}
+		
+		// If cancelled, loop back to menu
+		if shouldContinue {
+			continue
+		}
+		
+		// Exit loop and process month
+		break
 	}
 }
 
-func handleHiring(fs *founder.FounderState) {
+func handleHiring(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
 	reader := bufio.NewReader(os.Stdin)
@@ -344,15 +795,16 @@ func handleHiring(fs *founder.FounderState) {
 		isExec = true
 	case "0":
 		fmt.Println("\nCanceled hiring")
-		return
+		return true // Cancelled, go back to menu
 	default:
 		color.Red("\nInvalid choice!")
-		return
+		return true // Invalid, go back to menu
 	}
 
 	err := fs.HireEmployee(role)
 	if err != nil {
 		color.Red("\n❌ Error: %v", err)
+		return true // Error, go back to menu
 	} else {
 		if isExec {
 			green.Printf("\n🎉 Hired a %s! (3x impact)\n", role)
@@ -367,15 +819,16 @@ func handleHiring(fs *founder.FounderState) {
 			fmt.Printf("   New runway: %d months\n", fs.CashRunwayMonths)
 		}
 	}
+	return false // Action taken
 }
 
-func handleFiring(fs *founder.FounderState) {
+func handleFiring(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	reader := bufio.NewReader(os.Stdin)
 
 	if fs.Team.TotalEmployees == 0 {
 		color.Yellow("\nYou have no employees to fire.")
-		return
+		return true
 	}
 
 	fmt.Println("\n" + strings.Repeat("─", 70))
@@ -424,10 +877,10 @@ func handleFiring(fs *founder.FounderState) {
 		role = founder.RoleCFO
 	case "0":
 		fmt.Println("\nCanceled")
-		return
+		return true
 	default:
 		color.Red("\nInvalid choice!")
-		return
+		return true
 	}
 
 	err := fs.FireEmployee(role)
@@ -441,9 +894,10 @@ func handleFiring(fs *founder.FounderState) {
 			fmt.Printf("New runway: %d months\n", fs.CashRunwayMonths)
 		}
 	}
+	return false
 }
 
-func handleMarketing(fs *founder.FounderState) {
+func handleMarketing(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	reader := bufio.NewReader(os.Stdin)
 
@@ -470,26 +924,27 @@ func handleMarketing(fs *founder.FounderState) {
 	amount, err := strconv.ParseInt(amountStr, 10, 64)
 	if err != nil || amount < 0 {
 		color.Red("\nInvalid amount!")
-		return
+		return true
 	}
 
 	if amount == 0 {
 		fmt.Println("\nCanceled")
-		return
+		return true
 	}
 
 	if amount > fs.Cash {
 		color.Red("\n❌ Not enough cash!")
-		return
+		return true
 	}
 
 	newCustomers := fs.SpendOnMarketing(amount)
 	color.Green("\n✓ Marketing campaign launched!")
 	color.Green("  Acquired %d new customers!", newCustomers)
 	fmt.Printf("  New MRR: $%s\n", formatFounderCurrency(fs.MRR))
+	return false
 }
 
-func handleFundraising(fs *founder.FounderState) {
+func handleFundraising(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	reader := bufio.NewReader(os.Stdin)
 
@@ -532,7 +987,7 @@ func handleFundraising(fs *founder.FounderState) {
 
 	if len(options) == 0 {
 		color.Yellow("\nNo more funding rounds available!")
-		return
+		return true
 	}
 
 	fmt.Print("\nWhich round? (0-3): ")
@@ -541,13 +996,13 @@ func handleFundraising(fs *founder.FounderState) {
 
 	if choice == "0" {
 		fmt.Println("\nCanceled")
-		return
+		return true
 	}
 
 	choiceNum, err := strconv.Atoi(choice)
 	if err != nil || choiceNum < 1 || choiceNum > len(options) {
 		color.Red("\nInvalid choice!")
-		return
+		return true
 	}
 
 	roundName := options[choiceNum-1]
@@ -556,7 +1011,7 @@ func handleFundraising(fs *founder.FounderState) {
 	termSheets := fs.GenerateTermSheetOptions(roundName)
 	if len(termSheets) == 0 {
 		color.Red("\n❌ Unable to generate term sheets!")
-		return
+		return true
 	}
 	
 	// Display term sheet options
@@ -580,13 +1035,13 @@ func handleFundraising(fs *founder.FounderState) {
 	
 	if termChoice == "0" {
 		fmt.Println("\nCanceled")
-		return
+		return true
 	}
 	
 	termNum, err := strconv.Atoi(termChoice)
 	if err != nil || termNum < 1 || termNum > len(termSheets) {
 		color.Red("\nInvalid choice!")
-		return
+		return true
 	}
 	
 	selectedSheet := termSheets[termNum-1]
@@ -594,7 +1049,7 @@ func handleFundraising(fs *founder.FounderState) {
 	
 	if !success {
 		color.Red("\n❌ Failed to raise funding!")
-		return
+		return true
 	}
 
 	color.Green("\n✓ Successfully raised %s!", roundName)
@@ -603,12 +1058,13 @@ func handleFundraising(fs *founder.FounderState) {
 	fmt.Printf("  Post-Money Valuation: $%s\n", formatFounderCurrency(selectedSheet.PostValuation))
 	fmt.Printf("  Equity Given: %.1f%%\n", selectedSheet.Equity)
 	fmt.Printf("  Terms: %s\n", selectedSheet.Terms)
-	fmt.Printf("  Your remaining equity: %.1f%%\n", 100.0-fs.EquityGivenAway)
+	fmt.Printf("  Your remaining equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityPool)
 	if fs.CashRunwayMonths < 0 {
 		fmt.Printf("  Runway: ∞ (profitable!)\n")
 	} else {
 		fmt.Printf("  New runway: %d months\n", fs.CashRunwayMonths)
 	}
+	return false
 }
 
 func displayAcquisitionOffer(fs *founder.FounderState, offer *founder.AcquisitionOffer) {
@@ -623,8 +1079,8 @@ func displayAcquisitionOffer(fs *founder.FounderState, offer *founder.Acquisitio
 	yellow.Printf("\n%s wants to acquire your company!\n", offer.Acquirer)
 	green.Printf("\nOffer Amount: $%s\n", formatFounderCurrency(offer.OfferAmount))
 	
-	founderPayout := int64(float64(offer.OfferAmount) * (100.0 - fs.EquityGivenAway) / 100.0)
-	green.Printf("Your Payout (%.1f%% equity): $%s\n", 100.0-fs.EquityGivenAway, formatFounderCurrency(founderPayout))
+	founderPayout := int64(float64(offer.OfferAmount) * (100.0 - fs.EquityGivenAway - fs.EquityPool) / 100.0)
+	green.Printf("Your Payout (%.1f%% equity): $%s\n", 100.0-fs.EquityGivenAway-fs.EquityPool, formatFounderCurrency(founderPayout))
 	
 	fmt.Printf("\nDue Diligence: %s\n", offer.DueDiligence)
 	fmt.Printf("Terms Quality: %s\n", offer.TermsQuality)
@@ -665,28 +1121,69 @@ func displayFounderFinalScore(fs *founder.FounderState) {
 	fmt.Println("\n" + strings.Repeat("─", 70))
 	if fs.Cash <= 0 {
 		red.Printf("OUTCOME: %s\n", outcome)
+	} else if fs.HasExited {
+		// Show exit-specific outcome
+		switch fs.ExitType {
+		case "ipo":
+			green.Printf("OUTCOME: 🏛️  IPO SUCCESS - Took company public!\n")
+		case "acquisition":
+			green.Printf("OUTCOME: 🤝 ACQUIRED - Sold to strategic buyer!\n")
+		case "secondary":
+			green.Printf("OUTCOME: 💼 SECONDARY SALE - Partial liquidity event!\n")
+		default:
+			green.Printf("OUTCOME: %s\n", outcome)
+		}
 	} else {
 		green.Printf("OUTCOME: %s\n", outcome)
 	}
 	fmt.Println(strings.Repeat("─", 70))
 
-	// Final metrics
-	fmt.Printf("\n💰 Final Cash: $%s\n", formatFounderCurrency(fs.Cash))
-	fmt.Printf("📊 Company Valuation: $%s\n", formatFounderCurrency(valuation))
-	fmt.Printf("📈 MRR: $%s\n", formatFounderCurrency(fs.MRR))
-	fmt.Printf("👥 Customers: %d\n", fs.Customers)
-	fmt.Printf("💼 Your Equity: %.1f%%\n", founderEquity)
-	
-	if founderEquity > 0 && valuation > 0 {
-		yourValue := int64(float64(valuation) * founderEquity / 100.0)
-		green.Printf("💎 Your Equity Value: $%s\n", formatFounderCurrency(yourValue))
+	// Final metrics - handle exit differently
+	if fs.HasExited {
+		magenta := color.New(color.FgMagenta, color.Bold)
+		
+		fmt.Printf("\n📅 Exit Month: %d of %d\n", fs.ExitMonth, fs.MaxTurns)
+		fmt.Printf("📊 Exit Valuation: $%s\n", formatFounderCurrency(fs.ExitValuation))
+		fmt.Printf("💼 Your Equity: %.1f%%\n", founderEquity)
+		
+		switch fs.ExitType {
+		case "ipo":
+			liquidation := int64(float64(fs.ExitValuation) * founderEquity * 0.20 / 100.0)
+			remaining := int64(float64(fs.ExitValuation) * founderEquity * 0.80 / 100.0)
+			magenta.Printf("💵 Immediate Liquidation (20%%): $%s\n", formatFounderCurrency(liquidation))
+			magenta.Printf("💎 Remaining Equity Value: $%s\n", formatFounderCurrency(remaining))
+			magenta.Printf("📈 Total Net Worth: $%s\n", formatFounderCurrency(liquidation+remaining))
+		case "acquisition":
+			payout := int64(float64(fs.ExitValuation) * founderEquity / 100.0)
+			magenta.Printf("💵 Your Payout: $%s\n", formatFounderCurrency(payout))
+		case "secondary":
+			sold := int64(float64(fs.ExitValuation) * founderEquity * 0.5 / 100.0)
+			remaining := int64(float64(fs.ExitValuation) * founderEquity * 0.5 / 100.0)
+			magenta.Printf("💵 Payout (50%% of stake): $%s\n", formatFounderCurrency(sold))
+			magenta.Printf("💎 Remaining Equity Value: $%s\n", formatFounderCurrency(remaining))
+			magenta.Printf("📈 Total Net Worth: $%s\n", formatFounderCurrency(sold+remaining))
+		}
+		
+		fmt.Printf("\n📈 Final MRR: $%s\n", formatFounderCurrency(fs.MRR))
+		fmt.Printf("👥 Customers: %d\n", fs.Customers)
+	} else {
+		fmt.Printf("\n💰 Final Cash: $%s\n", formatFounderCurrency(fs.Cash))
+		fmt.Printf("📊 Company Valuation: $%s\n", formatFounderCurrency(valuation))
+		fmt.Printf("📈 MRR: $%s\n", formatFounderCurrency(fs.MRR))
+		fmt.Printf("👥 Customers: %d\n", fs.Customers)
+		fmt.Printf("💼 Your Equity: %.1f%%\n", founderEquity)
+		
+		if founderEquity > 0 && valuation > 0 {
+			yourValue := int64(float64(valuation) * founderEquity / 100.0)
+			green.Printf("💎 Your Equity Value: $%s\n", formatFounderCurrency(yourValue))
+		}
 	}
 
 	// Team
 	fmt.Printf("\n👥 Final Team Size: %d\n", fs.Team.TotalEmployees)
-	fmt.Printf("   Engineers: %d | Sales: %d | CS: %d | Marketing: %d\n",
+	fmt.Printf("   Engineers: %d | Sales: %d | CS: %d | Marketing: %d | C-Suite: %d\n",
 		len(fs.Team.Engineers), len(fs.Team.Sales),
-		len(fs.Team.CustomerSuccess), len(fs.Team.Marketing))
+		len(fs.Team.CustomerSuccess), len(fs.Team.Marketing), len(fs.Team.Executives))
 
 	// Funding
 	if len(fs.FundingRounds) > 0 {
@@ -703,7 +1200,7 @@ func displayFounderFinalScore(fs *founder.FounderState) {
 	}
 }
 
-func handlePartnership(fs *founder.FounderState) {
+func handlePartnership(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	reader := bufio.NewReader(os.Stdin)
 
@@ -733,10 +1230,10 @@ func handlePartnership(fs *founder.FounderState) {
 		partnerType = "data"
 	case "0":
 		fmt.Println("\nCanceled")
-		return
+		return true
 	default:
 		color.Red("\nInvalid choice!")
-		return
+		return true
 	}
 
 	partnership, err := fs.StartPartnership(partnerType)
@@ -749,9 +1246,10 @@ func handlePartnership(fs *founder.FounderState) {
 		fmt.Printf("  Duration: %d months\n", partnership.Duration)
 		fmt.Printf("  Expected MRR Boost: $%s\n", formatFounderCurrency(partnership.MRRBoost))
 	}
+	return false
 }
 
-func handleAffiliateLaunch(fs *founder.FounderState) {
+func handleAffiliateLaunch(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	reader := bufio.NewReader(os.Stdin)
 
@@ -772,7 +1270,7 @@ func handleAffiliateLaunch(fs *founder.FounderState) {
 	commission, err := strconv.ParseFloat(commStr, 64)
 	if err != nil || commission < 5 || commission > 30 {
 		color.Red("\nInvalid commission rate!")
-		return
+		return true
 	}
 
 	err = fs.LaunchAffiliateProgram(commission)
@@ -783,16 +1281,17 @@ func handleAffiliateLaunch(fs *founder.FounderState) {
 		fmt.Printf("  Commission: %.1f%%\n", commission)
 		fmt.Printf("  Starting Affiliates: %d\n", fs.AffiliateProgram.Affiliates)
 	}
+	return false
 }
 
-func handleCompetitorManagement(fs *founder.FounderState) {
+func handleCompetitorManagement(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	red := color.New(color.FgRed)
 	reader := bufio.NewReader(os.Stdin)
 
 	if len(fs.Competitors) == 0 {
 		color.Yellow("\nNo active competitors at this time")
-		return
+		return true
 	}
 
 	fmt.Println("\n" + strings.Repeat("─", 70))
@@ -820,7 +1319,7 @@ func handleCompetitorManagement(fs *founder.FounderState) {
 
 	if activeCount == 0 {
 		color.Yellow("\nNo active competitors")
-		return
+		return true
 	}
 
 	fmt.Print("\nSelect competitor # to handle (0 to cancel): ")
@@ -829,7 +1328,7 @@ func handleCompetitorManagement(fs *founder.FounderState) {
 	compNum, err := strconv.Atoi(compStr)
 	if err != nil || compNum == 0 {
 		fmt.Println("\nCanceled")
-		return
+		return true
 	}
 	compIndex := compNum - 1
 
@@ -852,7 +1351,7 @@ func handleCompetitorManagement(fs *founder.FounderState) {
 		strategy = "partner"
 	default:
 		red.Println("\nInvalid choice!")
-		return
+		return true
 	}
 
 	message, err := fs.HandleCompetitor(compIndex, strategy)
@@ -861,9 +1360,10 @@ func handleCompetitorManagement(fs *founder.FounderState) {
 	} else {
 		color.Green("\n✓ %s", message)
 	}
+	return false
 }
 
-func handleGlobalExpansion(fs *founder.FounderState) {
+func handleGlobalExpansion(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	reader := bufio.NewReader(os.Stdin)
 
@@ -913,10 +1413,10 @@ func handleGlobalExpansion(fs *founder.FounderState) {
 		region = "Australia"
 	case "0":
 		fmt.Println("\nCanceled")
-		return
+		return true
 	default:
 		color.Red("\nInvalid choice!")
-		return
+		return true
 	}
 
 	market, err := fs.ExpandToMarket(region)
@@ -934,9 +1434,10 @@ func handleGlobalExpansion(fs *founder.FounderState) {
 		yellow.Println("\n⚠️  Your global churn rate increased due to operational complexity")
 		fmt.Printf("  New churn rate: %.1f%%\n", fs.CustomerChurnRate*100)
 	}
+	return false
 }
 
-func handlePivot(fs *founder.FounderState) {
+func handlePivot(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	red := color.New(color.FgRed)
 	reader := bufio.NewReader(os.Stdin)
@@ -987,7 +1488,7 @@ func handlePivot(fs *founder.FounderState) {
 		} else {
 			red.Println("\nInvalid choice!")
 		}
-		return
+		return true
 	}
 
 	fmt.Print("\nReason for pivot: ")
@@ -1002,7 +1503,7 @@ func handlePivot(fs *founder.FounderState) {
 	confirm = strings.TrimSpace(strings.ToLower(confirm))
 	if confirm != "yes" && confirm != "y" {
 		fmt.Println("\nCanceled")
-		return
+		return true
 	}
 
 	pivot, err := fs.ExecutePivot(toStrategy, reason)
@@ -1020,22 +1521,23 @@ func handlePivot(fs *founder.FounderState) {
 		fmt.Printf("  Cost: $%s\n", formatFounderCurrency(pivot.Cost))
 		fmt.Printf("  Customers Lost: %d\n", pivot.CustomersLost)
 	}
+	return false
 }
 
-func handleBuyback(fs *founder.FounderState) {
+func handleBuyback(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	reader := bufio.NewReader(os.Stdin)
 
 	if len(fs.FundingRounds) == 0 {
 		color.Yellow("\nNo funding rounds to buy back from")
-		return
+		return true
 	}
 
 	monthlyProfit := fs.MRR - fs.MonthlyTeamCost
 	if monthlyProfit <= 0 {
 		color.Red("\nMust be profitable to buy back equity")
 		fmt.Printf("Current monthly profit/loss: $%s\n", formatFounderCurrency(monthlyProfit))
-		return
+		return true
 	}
 
 	fmt.Println("\n" + strings.Repeat("─", 70))
@@ -1054,11 +1556,11 @@ func handleBuyback(fs *founder.FounderState) {
 	roundNum, err := strconv.Atoi(roundStr)
 	if err != nil || roundNum == 0 {
 		fmt.Println("\nCanceled")
-		return
+		return true
 	}
 	if roundNum < 1 || roundNum > len(fs.FundingRounds) {
 		color.Red("\nInvalid round!")
-		return
+		return true
 	}
 
 	selectedRound := fs.FundingRounds[roundNum-1]
@@ -1073,7 +1575,7 @@ func handleBuyback(fs *founder.FounderState) {
 	equity, err := strconv.ParseFloat(equityStr, 64)
 	if err != nil || equity <= 0 {
 		color.Red("\nInvalid percentage!")
-		return
+		return true
 	}
 
 	costEstimate := int64(float64(currentVal) * equity / 100.0)
@@ -1083,7 +1585,7 @@ func handleBuyback(fs *founder.FounderState) {
 	confirm = strings.TrimSpace(strings.ToLower(confirm))
 	if confirm != "yes" && confirm != "y" {
 		fmt.Println("\nCanceled")
-		return
+		return true
 	}
 
 	buyback, err := fs.BuybackEquity(selectedRound.RoundName, equity)
@@ -1092,12 +1594,15 @@ func handleBuyback(fs *founder.FounderState) {
 	} else {
 		color.Green("\n✓ Successfully bought back %.1f%% equity!", buyback.EquityBought)
 		fmt.Printf("  Paid: $%s\n", formatFounderCurrency(buyback.PricePaid))
-		fmt.Printf("  Your new ownership: %.1f%%\n", 100.0-fs.EquityGivenAway)
+		fmt.Printf("  Your new ownership: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityPool)
 	}
+	return false
 }
 
-func handleBoardAndEquity(fs *founder.FounderState) {
+func handleBoardAndEquity(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
+	cyan := color.New(color.FgCyan)
+	green := color.New(color.FgGreen)
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("\n" + strings.Repeat("─", 70))
@@ -1106,14 +1611,26 @@ func handleBoardAndEquity(fs *founder.FounderState) {
 	
 	fmt.Printf("\nCurrent Board Seats: %d\n", fs.BoardSeats)
 	fmt.Printf("Employee Equity Pool: %.1f%%\n", fs.EquityPool)
-	fmt.Printf("Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityPool)
+	fmt.Printf("Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityAllocated)
+	
+	// Show current advisors/board members
+	if len(fs.BoardMembers) > 0 {
+		cyan.Println("\n👥 CURRENT ADVISORS:")
+		for _, member := range fs.BoardMembers {
+			if member.IsActive {
+				fmt.Printf("  • %s (%s, %s) - %.2f%% equity\n", 
+					member.Name, member.Type, member.Expertise, member.EquityCost)
+			}
+		}
+	}
 
 	fmt.Println("\nOptions:")
 	fmt.Println("1. Add Board Seat (costs ~2% from equity pool)")
 	fmt.Println("2. Expand Equity Pool (dilutes you by 1-10%)")
+	green.Println("3. Add Advisor (0.25-1% equity for strategic guidance)")
 	fmt.Println("0. Cancel")
 
-	fmt.Print("\nSelect option (0-2): ")
+	fmt.Print("\nSelect option (0-3): ")
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
@@ -1138,19 +1655,319 @@ func handleBoardAndEquity(fs *founder.FounderState) {
 		pct, err := strconv.ParseFloat(pctStr, 64)
 		if err != nil || pct < 1 || pct > 10 {
 			color.Red("\nInvalid percentage!")
-			return
+			return true
 		}
 
 		fs.ExpandEquityPool(pct)
 		color.Green("\n✓ Expanded equity pool by %.1f%%", pct)
 		fmt.Printf("  New equity pool: %.1f%%\n", fs.EquityPool)
-		fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityPool)
+		fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityAllocated)
+
+	case "3":
+		handleAddAdvisor(fs)
 
 	case "0":
 		fmt.Println("\nCanceled")
+		return true
 	default:
 		color.Red("\nInvalid choice!")
+		return true
 	}
+	return false
+}
+
+func handleAddAdvisor(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	cyan := color.New(color.FgCyan)
+	reader := bufio.NewReader(os.Stdin)
+	
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("💼 ADD ADVISOR")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	cyan.Println("\nSelect Advisor Expertise:")
+	fmt.Println("1. Sales - Helps with customer acquisition & MRR growth")
+	fmt.Println("2. Product - Improves product maturity faster")
+	fmt.Println("3. Fundraising - Better terms on future rounds")
+	fmt.Println("4. Operations - Reduces costs & burn")
+	fmt.Println("5. Strategy - Reduces churn, strategic guidance")
+	fmt.Println("\n💰 Cost: $10-50k setup fee + 0.25-1% equity")
+	fmt.Println("   (50% chance of $2-8k/month retainer for less equity)")
+	fmt.Println("\n0. Cancel")
+	
+	fmt.Print("\nSelect (0-5): ")
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	var expertise string
+	switch choice {
+	case "1":
+		expertise = "sales"
+	case "2":
+		expertise = "product"
+	case "3":
+		expertise = "fundraising"
+	case "4":
+		expertise = "operations"
+	case "5":
+		expertise = "strategy"
+	case "0":
+		fmt.Println("\nCanceled")
+		return
+	default:
+		color.Red("\nInvalid choice!")
+		return
+	}
+	
+	// Generate advisor - real Silicon Valley legends & tech advisors
+	var names []string
+	switch expertise {
+	case "sales":
+		names = []string{
+			"Gary Vaynerchuk", // Gary V - marketing/sales legend
+			"Aaron Ross", // Predictable Revenue author
+			"Jill Konrath", // Sales strategist
+			"Grant Cardone", // Sales expert
+			"Mark Roberge", // Former HubSpot CRO
+		}
+	case "product":
+		names = []string{
+			"Marty Cagan", // Product management guru
+			"Julie Zhuo", // Former Facebook VP of Design
+			"Ken Norton", // Google Ventures partner
+			"April Dunford", // Positioning expert
+			"Teresa Torres", // Continuous Discovery
+		}
+	case "fundraising":
+		names = []string{
+			"Marc Andreessen", // a16z founder
+			"Naval Ravikant", // AngelList founder
+			"Jason Calacanis", // Angel investor
+			"Chris Sacca", // Lowercase Capital
+			"Cyan Banister", // Long Journey Ventures
+		}
+	case "operations":
+		names = []string{
+			"Sheryl Sandberg", // Former Facebook COO
+			"Keith Rabois", // Founders Fund
+			"Frank Slootman", // Snowflake CEO
+			"Claire Hughes Johnson", // Stripe COO
+			"Gokul Rajaram", // "Godfather of AdSense"
+		}
+	case "strategy":
+		names = []string{
+			"Reid Hoffman", // LinkedIn founder
+			"Eric Ries", // Lean Startup author
+			"Steve Blank", // Customer Development pioneer
+			"Paul Graham", // Y Combinator founder
+			"Ben Horowitz", // a16z founder
+		}
+	}
+	advisorName := names[rand.Intn(len(names))]
+	
+	// Advisor costs: equity + cash setup fee + optional monthly retainer
+	equityCost := 0.25 + rand.Float64()*0.75 // 0.25-1% equity
+	setupFee := int64(10000 + rand.Intn(40000)) // $10-50k one-time (recruiting, onboarding)
+	
+	// 50% chance of monthly retainer vs equity-only
+	var monthlyRetainer int64
+	if rand.Float64() < 0.5 {
+		monthlyRetainer = int64(2000 + rand.Intn(6000)) // $2-8k/month ongoing
+		equityCost = equityCost * 0.5 // Lower equity if paying cash
+	}
+	
+	// Check if we have enough equity
+	availableEquity := fs.EquityPool - fs.EquityAllocated
+	if availableEquity < equityCost {
+		color.Red("\n❌ Not enough equity pool! Need %.2f%%, have %.2f%% available", equityCost, availableEquity)
+		fmt.Println("   Expand your equity pool first.")
+		return
+	}
+	
+	// Check if we have enough cash for setup fee
+	if fs.Cash < setupFee {
+		color.Red("\n❌ Not enough cash! Need $%s for setup, have $%s", 
+			formatFounderCurrency(setupFee), formatFounderCurrency(fs.Cash))
+		return
+	}
+	
+	// Show cost breakdown and confirm
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Printf("💰 %s (%s Advisor)\n", advisorName, strings.Title(expertise))
+	fmt.Println(strings.Repeat("─", 70))
+	fmt.Printf("Setup Fee: $%s (one-time)\n", formatFounderCurrency(setupFee))
+	if monthlyRetainer > 0 {
+		fmt.Printf("Monthly Retainer: $%s/month\n", formatFounderCurrency(monthlyRetainer))
+	} else {
+		cyan.Println("Monthly Retainer: Equity-only (no cash)")
+	}
+	fmt.Printf("Equity: %.2f%%\n", equityCost)
+	fmt.Printf("\nAfter hiring:\n")
+	fmt.Printf("  Cash: $%s → $%s\n", 
+		formatFounderCurrency(fs.Cash), formatFounderCurrency(fs.Cash-setupFee))
+	fmt.Printf("  Your Equity: %.1f%% → %.1f%%\n", 
+		100.0-fs.EquityGivenAway-fs.EquityAllocated,
+		100.0-fs.EquityGivenAway-fs.EquityAllocated-equityCost)
+	
+	fmt.Print("\nConfirm hire? (y/n): ")
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+	
+	if confirm != "y" && confirm != "yes" {
+		fmt.Println("\nCanceled")
+		return
+	}
+	
+	// Deduct costs
+	fs.Cash -= setupFee
+	
+	advisor := founder.BoardMember{
+		Name:          advisorName,
+		Type:          "advisor",
+		Expertise:     expertise,
+		MonthAdded:    fs.Turn,
+		EquityCost:    equityCost,
+		IsActive:      true,
+		ContributionScore: 0.5, // Start neutral
+	}
+	
+	fs.BoardMembers = append(fs.BoardMembers, advisor)
+	fs.EquityAllocated += equityCost
+	fs.CapTable = append(fs.CapTable, founder.CapTableEntry{
+		Name:         advisorName,
+		Type:         "advisor",
+		Equity:       equityCost,
+		MonthGranted: fs.Turn,
+	})
+	
+	color.Green("\n✓ Added %s as %s advisor!", advisorName, expertise)
+	fmt.Printf("   Setup Cost: $%s\n", formatFounderCurrency(setupFee))
+	if monthlyRetainer > 0 {
+		fmt.Printf("   Monthly Retainer: $%s/month (added to team cost)\n", formatFounderCurrency(monthlyRetainer))
+		fs.MonthlyTeamCost += monthlyRetainer
+	}
+	fmt.Printf("   Equity Cost: %.2f%%\n", equityCost)
+	fmt.Printf("   Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityAllocated)
+	fmt.Println("\n   💡 They will provide monthly guidance based on their expertise.")
+}
+
+func handleExitOptions(fs *founder.FounderState) bool {
+	yellow := color.New(color.FgYellow)
+	cyan := color.New(color.FgCyan)
+	green := color.New(color.FgGreen)
+	red := color.New(color.FgRed)
+	reader := bufio.NewReader(os.Stdin)
+	
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("💰 EXIT OPTIONS")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	exits := fs.GetAvailableExits()
+	
+	cyan.Println("\nAvailable Exit Paths:")
+	fmt.Println()
+	
+	for i, exit := range exits {
+		if exit.Type == "continue" {
+			continue // Don't show "continue" as an exit option
+		}
+		
+		optionNum := i + 1
+		var icon string
+		switch exit.Type {
+		case "ipo":
+			icon = "🏛️ "
+		case "acquisition":
+			icon = "🤝"
+		case "secondary":
+			icon = "💼"
+		}
+		
+		fmt.Printf("%d. %s %s\n", optionNum, icon, strings.ToUpper(exit.Type))
+		fmt.Printf("   %s\n", exit.Description)
+		fmt.Printf("   Company Valuation: $%s\n", formatFounderCurrency(exit.Valuation))
+		fmt.Printf("   Your Payout: $%s (%.1f%% equity)\n", 
+			formatFounderCurrency(exit.FounderPayout),
+			(100.0-fs.EquityGivenAway-fs.EquityAllocated))
+		
+		fmt.Println("   Requirements:")
+		for _, req := range exit.Requirements {
+			if strings.Contains(req, "❌") {
+				red.Printf("     %s\n", req)
+			} else {
+				green.Printf("     %s\n", req)
+			}
+		}
+		
+		if exit.CanExit {
+			green.Printf("   ✅ AVAILABLE\n")
+		} else {
+			red.Printf("   ❌ NOT AVAILABLE YET\n")
+		}
+		fmt.Println()
+	}
+	
+	fmt.Println("0. Cancel (keep building)")
+	fmt.Print("\nSelect exit option (0-3): ")
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	if choice == "0" {
+		fmt.Println("\n✓ Continuing to build...")
+		return true // Return to menu
+	}
+	
+	choiceNum, err := strconv.Atoi(choice)
+	if err != nil || choiceNum < 1 || choiceNum > len(exits) {
+		color.Red("\nInvalid choice!")
+		return true
+	}
+	
+	selectedExit := exits[choiceNum-1]
+	
+	if !selectedExit.CanExit {
+		color.Red("\n❌ This exit is not available yet. Keep building!")
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return true
+	}
+	
+	// Confirm exit
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Printf("⚠️  CONFIRM %s\n", strings.ToUpper(selectedExit.Type))
+	fmt.Println(strings.Repeat("─", 70))
+	fmt.Printf("\nCompany Valuation: $%s\n", formatFounderCurrency(selectedExit.Valuation))
+	fmt.Printf("Your Payout: $%s\n", formatFounderCurrency(selectedExit.FounderPayout))
+	
+	if selectedExit.Type == "ipo" {
+		fmt.Println("\n📊 IPO: You'll remain as CEO of a public company.")
+		fmt.Println("   You can sell 20%% of your shares now for liquidity.")
+	} else if selectedExit.Type == "acquisition" {
+		fmt.Println("\n🤝 Acquisition: You'll likely have a 1-2 year earn-out,")
+		fmt.Println("   then you're free to start your next venture.")
+	} else if selectedExit.Type == "secondary" {
+		fmt.Println("\n💼 Secondary Sale: Selling half your stake for liquidity,")
+		fmt.Println("   but you stay on as CEO to build further.")
+	}
+	
+	red.Println("\n⚠️  THIS IS IRREVERSIBLE. THE GAME WILL END.")
+	fmt.Print("\nType 'EXIT' to confirm: ")
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToUpper(confirm))
+	
+	if confirm != "EXIT" {
+		fmt.Println("\n✓ Continuing to build...")
+		return true
+	}
+	
+	// Execute exit
+	fs.ExecuteExit(selectedExit.Type)
+	
+	green.Printf("\n🎉 Congratulations! You've exited via %s!\n", strings.ToUpper(selectedExit.Type))
+	fmt.Printf("   Company Valuation: $%s\n", formatFounderCurrency(selectedExit.Valuation))
+	fmt.Printf("   Your Payout: $%s\n\n", formatFounderCurrency(selectedExit.FounderPayout))
+	
+	return false // Game ends, process final month
 }
 
 func formatFounderCurrency(amount int64) string {
@@ -1167,5 +1984,433 @@ func formatFounderCurrency(amount int64) string {
 		result += string(digit)
 	}
 	return result
+}
+
+func handleViewCustomerDeals(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	cyan := color.New(color.FgCyan)
+	green := color.New(color.FgGreen)
+	red := color.New(color.FgRed)
+	
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("📋 CUSTOMER DEALS")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	activeCustomers := fs.GetActiveCustomers()
+	churnedCustomers := fs.GetChurnedCustomers()
+	
+	if len(activeCustomers) == 0 && len(churnedCustomers) == 0 {
+		cyan.Println("\nNo customers yet.")
+		return
+	}
+	
+	if len(activeCustomers) > 0 {
+		green.Printf("\n✓ ACTIVE CUSTOMERS (%d):\n\n", len(activeCustomers))
+		fmt.Printf("%-8s %-12s %-15s %-20s %-10s\n", "ID", "Source", "Deal Size/mo", "Term", "Added")
+		fmt.Println(strings.Repeat("─", 70))
+		for _, c := range activeCustomers {
+			termStr := "Perpetual"
+			if c.TermMonths > 0 {
+				termStr = fmt.Sprintf("%d months", c.TermMonths)
+			}
+			fmt.Printf("%-8d %-12s $%-14s %-20s Month %-3d\n",
+				c.ID, c.Source, formatFounderCurrency(c.DealSize), termStr, c.MonthAdded)
+		}
+	}
+	
+	if len(churnedCustomers) > 0 {
+		red.Printf("\n\n✗ CHURNED CUSTOMERS (%d):\n\n", len(churnedCustomers))
+		fmt.Printf("%-8s %-12s %-15s %-20s %-10s %-10s\n", "ID", "Source", "Deal Size/mo", "Term", "Added", "Churned")
+		fmt.Println(strings.Repeat("─", 70))
+		for _, c := range churnedCustomers {
+			termStr := "Perpetual"
+			if c.TermMonths > 0 {
+				termStr = fmt.Sprintf("%d months", c.TermMonths)
+			}
+			fmt.Printf("%-8d %-12s $%-14s %-20s Month %-3d Month %-3d\n",
+				c.ID, c.Source, formatFounderCurrency(c.DealSize), termStr, c.MonthAdded, c.MonthChurned)
+		}
+	}
+	
+	fmt.Println("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func handleSolicitFeedback(fs *founder.FounderState) bool {
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	cyan := color.New(color.FgCyan)
+	
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("💬 SOLICIT CUSTOMER FEEDBACK")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	if fs.Customers == 0 {
+		cyan.Println("\nYou need customers before you can solicit feedback!")
+		fmt.Println("Press 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return true
+	}
+	
+	currentMaturity := fs.ProductMaturity
+	err := fs.SolicitCustomerFeedback()
+	if err != nil {
+		color.Red("\nError: %s", err)
+		fmt.Println("Press 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return true
+	}
+	
+	improvement := fs.ProductMaturity - currentMaturity
+	green.Printf("\n✓ Customer feedback collected from %d customers!\n", fs.Customers)
+	fmt.Printf("  Product maturity improved by %.1f%%\n", improvement*100)
+	fmt.Printf("  New product maturity: %.0f%%\n", fs.ProductMaturity*100)
+	fmt.Println("\n  Note: This action takes effect this month.")
+	fmt.Println("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return false
+}
+
+func handleViewAffiliateProgram(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	cyan := color.New(color.FgCyan)
+	
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("🤝 AFFILIATE PROGRAM")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	if fs.AffiliateProgram == nil {
+		cyan.Println("\nNo affiliate program launched yet!")
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return
+	}
+	
+	prog := fs.AffiliateProgram
+	
+	fmt.Printf("\n📊 Program Stats\n")
+	fmt.Printf("Launched: Month %d (%d months ago)\n", prog.LaunchedMonth, fs.Turn-prog.LaunchedMonth)
+	fmt.Printf("Active Affiliates: %d\n", prog.Affiliates)
+	fmt.Printf("Commission Rate: %.0f%%\n", prog.Commission*100)
+	fmt.Printf("\n💰 Costs\n")
+	fmt.Printf("Setup Cost: $%s (one-time)\n", formatFounderCurrency(prog.SetupCost))
+	fmt.Printf("Monthly Platform Fee: $%s\n", formatFounderCurrency(prog.MonthlyPlatformFee))
+	fmt.Printf("\n📈 Performance\n")
+	fmt.Printf("Total Customers Acquired: %d\n", prog.CustomersAcquired)
+	fmt.Printf("Total Revenue Generated: $%s\n", formatFounderCurrency(prog.MonthlyRevenue))
+	
+	if prog.CustomersAcquired > 0 {
+		avgPerAffiliate := float64(prog.CustomersAcquired) / float64(prog.Affiliates)
+		green.Printf("\nAvg Customers per Affiliate: %.1f\n", avgPerAffiliate)
+	}
+	
+	// Show active affiliate customers
+	affiliateCustomers := 0
+	var totalAffiliateMRR int64
+	for _, c := range fs.CustomerList {
+		if c.IsActive && c.Source == "affiliate" {
+			affiliateCustomers++
+			totalAffiliateMRR += c.DealSize
+		}
+	}
+	
+	if affiliateCustomers > 0 {
+		fmt.Printf("\n📊 Current Active Affiliate Customers\n")
+		fmt.Printf("Active: %d customers\n", affiliateCustomers)
+		fmt.Printf("Monthly Recurring Revenue: $%s\n", formatFounderCurrency(totalAffiliateMRR))
+		monthlyCommission := int64(float64(totalAffiliateMRR) * prog.Commission)
+		fmt.Printf("Monthly Commission Paid: $%s\n", formatFounderCurrency(monthlyCommission))
+	}
+	
+	fmt.Println("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func handleViewFinancials(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	red := color.New(color.FgRed)
+	
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("💰 FINANCIALS & CASH FLOW")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	// Revenue
+	fmt.Println("\n📈 REVENUE")
+	fmt.Printf("MRR: $%s/month\n", formatFounderCurrency(fs.MRR))
+	if fs.AffiliateProgram != nil && fs.AffiliateMRR > 0 {
+		fmt.Printf("  ├─ Direct MRR: $%s\n", formatFounderCurrency(fs.DirectMRR))
+		fmt.Printf("  └─ Affiliate MRR: $%s\n", formatFounderCurrency(fs.AffiliateMRR))
+	}
+	
+	// After 33% deductions (taxes, fees, overhead, savings)
+	netRevenue := int64(float64(fs.MRR) * 0.67)
+	fmt.Printf("Net Revenue (after 33%% deductions): $%s/month\n", formatFounderCurrency(netRevenue))
+	fmt.Printf("  Deductions: Taxes (20%%), Processing (3%%), Overhead (5%%), Savings (5%%)\n")
+	
+	// Expenses
+	fmt.Println("\n💸 EXPENSES")
+	totalExpenses := int64(0)
+	
+	fmt.Printf("Team Salaries: $%s/month\n", formatFounderCurrency(fs.MonthlyTeamCost))
+	totalExpenses += fs.MonthlyTeamCost
+	
+	if fs.MonthlyComputeCost > 0 || fs.MonthlyODCCost > 0 {
+		infraCosts := fs.MonthlyComputeCost + fs.MonthlyODCCost
+		fmt.Printf("Infrastructure (Compute + ODC): $%s/month\n", formatFounderCurrency(infraCosts))
+		totalExpenses += infraCosts
+	}
+	
+	if fs.AffiliateProgram != nil {
+		fmt.Printf("Affiliate Program Platform Fee: $%s/month\n", formatFounderCurrency(fs.AffiliateProgram.MonthlyPlatformFee))
+		totalExpenses += fs.AffiliateProgram.MonthlyPlatformFee
+		
+		// Commission is variable, estimate based on current affiliate MRR
+		commission := int64(float64(fs.AffiliateMRR) * fs.AffiliateProgram.Commission)
+		if commission > 0 {
+			fmt.Printf("Affiliate Commissions (~%.0f%%): $%s/month\n", 
+				fs.AffiliateProgram.Commission*100, formatFounderCurrency(commission))
+			totalExpenses += commission
+		}
+	}
+	
+	// Global market costs
+	if len(fs.GlobalMarkets) > 0 {
+		var marketCosts int64
+		for _, m := range fs.GlobalMarkets {
+			marketCosts += m.MonthlyCost
+		}
+		fmt.Printf("Global Markets (%d): $%s/month\n", len(fs.GlobalMarkets), formatFounderCurrency(marketCosts))
+		totalExpenses += marketCosts
+	}
+	
+	fmt.Printf("\nTotal Monthly Expenses: $%s\n", formatFounderCurrency(totalExpenses))
+	
+	// Net Income
+	netIncome := netRevenue - totalExpenses
+	fmt.Println("\n📊 NET INCOME")
+	if netIncome > 0 {
+		green.Printf("✅ Profitable: +$%s/month\n", formatFounderCurrency(netIncome))
+	} else {
+		red.Printf("⚠️  Burning: -$%s/month\n", formatFounderCurrency(-netIncome))
+	}
+	
+	// Margins
+	if fs.MRR > 0 {
+		grossMargin := float64(netRevenue) / float64(fs.MRR) * 100
+		netMargin := float64(netIncome) / float64(fs.MRR) * 100
+		fmt.Printf("\nGross Margin: %.1f%%\n", grossMargin)
+		if netMargin > 0 {
+			green.Printf("Net Margin: %.1f%%\n", netMargin)
+		} else {
+			red.Printf("Net Margin: %.1f%%\n", netMargin)
+		}
+	}
+	
+	// Runway
+	fmt.Println("\n⏱️  RUNWAY")
+	fmt.Printf("Current Cash: $%s\n", formatFounderCurrency(fs.Cash))
+	if netIncome > 0 {
+		green.Println("Runway: Infinite (profitable)")
+		fmt.Printf("Monthly Cash Growth: +$%s\n", formatFounderCurrency(netIncome))
+	} else if netIncome < 0 {
+		burnRate := -netIncome
+		runway := int(float64(fs.Cash) / float64(burnRate))
+		if runway <= 3 {
+			red.Printf("Runway: %d months ⚠️  CRITICAL\n", runway)
+		} else if runway <= 6 {
+			yellow.Printf("Runway: %d months\n", runway)
+		} else {
+			fmt.Printf("Runway: %d months\n", runway)
+		}
+		red.Printf("Monthly Burn: -$%s\n", formatFounderCurrency(burnRate))
+	} else {
+		fmt.Println("Runway: Break-even")
+	}
+	
+	fmt.Println("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func handleViewTeamRoster(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	cyan := color.New(color.FgCyan)
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("👥 TEAM ROSTER")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	allEmployees := []founder.Employee{}
+	
+	// Collect all employees
+	for _, e := range fs.Team.Engineers {
+		allEmployees = append(allEmployees, e)
+	}
+	for _, e := range fs.Team.Sales {
+		allEmployees = append(allEmployees, e)
+	}
+	for _, e := range fs.Team.CustomerSuccess {
+		allEmployees = append(allEmployees, e)
+	}
+	for _, e := range fs.Team.Marketing {
+		allEmployees = append(allEmployees, e)
+	}
+	for _, e := range fs.Team.Executives {
+		allEmployees = append(allEmployees, e)
+	}
+	
+	if len(allEmployees) == 0 {
+		cyan.Println("\nNo employees yet!")
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return
+	}
+	
+	// Display each employee
+	for _, e := range allEmployees {
+		roleTitle := strings.ToUpper(string(e.Role))
+		if e.IsExecutive {
+			green.Printf("\n━━━ %s ━━━\n", roleTitle)
+		} else {
+			fmt.Printf("\n── %s ──\n", roleTitle)
+		}
+		
+		fmt.Printf("Name: %s\n", e.Name)
+		fmt.Printf("Salary: $%s/year ($%s/month)\n", 
+			formatFounderCurrency(e.MonthlyCost*12), formatFounderCurrency(e.MonthlyCost))
+		
+		if e.Equity > 0 {
+			vestedEquity := 0.0
+			if e.HasCliff {
+				// After cliff, equity vests monthly
+				vestedEquity = e.Equity * (float64(e.VestedMonths) / float64(e.VestingMonths))
+			}
+			
+			fmt.Printf("Equity: %.2f%% ", e.Equity)
+			if vestedEquity > 0 {
+				green.Printf("(%.2f%% vested)\n", vestedEquity)
+			} else {
+				fmt.Printf("(unvested)\n")
+			}
+			
+			if !e.HasCliff {
+				fmt.Printf("Vesting: %d/%d months until cliff (%d months remaining)\n", 
+					e.VestedMonths, e.CliffMonths, e.CliffMonths-e.VestedMonths)
+			} else {
+				fmt.Printf("Vesting: %d/%d months (%.0f%% vested)\n",
+					e.VestedMonths, e.VestingMonths, (float64(e.VestedMonths)/float64(e.VestingMonths))*100)
+			}
+		}
+		
+		fmt.Printf("Hired: Month %d", e.MonthHired)
+		if fs.Turn > e.MonthHired {
+			fmt.Printf(" (%d months ago)\n", fs.Turn-e.MonthHired)
+		} else {
+			fmt.Println(" (this month)")
+		}
+		
+		fmt.Printf("Performance: %.1fx impact\n", e.Impact)
+	}
+	
+	// Summary
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	fmt.Printf("Total Team: %d employees\n", len(allEmployees))
+	fmt.Printf("Monthly Payroll: $%s\n", formatFounderCurrency(fs.MonthlyTeamCost))
+	fmt.Printf("Total Employee Equity: %.1f%% (%.1f%% available in pool)\n", 
+		fs.EquityAllocated, fs.EquityPool-fs.EquityAllocated)
+	
+	fmt.Println("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func handleStrategicOpportunity(fs *founder.FounderState) bool {
+	if fs.PendingOpportunity == nil {
+		fmt.Println("\nNo pending opportunity")
+		return true
+	}
+	
+	opp := fs.PendingOpportunity
+	reader := bufio.NewReader(os.Stdin)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	red := color.New(color.FgRed)
+	
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("💡 STRATEGIC OPPORTUNITY DECISION")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	fmt.Printf("\n%s\n\n", opp.Title)
+	fmt.Printf("%s\n\n", opp.Description)
+	green.Printf("✓ Benefits: %s\n", opp.Benefit)
+	red.Printf("⚠️  Risks: %s\n", opp.Risk)
+	if opp.Cost > 0 {
+		fmt.Printf("\n💰 Cost: $%s", formatFounderCurrency(opp.Cost))
+		fmt.Printf(" (Current cash: $%s)\n", formatFounderCurrency(fs.Cash))
+	}
+	
+	fmt.Println("\nOptions:")
+	fmt.Println("1. Accept Opportunity")
+	fmt.Println("2. Decline Opportunity")
+	fmt.Println("0. Decide Later")
+	
+	fmt.Print("\nYour decision (0-2): ")
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	switch choice {
+	case "1":
+		// Check if can afford
+		if opp.Cost > fs.Cash {
+			color.Red("\n✗ Insufficient cash! Need $%s, have $%s", 
+				formatFounderCurrency(opp.Cost), formatFounderCurrency(fs.Cash))
+			fmt.Println("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+			return true
+		}
+		
+		// Accept opportunity - apply effects based on type
+		fs.Cash -= opp.Cost
+		
+		switch opp.Type {
+		case "press":
+			// Add customers over next few months
+			newCustomers := 5 + rand.Intn(10)
+			green.Printf("\n✓ TechCrunch feature published! Expect %d new customers over next 3 months\n", newCustomers)
+		case "enterprise_pilot":
+			if rand.Float64() < 0.8 {
+				green.Println("\n✓ Enterprise pilot successful! Major customer acquired")
+			} else {
+				yellow.Println("\n~ Enterprise pilot didn't convert, but gained valuable learnings")
+			}
+		case "bridge_round":
+			green.Println("\n✓ Bridge round closed! Cash runway extended")
+		case "conference":
+			green.Println("\n✓ Conference presentation successful! Leads and recruiting pipeline boosted")
+		case "talent":
+			green.Println("\n✓ Star engineer hired! Product development accelerated")
+		case "competitor_distress":
+			green.Println("\n✓ Competitor customers acquired! Market position strengthened")
+		}
+		
+		fs.PendingOpportunity = nil
+		
+	case "2":
+		yellow.Printf("\n✓ Declined: %s\n", opp.Title)
+		fs.PendingOpportunity = nil
+		
+	case "0":
+		fmt.Println("\n✓ Will decide later (opportunity still pending)")
+		return true
+		
+	default:
+		color.Red("\nInvalid choice")
+		return true
+	}
+	
+	fmt.Println("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return false
 }
 

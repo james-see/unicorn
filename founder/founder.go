@@ -25,19 +25,36 @@ const (
 
 // Employee represents a team member
 type Employee struct {
-	Role        EmployeeRole
-	MonthlyCost int64
-	Impact      float64 // Productivity/effectiveness multiplier
-	IsExecutive bool    // C-level executives have 3x impact, $300k/year salary
-	Equity      float64 // Equity percentage owned by this employee
+	Name          string
+	Role          EmployeeRole
+	MonthlyCost   int64
+	Impact        float64 // Productivity/effectiveness multiplier
+	IsExecutive   bool    // C-level executives have 3x impact, $300k/year salary
+	Equity        float64 // Equity percentage owned by this employee
+	VestingMonths int     // Total vesting period (typically 48 months)
+	CliffMonths   int     // Cliff period (typically 12 months)
+	VestedMonths  int     // Months vested so far
+	HasCliff      bool    // Has cliff been reached
+	MonthHired    int     // Month when hired
 }
 
 // CapTableEntry tracks individual equity ownership
 type CapTableEntry struct {
 	Name         string  // Employee name or investor round name
-	Type         string  // "employee", "executive", "investor"
+	Type         string  // "employee", "executive", "investor", "advisor"
 	Equity       float64 // Equity percentage
 	MonthGranted int     // Month when equity was granted
+}
+
+// BoardMember represents an advisor or board member
+type BoardMember struct {
+	Name              string
+	Type              string // "advisor", "investor", "independent"
+	Expertise         string // "sales", "product", "fundraising", "operations", "strategy"
+	MonthAdded        int
+	EquityCost        float64 // Equity given for this seat
+	IsActive          bool
+	ContributionScore float64 // 0-1, how valuable their advice has been
 }
 
 // Team tracks all employees
@@ -98,8 +115,9 @@ type FounderState struct {
 	TargetMarketSize   int
 	CompetitionLevel   string
 	FundingRounds      []FundingRound
-	EquityGivenAway    float64 // Total % equity given to investors
-	BoardSeats         int     // Board seats given to investors
+	EquityGivenAway    float64       // Total % equity given to investors
+	BoardSeats         int           // Board seats given to investors
+	BoardMembers       []BoardMember // All board members/advisors
 	AcquisitionOffers  []AcquisitionOffer
 	CashRunwayMonths   int
 	MonthlyTeamCost    int64 // Cached monthly team cost
@@ -116,11 +134,59 @@ type FounderState struct {
 	Competitors        []Competitor
 	GlobalMarkets      []Market
 	PivotHistory       []Pivot
-	EquityPool         float64 // Employee equity pool %
+	EquityPool         float64 // Employee equity pool % (total allocated for employees)
+	EquityAllocated    float64 // % of equity pool already allocated to employees
 	InvestorBuybacks   []Buyback
 	RandomEvents       []RandomEvent
 	ActiveEventEffects map[string]EventImpact // Events currently affecting the business
 	CapTable           []CapTableEntry        // Individual equity ownership tracking
+
+	// Infrastructure costs
+	MonthlyComputeCost int64 // Cloud compute costs (scales with customers)
+	MonthlyODCCost     int64 // Other Direct Costs (scales with customers)
+
+	// Customer tracking
+	CustomerList       []Customer // Individual customer records
+	TotalCustomersEver int        // Total customers acquired (including churned)
+	TotalChurned       int        // Total customers that have churned
+	NextCustomerID     int        // Next customer ID to assign
+
+	// Investor/Board tracking
+	BoardSentiment   string // "happy", "neutral", "concerned", "angry"
+	BoardPressure    int    // 0-100, pressure to perform
+	LastBoardMeeting int    // Turn of last board meeting
+
+	// Strategic opportunities
+	PendingOpportunity *StrategicOpportunity // Current opportunity awaiting decision
+
+	// Exit tracking
+	HasExited     bool
+	ExitType      string // "ipo", "acquisition", "secondary", "time_limit"
+	ExitValuation int64
+	ExitMonth     int
+}
+
+// Customer represents an individual customer deal
+type Customer struct {
+	ID           int     // Unique customer ID
+	Source       string  // "direct", "affiliate", "partnership", "market"
+	DealSize     int64   // Monthly recurring revenue for this customer
+	TermMonths   int     // Contract term in months (0 = perpetual/auto-renew)
+	MonthAdded   int     // Turn when customer was acquired
+	MonthChurned int     // Turn when customer churned (0 if still active)
+	IsActive     bool    // Whether customer is currently active
+	HealthScore  float64 // 0-1, likelihood to churn (1=healthy, 0=churning soon)
+}
+
+// StrategicOpportunity represents a one-time strategic choice
+type StrategicOpportunity struct {
+	Type        string // "press", "enterprise_pilot", "bridge_round", "acquisition_offer", "conference"
+	Title       string
+	Description string
+	Cost        int64
+	Benefit     string
+	Risk        string
+	ExpiresIn   int // Months until opportunity expires
 }
 
 // FundingRound represents a completed fundraise
@@ -150,6 +216,16 @@ type AcquisitionOffer struct {
 	Month        int
 	DueDiligence string // "bad", "normal", "good"
 	TermsQuality string // "poor", "good", "excellent"
+}
+
+// ExitOption represents different ways to exit the company
+type ExitOption struct {
+	Type          string // "ipo", "acquisition", "secondary", "continue"
+	Valuation     int64
+	FounderPayout int64 // How much founder gets after dilution
+	Description   string
+	Requirements  []string
+	CanExit       bool
 }
 
 // Partnership represents a strategic partnership
@@ -271,8 +347,24 @@ func LoadFounderStartups(filename string) ([]StartupTemplate, error) {
 }
 
 // generateDealSize creates a variable deal size based on avg, with realistic distribution
-// Returns a deal size between 50% and 200% of avg, weighted toward avg
-func generateDealSize(avgDealSize int64) int64 {
+// Returns a deal size between 50% and 200% of avg, weighted toward avg, with category-based caps
+func generateDealSize(avgDealSize int64, category string) int64 {
+	// If avgDealSize is 0 (no customers yet), use category-based defaults
+	if avgDealSize == 0 {
+		switch category {
+		case "SaaS":
+			avgDealSize = 1000 // Default $1k/month for SaaS
+		case "DeepTech":
+			avgDealSize = 5000 // Default $5k/month for DeepTech
+		case "GovTech":
+			avgDealSize = 2000 // Default $2k/month for GovTech
+		case "Hardware":
+			avgDealSize = 3000 // Default $3k/month for Hardware
+		default:
+			avgDealSize = 1000 // Default $1k/month
+		}
+	}
+
 	// Use normal distribution approximation: 70% chance within ±30%, 30% chance outside
 	// Most deals cluster around avg, but some are much larger/smaller
 	var dealSize int64
@@ -299,7 +391,138 @@ func generateDealSize(avgDealSize int64) int64 {
 		dealSize = avgDealSize / 10
 	}
 
+	// Apply category-based maximum caps (per month)
+	var maxDealSize int64
+	switch category {
+	case "SaaS":
+		// Software: Max $83k/month (million dollar annual license)
+		maxDealSize = 83000
+	case "DeepTech":
+		// Hardware/Physical: Max $100k/month (could be per unit for expensive items)
+		maxDealSize = 100000
+	case "GovTech":
+		// Government contracts: Can be larger, but cap at $200k/month
+		maxDealSize = 200000
+	case "Hardware":
+		// Physical hardware: Max $100k/month per unit
+		maxDealSize = 100000
+	default:
+		// Default cap: $100k/month for unknown types
+		maxDealSize = 100000
+	}
+
+	// Cap the deal size at the maximum
+	if dealSize > maxDealSize {
+		dealSize = maxDealSize
+	}
+
 	return dealSize
+}
+
+// addCustomer adds a new customer to the tracking system
+func (fs *FounderState) addCustomer(dealSize int64, source string) Customer {
+	// Determine if contract is perpetual (80% chance) or fixed term (20% chance)
+	termMonths := 0 // Default to perpetual
+	if rand.Float64() < 0.2 {
+		// Fixed term contracts: 6, 12, 24, or 36 months
+		terms := []int{6, 12, 24, 36}
+		termMonths = terms[rand.Intn(len(terms))]
+	}
+
+	// Initial health score based on product maturity and source
+	healthScore := 0.5 + (fs.ProductMaturity * 0.3) // Base: 0.5-0.8
+	if source == "affiliate" {
+		healthScore -= 0.1 // Affiliates slightly less sticky
+	}
+	healthScore = math.Min(1.0, math.Max(0.1, healthScore))
+
+	customer := Customer{
+		ID:           fs.NextCustomerID,
+		Source:       source,
+		DealSize:     dealSize,
+		TermMonths:   termMonths,
+		MonthAdded:   fs.Turn,
+		MonthChurned: 0,
+		IsActive:     true,
+		HealthScore:  healthScore,
+	}
+
+	fs.CustomerList = append(fs.CustomerList, customer)
+	fs.NextCustomerID++
+	fs.TotalCustomersEver++
+
+	return customer
+}
+
+// churnCustomer marks a customer as churned
+func (fs *FounderState) churnCustomer(customerID int) {
+	for i := range fs.CustomerList {
+		if fs.CustomerList[i].ID == customerID && fs.CustomerList[i].IsActive {
+			fs.CustomerList[i].IsActive = false
+			fs.CustomerList[i].MonthChurned = fs.Turn
+			fs.TotalChurned++
+			break
+		}
+	}
+}
+
+// GetActiveCustomers returns all currently active customers
+func (fs *FounderState) GetActiveCustomers() []Customer {
+	var active []Customer
+	for _, c := range fs.CustomerList {
+		if c.IsActive {
+			active = append(active, c)
+		}
+	}
+	return active
+}
+
+// GetChurnedCustomers returns all churned customers
+func (fs *FounderState) GetChurnedCustomers() []Customer {
+	var churned []Customer
+	for _, c := range fs.CustomerList {
+		if !c.IsActive {
+			churned = append(churned, c)
+		}
+	}
+	return churned
+}
+
+// syncMRR ensures MRR is always the sum of DirectMRR + AffiliateMRR
+// syncMRR recalculates MRR from CustomerList (single source of truth)
+func (fs *FounderState) syncMRR() {
+	var directMRR int64
+	var affiliateMRR int64
+	var directCount int
+	var affiliateCount int
+
+	// Recalculate from actual customer list to prevent accumulation errors
+	for _, c := range fs.CustomerList {
+		if !c.IsActive {
+			continue
+		}
+
+		if c.Source == "affiliate" {
+			affiliateMRR += c.DealSize
+			affiliateCount++
+		} else {
+			// "direct", "partnership", "market" all count as direct
+			directMRR += c.DealSize
+			directCount++
+		}
+	}
+
+	fs.DirectMRR = directMRR
+	fs.AffiliateMRR = affiliateMRR
+	fs.MRR = directMRR + affiliateMRR
+	fs.DirectCustomers = directCount
+	fs.AffiliateCustomers = affiliateCount
+	fs.Customers = directCount + affiliateCount
+
+	// Recalculate average deal size
+	if fs.Customers > 0 {
+		fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+	}
 }
 
 // updateDealSizeRange updates min/max deal size tracking
@@ -334,8 +557,8 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		CustomerChurnRate:  template.BaseChurnRate,
 		BaseCAC:            template.BaseCAC,
 		Turn:               1,
-		MaxTurns:           60,  // 5 years
-		ProductMaturity:    0.3, // Start at 30% product maturity
+		MaxTurns:           60,                         // 5 years
+		ProductMaturity:    0.20 + rand.Float64()*0.25, // Randomize between 20-45% product maturity
 		MarketPenetration:  float64(template.InitialCustomers) / float64(template.TargetMarketSize),
 		TargetMarketSize:   template.TargetMarketSize,
 		CompetitionLevel:   template.CompetitionLevel,
@@ -347,26 +570,65 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		GlobalMarkets:      []Market{},
 		PivotHistory:       []Pivot{},
 		EquityPool:         10.0, // Start with 10% equity pool for employees
+		EquityAllocated:    0.0,  // Track allocated equity separately
 		InvestorBuybacks:   []Buyback{},
 		RandomEvents:       []RandomEvent{},
 		ActiveEventEffects: make(map[string]EventImpact),
 		EquityGivenAway:    0.0,
-		BoardSeats:         1,     // Founder starts with 1 board seat
-		MonthlyGrowthRate:  0.10,  // Start with 10% monthly growth
-		FounderSalary:      12500, // $150k/year
+		BoardSeats:         1,               // Founder starts with 1 board seat
+		BoardMembers:       []BoardMember{}, // Start with no advisors
+		MonthlyGrowthRate:  0.10,            // Start with 10% monthly growth
+		FounderSalary:      12500,           // $150k/year
 		CapTable:           []CapTableEntry{},
+
+		// Initialize infrastructure costs
+		MonthlyComputeCost: 0,
+		MonthlyODCCost:     0,
+
+		// Initialize customer tracking
+		CustomerList:       []Customer{},
+		TotalCustomersEver: template.InitialCustomers,
+		TotalChurned:       0,
+		NextCustomerID:     1,
+
+		// Initialize board tracking
+		BoardSentiment:     "",
+		BoardPressure:      0,
+		LastBoardMeeting:   0,
+		PendingOpportunity: nil,
+
+		HasExited:     false,
+		ExitType:      "",
+		ExitValuation: 0,
+		ExitMonth:     0,
 	}
 
-	// Add randomness to initial cash (±20%)
-	cashVariance := 0.20
-	cashMultiplier := 1.0 + (rand.Float64()*cashVariance*2 - cashVariance) // 0.8 to 1.2
-	fs.Cash = int64(float64(fs.Cash) * cashMultiplier)
+	// Add randomness to initial cash (±20%) - only if not already randomized
+	// (If randomized in UI, use that value; otherwise randomize here)
+	if fs.Cash == template.InitialCash {
+		cashVariance := 0.20
+		cashMultiplier := 1.0 + (rand.Float64()*cashVariance*2 - cashVariance) // 0.8 to 1.2
+		fs.Cash = int64(float64(fs.Cash) * cashMultiplier)
+	}
 
-	// Add randomness to competition level
+	// Competition level should already be randomized from UI, but if not, randomize it
 	competitionLevels := []string{"low", "medium", "high", "very_high"}
-	if rand.Float64() < 0.3 { // 30% chance to randomize competition level
+	if fs.CompetitionLevel == template.CompetitionLevel {
+		// Only randomize if it's still the original template value
 		fs.CompetitionLevel = competitionLevels[rand.Intn(len(competitionLevels))]
 	}
+
+	// Calculate initial churn based on product maturity
+	// Lower maturity = higher churn
+	// Formula: baseChurn = (1.0 - ProductMaturity) * 0.65 + 0.05
+	// At 25% maturity: (1.0 - 0.25) * 0.65 + 0.05 = 0.5375 ≈ 54% churn
+	// At 45% maturity: (1.0 - 0.45) * 0.65 + 0.05 = 0.4075 ≈ 41% churn
+	// At 100% maturity: (1.0 - 1.0) * 0.65 + 0.05 = 0.05 = 5% churn (minimum)
+	baseChurnFromMaturity := (1.0-fs.ProductMaturity)*0.65 + 0.05
+	// Add some variation (±10%)
+	churnVariation := -0.10 + rand.Float64()*0.20 // -10% to +10%
+	fs.CustomerChurnRate = baseChurnFromMaturity * (1.0 + churnVariation)
+	fs.ChurnRate = fs.CustomerChurnRate
 
 	// Calculate initial effective CAC
 	fs.UpdateCAC()
@@ -384,8 +646,8 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 	totalInitialEmployees := template.InitialTeam["engineers"] + template.InitialTeam["sales"] +
 		template.InitialTeam["customer_success"] + template.InitialTeam["marketing"]
 
-	// Calculate total equity for initial employees (1-2% each)
-	equityPerEmployee := 1.0 + rand.Float64()*1.0 // 1-2% per employee
+	// Calculate total equity for initial employees (0.5-1.5% each)
+	equityPerEmployee := 0.5 + rand.Float64()*1.0 // 0.5-1.5% per employee
 	totalEmployeeEquity := float64(totalInitialEmployees) * equityPerEmployee
 
 	// Ensure we don't exceed equity pool
@@ -394,19 +656,33 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		totalEmployeeEquity = fs.EquityPool
 	}
 
-	fs.EquityPool -= totalEmployeeEquity
+	// Track allocated equity (deducted from founder's ownership)
+	fs.EquityAllocated = totalEmployeeEquity
+
+	// Generate employee names
+	engineerNames := []string{"Alex Chen", "Jordan Smith", "Taylor Kim", "Morgan Lee", "Casey Park"}
+	salesNames := []string{"Sam Rivera", "Riley Cooper", "Jamie Foster", "Drew Mitchell", "Quinn Baker"}
+	csNames := []string{"Avery Thompson", "Dakota Reed", "Skylar Hayes", "River Martinez", "Phoenix Adams"}
+	marketingNames := []string{"Sage Wilson", "Rowan Clark", "Eden Wright", "Blake Turner", "Finley Ross"}
 
 	employeeIdx := 0
 	for i := range fs.Team.Engineers {
+		name := engineerNames[i%len(engineerNames)]
 		fs.Team.Engineers[i] = Employee{
-			Role:        RoleEngineer,
-			MonthlyCost: avgSalary / 12,
-			Impact:      0.8 + rand.Float64()*0.4, // 0.8-1.2x impact
-			IsExecutive: false,
-			Equity:      equityPerEmployee,
+			Name:          name,
+			Role:          RoleEngineer,
+			MonthlyCost:   avgSalary / 12,
+			Impact:        0.8 + rand.Float64()*0.4, // 0.8-1.2x impact
+			IsExecutive:   false,
+			Equity:        equityPerEmployee,
+			VestingMonths: 48, // 4 year vesting
+			CliffMonths:   12, // 1 year cliff
+			VestedMonths:  0,
+			HasCliff:      false,
+			MonthHired:    1,
 		}
 		fs.CapTable = append(fs.CapTable, CapTableEntry{
-			Name:         fmt.Sprintf("Engineer %d", employeeIdx+1),
+			Name:         name,
 			Type:         "employee",
 			Equity:       equityPerEmployee,
 			MonthGranted: 1,
@@ -414,15 +690,22 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		employeeIdx++
 	}
 	for i := range fs.Team.Sales {
+		name := salesNames[i%len(salesNames)]
 		fs.Team.Sales[i] = Employee{
-			Role:        RoleSales,
-			MonthlyCost: avgSalary / 12,
-			Impact:      0.8 + rand.Float64()*0.4,
-			IsExecutive: false,
-			Equity:      equityPerEmployee,
+			Name:          name,
+			Role:          RoleSales,
+			MonthlyCost:   avgSalary / 12,
+			Impact:        0.8 + rand.Float64()*0.4,
+			IsExecutive:   false,
+			Equity:        equityPerEmployee,
+			VestingMonths: 48,
+			CliffMonths:   12,
+			VestedMonths:  0,
+			HasCliff:      false,
+			MonthHired:    1,
 		}
 		fs.CapTable = append(fs.CapTable, CapTableEntry{
-			Name:         fmt.Sprintf("Sales Rep %d", employeeIdx+1),
+			Name:         name,
 			Type:         "employee",
 			Equity:       equityPerEmployee,
 			MonthGranted: 1,
@@ -430,15 +713,22 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		employeeIdx++
 	}
 	for i := range fs.Team.CustomerSuccess {
+		name := csNames[i%len(csNames)]
 		fs.Team.CustomerSuccess[i] = Employee{
-			Role:        RoleCustomerSuccess,
-			MonthlyCost: avgSalary / 12,
-			Impact:      0.8 + rand.Float64()*0.4,
-			IsExecutive: false,
-			Equity:      equityPerEmployee,
+			Name:          name,
+			Role:          RoleCustomerSuccess,
+			MonthlyCost:   avgSalary / 12,
+			Impact:        0.8 + rand.Float64()*0.4,
+			IsExecutive:   false,
+			Equity:        equityPerEmployee,
+			VestingMonths: 48,
+			CliffMonths:   12,
+			VestedMonths:  0,
+			HasCliff:      false,
+			MonthHired:    1,
 		}
 		fs.CapTable = append(fs.CapTable, CapTableEntry{
-			Name:         fmt.Sprintf("CS Rep %d", employeeIdx+1),
+			Name:         name,
 			Type:         "employee",
 			Equity:       equityPerEmployee,
 			MonthGranted: 1,
@@ -446,15 +736,22 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		employeeIdx++
 	}
 	for i := range fs.Team.Marketing {
+		name := marketingNames[i%len(marketingNames)]
 		fs.Team.Marketing[i] = Employee{
-			Role:        RoleMarketing,
-			MonthlyCost: avgSalary / 12,
-			Impact:      0.8 + rand.Float64()*0.4,
-			IsExecutive: false,
-			Equity:      equityPerEmployee,
+			Name:          name,
+			Role:          RoleMarketing,
+			MonthlyCost:   avgSalary / 12,
+			Impact:        0.8 + rand.Float64()*0.4,
+			IsExecutive:   false,
+			Equity:        equityPerEmployee,
+			VestingMonths: 48,
+			CliffMonths:   12,
+			VestedMonths:  0,
+			HasCliff:      false,
+			MonthHired:    1,
 		}
 		fs.CapTable = append(fs.CapTable, CapTableEntry{
-			Name:         fmt.Sprintf("Marketer %d", employeeIdx+1),
+			Name:         name,
 			Type:         "employee",
 			Equity:       equityPerEmployee,
 			MonthGranted: 1,
@@ -515,12 +812,154 @@ func (fs *FounderState) CalculateRunway() {
 
 // IsGameOver checks if the game has ended
 func (fs *FounderState) IsGameOver() bool {
-	return fs.Cash <= 0 || fs.Turn > fs.MaxTurns
+	return fs.Cash <= 0 || fs.Turn > fs.MaxTurns || fs.HasExited
+}
+
+// GetAvailableExits returns possible exit options based on current state
+func (fs *FounderState) GetAvailableExits() []ExitOption {
+	var exits []ExitOption
+	founderEquity := (100.0 - fs.EquityGivenAway - fs.EquityAllocated) / 100.0
+
+	// Calculate current valuation (simplified: ARR * multiple based on growth/profitability)
+	arr := fs.MRR * 12
+	multiple := 10.0                 // Base multiple
+	if fs.MonthlyGrowthRate > 0.05 { // >5% monthly growth
+		multiple += 5.0
+	}
+	if fs.MRR > fs.MonthlyTeamCost { // Profitable
+		multiple += 3.0
+	}
+	currentValuation := int64(float64(arr) * multiple)
+
+	// 1. IPO Option
+	ipoReqs := []string{}
+	canIPO := true
+
+	if arr < 20000000 { // $20M ARR minimum
+		ipoReqs = append(ipoReqs, fmt.Sprintf("❌ Need $20M ARR (currently $%s)", formatCurrency(arr)))
+		canIPO = false
+	} else {
+		ipoReqs = append(ipoReqs, "✓ $20M+ ARR")
+	}
+
+	if len(fs.FundingRounds) < 2 {
+		ipoReqs = append(ipoReqs, "❌ Need at least Series A funding")
+		canIPO = false
+	} else {
+		ipoReqs = append(ipoReqs, "✓ Multiple funding rounds")
+	}
+
+	if fs.MonthlyGrowthRate < 0.03 { // <3% monthly = <40% YoY
+		ipoReqs = append(ipoReqs, "❌ Need 40%+ YoY growth")
+		canIPO = false
+	} else {
+		ipoReqs = append(ipoReqs, "✓ Strong growth rate")
+	}
+
+	ipoValuation := int64(float64(currentValuation) * 1.3)                 // 30% IPO premium
+	ipoFounderPayout := int64(float64(ipoValuation) * founderEquity * 0.2) // Can sell 20% at IPO
+
+	exits = append(exits, ExitOption{
+		Type:          "ipo",
+		Valuation:     ipoValuation,
+		FounderPayout: ipoFounderPayout,
+		Description:   "Take company public on NASDAQ. Provides liquidity but you remain CEO.",
+		Requirements:  ipoReqs,
+		CanExit:       canIPO,
+	})
+
+	// 2. Strategic Acquisition
+	acqReqs := []string{}
+	canAcquire := true
+
+	if arr < 5000000 { // $5M ARR minimum
+		acqReqs = append(acqReqs, fmt.Sprintf("❌ Need $5M ARR (currently $%s)", formatCurrency(arr)))
+		canAcquire = false
+	} else {
+		acqReqs = append(acqReqs, "✓ $5M+ ARR")
+	}
+
+	if fs.Customers < 50 {
+		acqReqs = append(acqReqs, fmt.Sprintf("❌ Need 50+ customers (currently %d)", fs.Customers))
+		canAcquire = false
+	} else {
+		acqReqs = append(acqReqs, "✓ Significant customer base")
+	}
+
+	acqValuation := int64(float64(currentValuation) * 1.1) // 10% acquisition premium
+	acqFounderPayout := int64(float64(acqValuation) * founderEquity)
+
+	exits = append(exits, ExitOption{
+		Type:          "acquisition",
+		Valuation:     acqValuation,
+		FounderPayout: acqFounderPayout,
+		Description:   "Sell company to strategic acquirer. Full liquidity, but you're done.",
+		Requirements:  acqReqs,
+		CanExit:       canAcquire,
+	})
+
+	// 3. Secondary Sale (Private Equity)
+	secondaryReqs := []string{}
+	canSecondary := true
+
+	if arr < 10000000 {
+		secondaryReqs = append(secondaryReqs, fmt.Sprintf("❌ Need $10M ARR (currently $%s)", formatCurrency(arr)))
+		canSecondary = false
+	} else {
+		secondaryReqs = append(secondaryReqs, "✓ $10M+ ARR")
+	}
+
+	netIncome := fs.MRR - fs.MonthlyTeamCost - fs.MonthlyComputeCost - fs.MonthlyODCCost
+	if netIncome < 0 {
+		secondaryReqs = append(secondaryReqs, "❌ Must be profitable")
+		canSecondary = false
+	} else {
+		secondaryReqs = append(secondaryReqs, "✓ Profitable")
+	}
+
+	secondaryValuation := currentValuation
+	secondaryFounderPayout := int64(float64(secondaryValuation) * founderEquity * 0.5) // Sell 50% of your stake
+
+	exits = append(exits, ExitOption{
+		Type:          "secondary",
+		Valuation:     secondaryValuation,
+		FounderPayout: secondaryFounderPayout,
+		Description:   "Sell 50% of your shares to private equity. Partial liquidity, stay as CEO.",
+		Requirements:  secondaryReqs,
+		CanExit:       canSecondary,
+	})
+
+	// 4. Continue building
+	exits = append(exits, ExitOption{
+		Type:          "continue",
+		Valuation:     currentValuation,
+		FounderPayout: 0,
+		Description:   "Keep building. Your current company value.",
+		Requirements:  []string{"No requirements - always available"},
+		CanExit:       true,
+	})
+
+	return exits
+}
+
+// ExecuteExit processes an exit decision
+func (fs *FounderState) ExecuteExit(exitType string) {
+	fs.HasExited = true
+	fs.ExitType = exitType
+	fs.ExitMonth = fs.Turn
+
+	exits := fs.GetAvailableExits()
+	for _, exit := range exits {
+		if exit.Type == exitType {
+			fs.ExitValuation = exit.Valuation
+			break
+		}
+	}
 }
 
 // GetFinalScore calculates the final outcome
 func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founderEquity float64) {
-	founderEquity = 100.0 - fs.EquityGivenAway - fs.EquityPool
+	founderEquity = 100.0 - fs.EquityGivenAway - fs.EquityAllocated
 
 	// Calculate final valuation based on MRR
 	if fs.MRR > 0 {
@@ -550,6 +989,31 @@ func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founde
 	}
 
 	return outcome, valuation, founderEquity
+}
+
+// RecalculateChurnRate updates the displayed churn rate based on product maturity and CS team
+func (fs *FounderState) RecalculateChurnRate() {
+	// Calculate base churn from product maturity
+	baseChurnFromMaturity := (1.0-fs.ProductMaturity)*0.65 + 0.05
+	baseChurnFromMaturity = math.Max(0.05, math.Min(0.70, baseChurnFromMaturity))
+	baseChurn := baseChurnFromMaturity
+
+	// CS team reduces churn
+	// COO counts as 3x CS reps
+	csImpact := 0.0
+	for _, cs := range fs.Team.CustomerSuccess {
+		csImpact += (cs.Impact * 0.02) // Each CS rep reduces churn by ~2%
+	}
+	for _, exec := range fs.Team.Executives {
+		if exec.Role == RoleCOO {
+			csImpact += (exec.Impact * 0.02) // COO has 3x impact already built into Impact field
+		}
+	}
+
+	// Calculate effective churn rate (after CS team impact)
+	actualChurn := math.Max(0.01, baseChurn-csImpact)
+	fs.CustomerChurnRate = actualChurn
+	fs.ChurnRate = fs.CustomerChurnRate
 }
 
 // HireEmployee adds a new team member
@@ -624,6 +1088,12 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 
 	fs.CalculateTeamCost()
 	fs.CalculateRunway()
+
+	// Recalculate churn rate if hiring CS or COO (affects churn)
+	if role == RoleCustomerSuccess || role == RoleCOO {
+		fs.RecalculateChurnRate()
+	}
+
 	return nil
 }
 
@@ -638,6 +1108,12 @@ func (fs *FounderState) FireEmployee(role EmployeeRole) error {
 				fs.Team.Executives = append(fs.Team.Executives[:i], fs.Team.Executives[i+1:]...)
 				fs.CalculateTeamCost()
 				fs.CalculateRunway()
+
+				// Recalculate churn rate if firing COO (affects churn)
+				if role == RoleCOO {
+					fs.RecalculateChurnRate()
+				}
+
 				return nil
 			}
 		}
@@ -675,52 +1151,42 @@ func (fs *FounderState) FireEmployee(role EmployeeRole) error {
 
 	fs.CalculateTeamCost()
 	fs.CalculateRunway()
+
+	// Recalculate churn rate if firing CS (affects churn)
+	if role == RoleCustomerSuccess {
+		fs.RecalculateChurnRate()
+	}
+
 	return nil
 }
 
 // GenerateTermSheetOptions creates multiple term sheet options for a funding round
 func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOption {
-	// Calculate base valuation based on metrics
-	baseValuation := int64(float64(fs.MRR) * 12 * 10) // 10x ARR
-
-	// Adjust based on growth and metrics
-	if fs.MonthlyGrowthRate > 0.20 {
-		baseValuation = int64(float64(baseValuation) * 1.5)
-	}
-	if fs.ProductMaturity > 0.7 {
-		baseValuation = int64(float64(baseValuation) * 1.2)
-	}
-	if fs.Customers < 10 {
-		baseValuation = int64(float64(baseValuation) * 0.5)
-	}
-
-	// Minimum valuations by round
-	var minValuation, baseRaise int64
+	// Use fixed equity percentages per round (industry standard)
+	// Then calculate valuations from those percentages
+	var baseEquityPercent float64
+	var baseRaise int64
 	switch roundName {
 	case "Seed":
-		minValuation = 3000000
-		baseRaise = 2000000
+		baseEquityPercent = 12.0 // 12% base equity for seed
+		baseRaise = 2000000      // $2M base raise
 	case "Series A":
-		minValuation = 15000000
-		baseRaise = 10000000
+		baseEquityPercent = 22.0 // 22% base equity for Series A
+		baseRaise = 10000000     // $10M base raise
 	case "Series B":
-		minValuation = 50000000
-		baseRaise = 30000000
+		baseEquityPercent = 18.0 // 18% base equity for Series B
+		baseRaise = 30000000     // $30M base raise
 	default:
 		return []TermSheetOption{}
-	}
-
-	if baseValuation < minValuation {
-		baseValuation = minValuation
 	}
 
 	options := []TermSheetOption{}
 
 	// Option 1: Less money, founder-friendly (lower dilution)
 	option1Amount := int64(float64(baseRaise) * 0.7)
-	option1PreVal := int64(float64(baseValuation) * 1.1) // 10% higher pre-money
-	option1PostVal := option1PreVal + option1Amount
-	option1Equity := (float64(option1Amount) / float64(option1PostVal)) * 100
+	option1Equity := baseEquityPercent * 0.85 // 85% of base (lower dilution)
+	option1PostVal := int64(float64(option1Amount) / (option1Equity / 100.0))
+	option1PreVal := option1PostVal - option1Amount
 	options = append(options, TermSheetOption{
 		Amount:        option1Amount,
 		PostValuation: option1PostVal,
@@ -732,9 +1198,9 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 
 	// Option 2: Standard terms (balanced)
 	option2Amount := baseRaise
-	option2PreVal := baseValuation
-	option2PostVal := option2PreVal + option2Amount
-	option2Equity := (float64(option2Amount) / float64(option2PostVal)) * 100
+	option2Equity := baseEquityPercent // Base equity percentage
+	option2PostVal := int64(float64(option2Amount) / (option2Equity / 100.0))
+	option2PreVal := option2PostVal - option2Amount
 	options = append(options, TermSheetOption{
 		Amount:        option2Amount,
 		PostValuation: option2PostVal,
@@ -746,9 +1212,9 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 
 	// Option 3: More money, higher dilution
 	option3Amount := int64(float64(baseRaise) * 1.4)
-	option3PreVal := int64(float64(baseValuation) * 0.9) // 10% lower pre-money
-	option3PostVal := option3PreVal + option3Amount
-	option3Equity := (float64(option3Amount) / float64(option3PostVal)) * 100
+	option3Equity := baseEquityPercent * 1.15 // 15% more equity (higher dilution)
+	option3PostVal := int64(float64(option3Amount) / (option3Equity / 100.0))
+	option3PreVal := option3PostVal - option3Amount
 	options = append(options, TermSheetOption{
 		Amount:        option3Amount,
 		PostValuation: option3PostVal,
@@ -760,9 +1226,9 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 
 	// Option 4: Maximum money, investor-heavy terms
 	option4Amount := int64(float64(baseRaise) * 1.8)
-	option4PreVal := int64(float64(baseValuation) * 0.75) // 25% lower pre-money
-	option4PostVal := option4PreVal + option4Amount
-	option4Equity := (float64(option4Amount) / float64(option4PostVal)) * 100
+	option4Equity := baseEquityPercent * 1.35 // 35% more equity (investor-heavy)
+	option4PostVal := int64(float64(option4Amount) / (option4Equity / 100.0))
+	option4PreVal := option4PostVal - option4Amount
 	options = append(options, TermSheetOption{
 		Amount:        option4Amount,
 		PostValuation: option4PostVal,
@@ -854,18 +1320,44 @@ func (fs *FounderState) SpendOnMarketing(amount int64) int {
 	newCustomers := int(amount / fs.CustomerAcquisitionCost)
 
 	// Calculate MRR with variable deal sizes
+	// Use category-based defaults if AvgDealSize is 0 (no customers yet)
+	baseDealSize := fs.AvgDealSize
+	if baseDealSize == 0 {
+		switch fs.Category {
+		case "SaaS":
+			baseDealSize = 1000 // Default $1k/month for SaaS
+		case "DeepTech":
+			baseDealSize = 5000 // Default $5k/month for DeepTech
+		case "GovTech":
+			baseDealSize = 2000 // Default $2k/month for GovTech
+		case "Hardware":
+			baseDealSize = 3000 // Default $3k/month for Hardware
+		default:
+			baseDealSize = 1000 // Default $1k/month
+		}
+	}
+
 	var totalMRR int64
+	var dealSizes []int64 // Store deal sizes for customer tracking
 	for i := 0; i < newCustomers; i++ {
-		dealSize := generateDealSize(fs.AvgDealSize)
+		dealSize := generateDealSize(baseDealSize, fs.Category)
 		fs.updateDealSizeRange(dealSize)
 		totalMRR += dealSize
+		dealSizes = append(dealSizes, dealSize)
 	}
 
 	// These are direct customers (not from affiliate program)
 	fs.Customers += newCustomers
 	fs.DirectCustomers += newCustomers
-	fs.MRR += totalMRR
 	fs.DirectMRR += totalMRR
+
+	// Add customers to tracking system
+	for _, dealSize := range dealSizes {
+		fs.addCustomer(dealSize, "direct")
+	}
+
+	// Sync MRR from DirectMRR + AffiliateMRR
+	fs.syncMRR()
 
 	// Recalculate average deal size
 	if fs.Customers > 0 {
@@ -937,13 +1429,619 @@ func (fs *FounderState) NeedsLowCashWarning() bool {
 	return fs.Cash <= 200000 && fs.CashRunwayMonths < 6
 }
 
+// CalculateInfrastructureCosts computes cloud compute and ODC costs based on customers
+func (fs *FounderState) CalculateInfrastructureCosts() {
+	// Calculate compute costs per customer (variable, random, but never more than deal size)
+	// For SaaS, compute costs are typically 10-30% of deal size
+	// For DeepTech/Hardware, compute costs might be higher (20-40%)
+	// For GovTech, compute costs might be lower (5-15%)
+
+	// Compute cost percentages vary by category
+	var computePercent float64
+	switch fs.Category {
+	case "SaaS":
+		computePercent = 0.10 + rand.Float64()*0.20 // 10-30% of deal size
+	case "DeepTech":
+		computePercent = 0.20 + rand.Float64()*0.20 // 20-40% of deal size
+	case "GovTech":
+		computePercent = 0.05 + rand.Float64()*0.10 // 5-15% of deal size
+	case "Hardware":
+		computePercent = 0.15 + rand.Float64()*0.25 // 15-40% of deal size
+	default:
+		computePercent = 0.10 + rand.Float64()*0.20 // 10-30% default
+	}
+
+	// ODC costs are typically 5-15% of deal size (support, data transfer, etc.)
+	odcPercent := 0.05 + rand.Float64()*0.10
+
+	// Calculate costs based on each active customer's deal size
+	var totalComputeCost int64
+	var totalODCCost int64
+
+	for _, c := range fs.CustomerList {
+		if !c.IsActive {
+			continue
+		}
+
+		dealSize := c.DealSize
+		if dealSize == 0 {
+			continue
+		}
+
+		// Compute cost for this customer
+		customerComputeCost := int64(float64(dealSize) * computePercent)
+		customerODCCost := int64(float64(dealSize) * odcPercent)
+
+		// Ensure total infrastructure cost never exceeds 80% of deal size
+		maxCost := int64(float64(dealSize) * 0.80)
+		if customerComputeCost+customerODCCost > maxCost {
+			// Scale down proportionally
+			totalCost := float64(customerComputeCost + customerODCCost)
+			scale := float64(maxCost) / totalCost
+			customerComputeCost = int64(float64(customerComputeCost) * scale)
+			customerODCCost = int64(float64(customerODCCost) * scale)
+		}
+
+		totalComputeCost += customerComputeCost
+		totalODCCost += customerODCCost
+	}
+
+	fs.MonthlyComputeCost = totalComputeCost
+	fs.MonthlyODCCost = totalODCCost
+}
+
+// SolicitCustomerFeedback gathers feedback from customers to improve product maturity
+func (fs *FounderState) SolicitCustomerFeedback() error {
+	if fs.Customers == 0 {
+		return fmt.Errorf("no customers to solicit feedback from")
+	}
+
+	// Feedback improves product maturity by 1-5% based on customer count
+	// More customers = better feedback = more improvement
+	improvement := 0.01 + (float64(fs.Customers)/100.0)*0.04 // 1-5% improvement
+	if improvement > 0.05 {
+		improvement = 0.05 // Cap at 5%
+	}
+
+	fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity+improvement)
+	return nil
+}
+
+// ============================================================================
+// KEY METRICS & ANALYTICS
+// ============================================================================
+
+// CalculateLTVToCAC calculates the lifetime value to customer acquisition cost ratio
+func (fs *FounderState) CalculateLTVToCAC() float64 {
+	if fs.CustomerAcquisitionCost == 0 {
+		return 0
+	}
+
+	// LTV = Average Revenue per Customer / Churn Rate
+	avgRevenuePerCustomer := float64(fs.AvgDealSize)
+	ltv := avgRevenuePerCustomer / math.Max(0.01, fs.CustomerChurnRate)
+
+	return ltv / float64(fs.CustomerAcquisitionCost)
+}
+
+// CalculateCACPayback calculates months to recover customer acquisition cost
+func (fs *FounderState) CalculateCACPayback() float64 {
+	if fs.AvgDealSize == 0 {
+		return 0
+	}
+
+	// Payback period = CAC / Monthly Revenue per Customer
+	return float64(fs.CustomerAcquisitionCost) / float64(fs.AvgDealSize)
+}
+
+// CalculateRuleOf40 calculates growth rate + profit margin (should be >40% for healthy SaaS)
+func (fs *FounderState) CalculateRuleOf40() float64 {
+	// Growth rate (as %)
+	growthRate := fs.MonthlyGrowthRate * 100
+
+	// Profit margin = (MRR - Costs) / MRR * 100
+	annualizedMRR := fs.MRR * 12
+	annualCosts := (fs.MonthlyTeamCost + fs.MonthlyComputeCost + fs.MonthlyODCCost) * 12
+
+	var profitMargin float64
+	if annualizedMRR > 0 {
+		profitMargin = (float64(annualizedMRR-annualCosts) / float64(annualizedMRR)) * 100
+	}
+
+	return growthRate + profitMargin
+}
+
+// CalculateBurnMultiple calculates cash burned per dollar of new ARR
+func (fs *FounderState) CalculateBurnMultiple() float64 {
+	if fs.Turn < 2 {
+		return 0 // Need at least 2 months of data
+	}
+
+	// Monthly burn (if negative cash flow)
+	monthlyRevenue := fs.MRR
+	monthlyCosts := fs.MonthlyTeamCost + fs.MonthlyComputeCost + fs.MonthlyODCCost
+	monthlyBurn := monthlyCosts - monthlyRevenue
+
+	if monthlyBurn <= 0 {
+		return 0 // Profitable, no burn
+	}
+
+	// New ARR = Growth * 12
+	newMonthlyRevenue := int64(float64(fs.MRR) * fs.MonthlyGrowthRate)
+	newARR := newMonthlyRevenue * 12
+
+	if newARR <= 0 {
+		return 999 // Burning with no growth
+	}
+
+	return float64(monthlyBurn) / float64(newARR)
+}
+
+// CalculateMagicNumber calculates sales efficiency (revenue per dollar spent on sales/marketing)
+func (fs *FounderState) CalculateMagicNumber() float64 {
+	if fs.Turn < 2 {
+		return 0
+	}
+
+	// Sales & Marketing spend = salaries for sales + marketing + any marketing campaigns
+	salesMarketingCost := int64(0)
+	for range fs.Team.Sales {
+		salesMarketingCost += 100000 / 12 // $100k/year salary
+	}
+	for range fs.Team.Marketing {
+		salesMarketingCost += 100000 / 12
+	}
+	for _, exec := range fs.Team.Executives {
+		if exec.Role == RoleCGO {
+			salesMarketingCost += 300000 / 12 // $300k/year
+		}
+	}
+
+	if salesMarketingCost == 0 {
+		return 0
+	}
+
+	// New revenue this quarter / S&M spend this quarter
+	newQuarterlyRevenue := int64(float64(fs.MRR) * fs.MonthlyGrowthRate * 3) // 3 months
+
+	return float64(newQuarterlyRevenue) / float64(salesMarketingCost*3)
+}
+
+// MonthlyHighlight represents a significant event or metric
+type MonthlyHighlight struct {
+	Type    string // "win" or "concern"
+	Message string
+	Icon    string
+}
+
+// GenerateMonthlyHighlights creates top wins and concerns for the month
+func (fs *FounderState) GenerateMonthlyHighlights() []MonthlyHighlight {
+	var highlights []MonthlyHighlight
+
+	// WINS
+	if fs.MRR >= 100000 && fs.Turn > 1 {
+		// Check if we just crossed $100k
+		prevMRR := int64(float64(fs.MRR) / (1.0 + fs.MonthlyGrowthRate))
+		if prevMRR < 100000 {
+			highlights = append(highlights, MonthlyHighlight{
+				Type:    "win",
+				Message: "Broke $100k MRR milestone! 🎉",
+				Icon:    "💰",
+			})
+		}
+	}
+
+	if fs.CustomerChurnRate < 0.05 && fs.Customers > 5 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "win",
+			Message: "Churn rate below 5% - excellent retention!",
+			Icon:    "🎯",
+		})
+	}
+
+	if fs.MonthlyGrowthRate > 0.20 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "win",
+			Message: fmt.Sprintf("Strong growth: %.0f%% MoM!", fs.MonthlyGrowthRate*100),
+			Icon:    "📈",
+		})
+	}
+
+	ltvCac := fs.CalculateLTVToCAC()
+	if ltvCac >= 3.0 && fs.Customers > 10 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "win",
+			Message: "LTV:CAC ratio is healthy (>3:1)",
+			Icon:    "✨",
+		})
+	}
+
+	if fs.ProductMaturity >= 0.8 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "win",
+			Message: "Product is highly mature - low churn expected",
+			Icon:    "🚀",
+		})
+	}
+
+	ruleOf40 := fs.CalculateRuleOf40()
+	if ruleOf40 >= 40 && fs.MRR > 50000 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "win",
+			Message: "Rule of 40 achieved - excellent balance!",
+			Icon:    "💎",
+		})
+	}
+
+	// CONCERNS
+	if fs.CashRunwayMonths <= 3 && fs.CashRunwayMonths > 0 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "concern",
+			Message: fmt.Sprintf("Low runway: %d months left!", fs.CashRunwayMonths),
+			Icon:    "⚠️",
+		})
+	}
+
+	if fs.CustomerChurnRate > 0.20 && fs.Customers > 5 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "concern",
+			Message: fmt.Sprintf("High churn rate: %.0f%%/month", fs.CustomerChurnRate*100),
+			Icon:    "📉",
+		})
+	}
+
+	if fs.MonthlyGrowthRate < 0 && fs.Turn > 3 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "concern",
+			Message: "Revenue is declining - need to fix growth!",
+			Icon:    "🔴",
+		})
+	}
+
+	if fs.Customers == 0 && fs.Turn > 3 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "concern",
+			Message: "No customers yet - focus on acquisition!",
+			Icon:    "⚡",
+		})
+	}
+
+	burnMultiple := fs.CalculateBurnMultiple()
+	if burnMultiple > 2.0 && burnMultiple < 999 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "concern",
+			Message: "High burn multiple - spending too much per $ of growth",
+			Icon:    "💸",
+		})
+	}
+
+	if ltvCac < 1.0 && ltvCac > 0 && fs.Customers > 10 {
+		highlights = append(highlights, MonthlyHighlight{
+			Type:    "concern",
+			Message: "LTV:CAC ratio < 1 - losing money on customers!",
+			Icon:    "⛔",
+		})
+	}
+
+	// Prioritize: show max 3 of each type
+	wins := []MonthlyHighlight{}
+	concerns := []MonthlyHighlight{}
+
+	for _, h := range highlights {
+		if h.Type == "win" {
+			wins = append(wins, h)
+		} else {
+			concerns = append(concerns, h)
+		}
+	}
+
+	result := []MonthlyHighlight{}
+
+	// Add top 3 wins
+	for i := 0; i < len(wins) && i < 3; i++ {
+		result = append(result, wins[i])
+	}
+
+	// Add top 3 concerns
+	for i := 0; i < len(concerns) && i < 3; i++ {
+		result = append(result, concerns[i])
+	}
+
+	return result
+}
+
+// GetCustomerHealthSegments categorizes customers by health score
+func (fs *FounderState) GetCustomerHealthSegments() (healthy, atRisk, critical int, atRiskMRR, criticalMRR int64) {
+	for i := range fs.CustomerList {
+		c := &fs.CustomerList[i]
+		if !c.IsActive {
+			continue
+		}
+
+		// Update health score based on product maturity and CS team
+		csImpact := float64(len(fs.Team.CustomerSuccess)) * 0.05
+		for _, exec := range fs.Team.Executives {
+			if exec.Role == RoleCOO {
+				csImpact += 0.15 // COO = 3x CS rep
+			}
+		}
+
+		// Health improves with product maturity and CS team
+		c.HealthScore = 0.3 + (fs.ProductMaturity * 0.5) + csImpact
+		c.HealthScore = math.Min(1.0, math.Max(0.0, c.HealthScore))
+
+		// Categorize
+		if c.HealthScore >= 0.7 {
+			healthy++
+		} else if c.HealthScore >= 0.4 {
+			atRisk++
+			atRiskMRR += c.DealSize
+		} else {
+			critical++
+			criticalMRR += c.DealSize
+		}
+	}
+
+	return
+}
+
+// GetBoardGuidance generates monthly advice/opportunities from board members
+func (fs *FounderState) GetBoardGuidance() []string {
+	var guidance []string
+
+	if len(fs.BoardMembers) == 0 {
+		return guidance
+	}
+
+	// Board members provide value based on their expertise
+	for _, member := range fs.BoardMembers {
+		if !member.IsActive {
+			continue
+		}
+
+		// 30% chance per month a board member provides useful guidance
+		if rand.Float64() < 0.3 {
+			switch member.Expertise {
+			case "sales":
+				// Sales expertise helps with customer acquisition
+				boost := int64(float64(fs.MRR) * (0.02 + rand.Float64()*0.03)) // 2-5% boost
+				if boost > 0 {
+					guidance = append(guidance, fmt.Sprintf("📊 %s (Sales Advisor) introduced you to potential customers (+$%s MRR opportunity)",
+						member.Name, formatCurrency(boost)))
+					// Could apply boost here or make it an opportunity
+				}
+			case "product":
+				// Product expertise improves product maturity
+				if fs.ProductMaturity < 1.0 {
+					improvement := 0.02 + rand.Float64()*0.03 // 2-5% improvement
+					fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity+improvement)
+					guidance = append(guidance, fmt.Sprintf("🎯 %s (Product Advisor) helped improve product (%.0f%% maturity gained)",
+						member.Name, improvement*100))
+				}
+			case "fundraising":
+				// Fundraising expertise improves future round terms
+				if len(fs.FundingRounds) < 3 {
+					guidance = append(guidance, fmt.Sprintf("💰 %s (Fundraising Advisor) is warming up investors for your next round",
+						member.Name))
+				}
+			case "operations":
+				// Operations expertise reduces costs
+				if fs.MonthlyTeamCost > 50000 {
+					savings := int64(float64(fs.MonthlyTeamCost) * (0.01 + rand.Float64()*0.02)) // 1-3% savings
+					fs.Cash += savings
+					guidance = append(guidance, fmt.Sprintf("⚙️  %s (Operations Advisor) identified cost savings (+$%s this month)",
+						member.Name, formatCurrency(savings)))
+				}
+			case "strategy":
+				// Strategy expertise helps avoid bad decisions
+				if fs.CustomerChurnRate > 0.15 {
+					reduction := 0.01 + rand.Float64()*0.02 // 1-3% churn reduction
+					fs.CustomerChurnRate = math.Max(0.01, fs.CustomerChurnRate-reduction)
+					guidance = append(guidance, fmt.Sprintf("🎓 %s (Strategy Advisor) helped reduce churn (%.0f%% improvement)",
+						member.Name, reduction*100))
+				}
+			}
+		}
+	}
+
+	return guidance
+}
+
+// UpdateBoardSentiment updates board/investor sentiment based on performance
+func (fs *FounderState) UpdateBoardSentiment() {
+	if len(fs.FundingRounds) == 0 {
+		fs.BoardSentiment = ""
+		fs.BoardPressure = 0
+		return
+	}
+
+	// Calculate performance score (0-100)
+	score := 50.0 // Start neutral
+
+	// Growth is good
+	if fs.MonthlyGrowthRate > 0.15 {
+		score += 20
+	} else if fs.MonthlyGrowthRate > 0.05 {
+		score += 10
+	} else if fs.MonthlyGrowthRate < 0 {
+		score -= 20
+	}
+
+	// Runway matters
+	if fs.CashRunwayMonths <= 3 {
+		score -= 25
+	} else if fs.CashRunwayMonths > 12 {
+		score += 10
+	}
+
+	// Profitability is good
+	netIncome := fs.MRR - fs.MonthlyTeamCost - fs.MonthlyComputeCost - fs.MonthlyODCCost
+	if netIncome > 0 {
+		score += 15
+	}
+
+	// Churn matters
+	if fs.CustomerChurnRate < 0.05 {
+		score += 10
+	} else if fs.CustomerChurnRate > 0.20 {
+		score -= 15
+	}
+
+	// Set sentiment
+	if score >= 75 {
+		fs.BoardSentiment = "happy"
+		fs.BoardPressure = 10
+	} else if score >= 60 {
+		fs.BoardSentiment = "pleased"
+		fs.BoardPressure = 25
+	} else if score >= 40 {
+		fs.BoardSentiment = "neutral"
+		fs.BoardPressure = 50
+	} else if score >= 25 {
+		fs.BoardSentiment = "concerned"
+		fs.BoardPressure = 75
+	} else {
+		fs.BoardSentiment = "angry"
+		fs.BoardPressure = 95
+	}
+}
+
+// GenerateStrategicOpportunity creates a random strategic choice
+func (fs *FounderState) GenerateStrategicOpportunity() *StrategicOpportunity {
+	// Don't generate if one already pending
+	if fs.PendingOpportunity != nil {
+		return nil
+	}
+
+	// 15% chance per month (after month 3)
+	if fs.Turn < 3 || rand.Float64() > 0.15 {
+		return nil
+	}
+
+	opportunityTypes := []string{"press", "enterprise_pilot", "conference", "talent", "competitor_distress"}
+
+	// Add bridge round opportunity if running low on cash and have raised before
+	if fs.CashRunwayMonths <= 6 && len(fs.FundingRounds) > 0 {
+		opportunityTypes = append(opportunityTypes, "bridge_round")
+	}
+
+	oppType := opportunityTypes[rand.Intn(len(opportunityTypes))]
+
+	var opp StrategicOpportunity
+
+	switch oppType {
+	case "press":
+		opp = StrategicOpportunity{
+			Type:        "press",
+			Title:       "📰 TechCrunch Feature Opportunity",
+			Description: "TechCrunch wants to write a feature story about your company. This could significantly boost brand awareness and inbound leads.",
+			Cost:        10000 + rand.Int63n(15000), // $10-25k PR prep
+			Benefit:     fmt.Sprintf("+%d potential customers over next 3 months, +15%% brand awareness", 5+rand.Intn(10)),
+			Risk:        "Requires founder time (1 week) and PR prep costs",
+			ExpiresIn:   1,
+		}
+
+	case "enterprise_pilot":
+		dealSize := 50000 + rand.Int63n(150000)
+		opp = StrategicOpportunity{
+			Type:        "enterprise_pilot",
+			Title:       "🏢 Enterprise Pilot Program",
+			Description: "Fortune 500 company wants to pilot your product. High revenue potential but requires dedicated engineering resources.",
+			Cost:        0, // No upfront cost, but requires team time
+			Benefit:     fmt.Sprintf("$%s annual contract if successful (80%% chance), reference customer for enterprise sales", formatCurrency(dealSize)),
+			Risk:        "Requires 2 engineers for 3 months, may slow product development",
+			ExpiresIn:   1,
+		}
+
+	case "bridge_round":
+		amount := 200000 + rand.Int63n(500000)
+		equity := 3.0 + rand.Float64()*5.0
+		opp = StrategicOpportunity{
+			Type:        "bridge_round",
+			Title:       "💰 Bridge Round Opportunity",
+			Description: "Existing investor offers bridge financing at favorable terms. Quick capital to extend runway.",
+			Cost:        0,
+			Benefit:     fmt.Sprintf("$%s at %.1f%% equity (better terms than raising a full round)", formatCurrency(amount), equity),
+			Risk:        "Additional dilution, may signal to market that you're struggling",
+			ExpiresIn:   2,
+		}
+
+	case "conference":
+		opp = StrategicOpportunity{
+			Type:        "conference",
+			Title:       "🎤 Conference Speaking Slot",
+			Description: "Invited to speak at major industry conference. Great for leads and recruiting, but takes founder time.",
+			Cost:        5000 + rand.Int63n(10000), // Travel + booth costs
+			Benefit:     fmt.Sprintf("+%d qualified leads, improved recruiting pipeline, industry credibility", 10+rand.Intn(20)),
+			Risk:        "Founder unavailable for 1 week, may not convert leads immediately",
+			ExpiresIn:   2,
+		}
+
+	case "talent":
+		opp = StrategicOpportunity{
+			Type:        "talent",
+			Title:       "⭐ Star Engineer Available",
+			Description: "Senior engineer from Google/Meta is interested in joining. Exceptional talent but expensive and expects senior role.",
+			Cost:        200000, // $200k/year salary
+			Benefit:     "Accelerates product development 2x, attracts other top talent, improved technical credibility",
+			Risk:        "High salary, may create team dynamics issues if not managed well",
+			ExpiresIn:   1,
+		}
+
+	case "competitor_distress":
+		opp = StrategicOpportunity{
+			Type:        "competitor_distress",
+			Title:       "🎯 Competitor in Distress",
+			Description: "Main competitor is struggling (layoffs, negative press). Perfect time to steal their customers or acquire them cheaply.",
+			Cost:        50000 + rand.Int63n(150000),
+			Benefit:     fmt.Sprintf("+%d customers (from their base), eliminate key competitor", 15+rand.Intn(25)),
+			Risk:        "May inherit technical debt or unhappy customers",
+			ExpiresIn:   2,
+		}
+	}
+
+	return &opp
+}
+
+// UpdateEmployeeVesting updates vesting progress for all employees
+func (fs *FounderState) UpdateEmployeeVesting() {
+	updateVesting := func(employees *[]Employee) {
+		for i := range *employees {
+			e := &(*employees)[i]
+			if e.Equity > 0 {
+				e.VestedMonths = fs.Turn - e.MonthHired
+				if e.VestedMonths >= e.CliffMonths && !e.HasCliff {
+					e.HasCliff = true // Cliff reached!
+				}
+			}
+		}
+	}
+
+	updateVesting(&fs.Team.Engineers)
+	updateVesting(&fs.Team.Sales)
+	updateVesting(&fs.Team.CustomerSuccess)
+	updateVesting(&fs.Team.Marketing)
+	updateVesting(&fs.Team.Executives)
+}
+
 // ProcessMonth runs all monthly calculations
 func (fs *FounderState) ProcessMonth() []string {
+	return fs.ProcessMonthWithBaseline(fs.MRR)
+}
+
+// ProcessMonthWithBaseline runs monthly calculations with a baseline MRR for comparison
+func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 	var messages []string
 	fs.Turn++
 
+	// Update employee vesting
+	fs.UpdateEmployeeVesting()
+
+	// Ensure MRR is in sync before processing
+	fs.syncMRR()
+
 	// 1. Process revenue growth
-	oldMRR := fs.MRR
+	oldMRR := baselineMRR // Use the baseline MRR from start of turn, not current MRR
 
 	// Engineer impact on product (reduces churn, increases sales)
 	// CTO counts as 3x engineers
@@ -975,87 +2073,127 @@ func (fs *FounderState) ProcessMonth() []string {
 	actualGrowth := baseGrowth * salesImpact * engImpact
 
 	// Apply growth
+	// Calculate growth first, then apply proportionally
 	newRevenue := int64(float64(fs.MRR) * actualGrowth)
-	fs.MRR += newRevenue
 
 	// Apply growth proportionally to direct and affiliate MRR
 	if fs.MRR > 0 {
-		directRatio := float64(fs.DirectMRR) / float64(fs.MRR-newRevenue)
-		affiliateRatio := float64(fs.AffiliateMRR) / float64(fs.MRR-newRevenue)
-		if fs.MRR-newRevenue == 0 {
-			directRatio = 1.0
-			affiliateRatio = 0.0
-		}
+		directRatio := float64(fs.DirectMRR) / float64(fs.MRR)
+		affiliateRatio := float64(fs.AffiliateMRR) / float64(fs.MRR)
 		fs.DirectMRR += int64(float64(newRevenue) * directRatio)
 		fs.AffiliateMRR += int64(float64(newRevenue) * affiliateRatio)
+	} else {
+		// If no MRR yet, growth goes to direct
+		fs.DirectMRR += newRevenue
 	}
+
+	// Sync MRR from DirectMRR + AffiliateMRR
+	fs.syncMRR()
 
 	// 2. Process churn (only if we have customers)
 	var lostCustomers int
 	var lostDirectCustomers int
 	var lostAffiliateCustomers int
 	var actualChurn float64
-	if fs.Customers > 0 {
-		baseChurn := fs.CustomerChurnRate
 
-		// CS team reduces churn
-		// COO counts as 3x CS reps
-		csImpact := 0.0
-		for _, cs := range fs.Team.CustomerSuccess {
-			csImpact += (cs.Impact * 0.02) // Each CS rep reduces churn by ~2%
-		}
-		for _, exec := range fs.Team.Executives {
-			if exec.Role == RoleCOO {
-				csImpact += (exec.Impact * 0.02) // COO has 3x impact already built into Impact field
-			}
-		}
-		actualChurn = math.Max(0.01, baseChurn-csImpact)
+	// Always recalculate base churn based on current product maturity
+	// Lower maturity = higher churn
+	// Formula: baseChurn = (1.0 - ProductMaturity) * 0.65 + 0.05
+	// This ensures churn decreases as product matures
+	baseChurnFromMaturity := (1.0-fs.ProductMaturity)*0.65 + 0.05
+	// Cap at reasonable range (5% minimum, 70% maximum)
+	baseChurnFromMaturity = math.Max(0.05, math.Min(0.70, baseChurnFromMaturity))
+	baseChurn := baseChurnFromMaturity
 
-		// Calculate total churn loss
-		churnLoss := int64(float64(fs.MRR) * actualChurn)
-		lostCustomers = int(float64(fs.Customers) * actualChurn)
-
-		// Apply churn proportionally to direct and affiliate customers
-		if fs.Customers > 0 {
-			directChurnLoss := int64(float64(fs.DirectMRR) * actualChurn)
-			affiliateChurnLoss := int64(float64(fs.AffiliateMRR) * actualChurn)
-
-			lostDirectCustomers = int(float64(fs.DirectCustomers) * actualChurn)
-			lostAffiliateCustomers = int(float64(fs.AffiliateCustomers) * actualChurn)
-
-			fs.DirectMRR -= directChurnLoss
-			fs.AffiliateMRR -= affiliateChurnLoss
-			fs.DirectCustomers -= lostDirectCustomers
-			fs.AffiliateCustomers -= lostAffiliateCustomers
-		}
-
-		fs.MRR -= churnLoss
-		fs.Customers -= lostCustomers
-
-		if fs.MRR < 0 {
-			fs.MRR = 0
-		}
-		if fs.DirectMRR < 0 {
-			fs.DirectMRR = 0
-		}
-		if fs.AffiliateMRR < 0 {
-			fs.AffiliateMRR = 0
-		}
-		if fs.Customers < 0 {
-			fs.Customers = 0
-		}
-		if fs.DirectCustomers < 0 {
-			fs.DirectCustomers = 0
-		}
-		if fs.AffiliateCustomers < 0 {
-			fs.AffiliateCustomers = 0
-		}
-
-		// Recalculate average deal size after churn
-		if fs.Customers > 0 {
-			fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+	// CS team reduces churn
+	// COO counts as 3x CS reps
+	csImpact := 0.0
+	for _, cs := range fs.Team.CustomerSuccess {
+		csImpact += (cs.Impact * 0.02) // Each CS rep reduces churn by ~2%
+	}
+	for _, exec := range fs.Team.Executives {
+		if exec.Role == RoleCOO {
+			csImpact += (exec.Impact * 0.02) // COO has 3x impact already built into Impact field
 		}
 	}
+
+	// Calculate effective churn rate (after CS team impact)
+	actualChurn = math.Max(0.01, baseChurn-csImpact)
+
+	// Update displayed churn rate using helper function
+	fs.RecalculateChurnRate()
+
+	if fs.Customers > 0 {
+		// Get active customers by source for proportional churn
+		activeDirectCustomers := []Customer{}
+		activeAffiliateCustomers := []Customer{}
+		for _, c := range fs.CustomerList {
+			if c.IsActive {
+				if c.Source == "direct" || c.Source == "partnership" || c.Source == "market" {
+					activeDirectCustomers = append(activeDirectCustomers, c)
+				} else if c.Source == "affiliate" {
+					activeAffiliateCustomers = append(activeAffiliateCustomers, c)
+				}
+			}
+		}
+
+		// Calculate how many to churn from each source
+		lostDirectCustomers = int(float64(len(activeDirectCustomers)) * actualChurn)
+		lostAffiliateCustomers = int(float64(len(activeAffiliateCustomers)) * actualChurn)
+
+		// Mark customers as churned (randomly select from active customers)
+		rand.Shuffle(len(activeDirectCustomers), func(i, j int) {
+			activeDirectCustomers[i], activeDirectCustomers[j] = activeDirectCustomers[j], activeDirectCustomers[i]
+		})
+		rand.Shuffle(len(activeAffiliateCustomers), func(i, j int) {
+			activeAffiliateCustomers[i], activeAffiliateCustomers[j] = activeAffiliateCustomers[j], activeAffiliateCustomers[i]
+		})
+
+		// Churn direct customers
+		for i := 0; i < lostDirectCustomers && i < len(activeDirectCustomers); i++ {
+			customer := activeDirectCustomers[i]
+			fs.churnCustomer(customer.ID)
+			fs.DirectMRR -= customer.DealSize
+		}
+
+		// Churn affiliate customers
+		for i := 0; i < lostAffiliateCustomers && i < len(activeAffiliateCustomers); i++ {
+			customer := activeAffiliateCustomers[i]
+			fs.churnCustomer(customer.ID)
+			fs.AffiliateMRR -= customer.DealSize
+		}
+
+		lostCustomers = lostDirectCustomers + lostAffiliateCustomers
+		fs.Customers -= lostCustomers
+		fs.DirectCustomers -= lostDirectCustomers
+		fs.AffiliateCustomers -= lostAffiliateCustomers
+	}
+
+	// Clamp values to prevent negatives
+	if fs.DirectMRR < 0 {
+		fs.DirectMRR = 0
+	}
+	if fs.AffiliateMRR < 0 {
+		fs.AffiliateMRR = 0
+	}
+	if fs.Customers < 0 {
+		fs.Customers = 0
+	}
+	if fs.DirectCustomers < 0 {
+		fs.DirectCustomers = 0
+	}
+	if fs.AffiliateCustomers < 0 {
+		fs.AffiliateCustomers = 0
+	}
+
+	// Ensure MRR is in sync with DirectMRR + AffiliateMRR
+	fs.syncMRR()
+
+	// Recalculate average deal size after churn
+	if fs.Customers > 0 {
+		fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+	}
+	// If no customers, keep AvgDealSize from template (don't reset to 0)
 
 	// 3. Process MRR cash flow
 	// MRR converts to cash after deductions:
@@ -1074,34 +2212,20 @@ func (fs *FounderState) ProcessMonth() []string {
 
 	// 4. Calculate costs
 	totalCost := fs.MonthlyTeamCost + (int64(fs.Team.TotalEmployees) * 2000) // +$2k overhead per employee
-	fs.Cash -= totalCost
 
-	netIncome := netMRRToCash - totalCost
+	// Calculate infrastructure costs (compute + ODC)
+	fs.CalculateInfrastructureCosts()
+	totalInfrastructureCost := fs.MonthlyComputeCost + fs.MonthlyODCCost
+
+	fs.Cash -= totalCost
+	fs.Cash -= totalInfrastructureCost
+
+	netIncome := netMRRToCash - totalCost - totalInfrastructureCost
 
 	// 5. Update runway
 	fs.CalculateRunway()
 
-	// 6. Update growth rate for next month
-	if oldMRR > 0 {
-		fs.MonthlyGrowthRate = float64(fs.MRR-oldMRR) / float64(oldMRR)
-	} else if fs.MRR > 0 {
-		// First customers! Set initial growth rate
-		fs.MonthlyGrowthRate = 0.10 // Start with 10% base growth
-	}
-
-	// 7. Generate messages
-	if fs.MRR > 0 && oldMRR == 0 {
-		messages = append(messages, fmt.Sprintf("🎉 FIRST REVENUE! MRR: $%s", formatCurrency(fs.MRR)))
-	} else if fs.MRR > oldMRR && oldMRR > 0 {
-		pctGrowth := ((float64(fs.MRR) - float64(oldMRR)) / float64(oldMRR)) * 100
-		messages = append(messages, fmt.Sprintf("💰 MRR grew %.1f%% to $%s", pctGrowth, formatCurrency(fs.MRR)))
-	} else if fs.MRR < oldMRR && oldMRR > 0 {
-		pctDecline := ((float64(oldMRR) - float64(fs.MRR)) / float64(oldMRR)) * 100
-		messages = append(messages, fmt.Sprintf("⚠️  MRR declined %.1f%% to $%s", pctDecline, formatCurrency(fs.MRR)))
-	} else if fs.MRR == 0 && fs.Turn > 3 {
-		messages = append(messages, "⚠️  Still no revenue! Hire sales or spend on marketing!")
-	}
-
+	// Store messages for churn, cash flow, etc. (will add MRR comparison later)
 	if lostCustomers > 0 {
 		messages = append(messages, fmt.Sprintf("📉 Lost %d customers to churn (%.1f%% churn rate)", lostCustomers, actualChurn*100))
 	}
@@ -1116,7 +2240,8 @@ func (fs *FounderState) ProcessMonth() []string {
 		messages = append(messages, "🎉 Product has reached full maturity!")
 	}
 
-	// 8. Process advanced features
+	// 7. Process advanced features (affiliates, partnerships, etc.)
+	// These will add more MRR, so we'll compare baseline to final MRR after all processing
 	partnershipMsgs := fs.UpdatePartnerships()
 	messages = append(messages, partnershipMsgs...)
 
@@ -1129,22 +2254,83 @@ func (fs *FounderState) ProcessMonth() []string {
 	marketMsgs := fs.UpdateGlobalMarkets()
 	messages = append(messages, marketMsgs...)
 
-	// 9. Spawn new competitors randomly
+	// 8. Spawn new competitors randomly
 	if newComp := fs.SpawnCompetitor(); newComp != nil {
 		messages = append(messages, fmt.Sprintf("🚨 NEW COMPETITOR: %s entered the market! Threat: %s, Market Share: %.1f%%",
 			newComp.Name, newComp.Threat, newComp.MarketShare*100))
 	}
 
-	// 10. Process random events
+	// 9. Process random events
 	eventMsgs := fs.ProcessRandomEvents()
 	messages = append(messages, eventMsgs...)
 
-	// 11. Spawn new random events (5% chance each month)
+	// 10. Spawn new random events (5% chance each month)
 	if rand.Float64() < 0.05 {
 		if event := fs.SpawnRandomEvent(); event != nil {
 			messages = append(messages, fmt.Sprintf("⚡ EVENT: %s - %s", event.Title, event.Description))
 		}
 	}
+
+	// Final sync to ensure MRR is always correct (after all processing)
+	fs.syncMRR()
+
+	// Recalculate infrastructure costs after all customer changes (affiliates, partnerships, etc.)
+	fs.CalculateInfrastructureCosts()
+
+	// Show infrastructure costs if significant
+	if fs.MonthlyComputeCost > 0 || fs.MonthlyODCCost > 0 {
+		messages = append(messages, fmt.Sprintf("💻 Infrastructure: Compute $%s/mo, ODC $%s/mo",
+			formatCurrency(fs.MonthlyComputeCost), formatCurrency(fs.MonthlyODCCost)))
+	}
+
+	// 11. Update growth rate for display on next month's dashboard (AFTER all processing)
+	if oldMRR > 0 {
+		fs.MonthlyGrowthRate = float64(fs.MRR-oldMRR) / float64(oldMRR)
+	} else if fs.MRR > 0 {
+		// First customers! Set initial growth rate
+		fs.MonthlyGrowthRate = 0.10 // Start with 10% base growth
+	}
+
+	// Update board sentiment if raised funding
+	fs.UpdateBoardSentiment()
+
+	// Get board guidance
+	boardGuidance := fs.GetBoardGuidance()
+	messages = append(messages, boardGuidance...)
+
+	// Generate strategic opportunity (15% chance, or 25% with good board)
+	if fs.PendingOpportunity == nil {
+		newOpp := fs.GenerateStrategicOpportunity()
+		if newOpp != nil {
+			fs.PendingOpportunity = newOpp
+		}
+	} else {
+		// Decrement expiration timer
+		fs.PendingOpportunity.ExpiresIn--
+		if fs.PendingOpportunity.ExpiresIn <= 0 {
+			messages = append(messages, fmt.Sprintf("⏰ Opportunity expired: %s", fs.PendingOpportunity.Title))
+			fs.PendingOpportunity = nil
+		}
+	}
+
+	// 12. Generate MRR comparison message (AFTER all customer additions)
+	if fs.MRR > 0 && oldMRR == 0 {
+		messages = append(messages, fmt.Sprintf("🎉 FIRST REVENUE! MRR: $%s", formatCurrency(fs.MRR)))
+	} else if fs.MRR > oldMRR && oldMRR > 0 {
+		pctGrowth := ((float64(fs.MRR) - float64(oldMRR)) / float64(oldMRR)) * 100
+		messages = append(messages, fmt.Sprintf("💰 MRR grew %.1f%% to $%s", pctGrowth, formatCurrency(fs.MRR)))
+	} else if fs.MRR < oldMRR && oldMRR > 0 {
+		pctDecline := ((float64(oldMRR) - float64(fs.MRR)) / float64(oldMRR)) * 100
+		messages = append(messages, fmt.Sprintf("⚠️  MRR declined %.1f%% to $%s", pctDecline, formatCurrency(fs.MRR)))
+	} else if fs.MRR == 0 && fs.Turn > 3 {
+		messages = append(messages, "⚠️  Still no revenue! Hire sales or spend on marketing!")
+	}
+
+	// Recalculate average deal size if we have customers
+	if fs.Customers > 0 {
+		fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+	}
+	// If no customers, keep AvgDealSize from template (don't reset to 0)
 
 	return messages
 }
@@ -1171,6 +2357,9 @@ func formatCurrency(amount int64) string {
 
 // StartPartnership creates a new strategic partnership
 func (fs *FounderState) StartPartnership(partnerType string) (*Partnership, error) {
+	// Ensure MRR is synced before calculating boost
+	fs.syncMRR()
+
 	partners := map[string][]string{
 		"distribution": {"Salesforce", "HubSpot", "Oracle", "SAP", "Adobe"},
 		"technology":   {"AWS", "Google Cloud", "Microsoft Azure", "IBM", "MongoDB"},
@@ -1194,23 +2383,39 @@ func (fs *FounderState) StartPartnership(partnerType string) (*Partnership, erro
 	case "distribution":
 		cost = 50000 + rand.Int63n(100000)                             // $50-150k
 		mrrBoost = int64(float64(fs.MRR) * (0.1 + rand.Float64()*0.2)) // 10-30% MRR boost
-		churnReduction = 0.01 + rand.Float64()*0.02                    // 1-3% churn reduction
-		duration = 12 + rand.Intn(12)                                  // 12-24 months
+		if mrrBoost == 0 && fs.MRR == 0 {
+			// Minimum boost even with no MRR - helps acquire first customers
+			mrrBoost = 5000 + rand.Int63n(15000) // $5-20k/month minimum
+		}
+		churnReduction = 0.01 + rand.Float64()*0.02 // 1-3% churn reduction
+		duration = 12 + rand.Intn(12)               // 12-24 months
 	case "technology":
 		cost = 30000 + rand.Int63n(70000)                                // $30-100k
 		mrrBoost = int64(float64(fs.MRR) * (0.05 + rand.Float64()*0.15)) // 5-20% MRR boost
-		churnReduction = 0.02 + rand.Float64()*0.03                      // 2-5% churn reduction
-		duration = 12 + rand.Intn(24)                                    // 12-36 months
+		if mrrBoost == 0 && fs.MRR == 0 {
+			// Minimum boost even with no MRR - product integration helps attract customers
+			mrrBoost = 3000 + rand.Int63n(7000) // $3-10k/month minimum
+		}
+		churnReduction = 0.02 + rand.Float64()*0.03 // 2-5% churn reduction
+		duration = 12 + rand.Intn(24)               // 12-36 months
 	case "co-marketing":
 		cost = 25000 + rand.Int63n(50000)                                // $25-75k
 		mrrBoost = int64(float64(fs.MRR) * (0.15 + rand.Float64()*0.25)) // 15-40% MRR boost
-		churnReduction = 0.005 + rand.Float64()*0.015                    // 0.5-2% churn reduction
-		duration = 6 + rand.Intn(12)                                     // 6-18 months
+		if mrrBoost == 0 && fs.MRR == 0 {
+			// Minimum boost even with no MRR - marketing helps acquire customers
+			mrrBoost = 8000 + rand.Int63n(12000) // $8-20k/month minimum
+		}
+		churnReduction = 0.005 + rand.Float64()*0.015 // 0.5-2% churn reduction
+		duration = 6 + rand.Intn(12)                  // 6-18 months
 	case "data":
 		cost = 40000 + rand.Int63n(60000)                                // $40-100k
 		mrrBoost = int64(float64(fs.MRR) * (0.08 + rand.Float64()*0.12)) // 8-20% MRR boost
-		churnReduction = 0.01 + rand.Float64()*0.02                      // 1-3% churn reduction
-		duration = 12 + rand.Intn(24)                                    // 12-36 months
+		if mrrBoost == 0 && fs.MRR == 0 {
+			// Minimum boost even with no MRR - analytics help attract customers
+			mrrBoost = 4000 + rand.Int63n(8000) // $4-12k/month minimum
+		}
+		churnReduction = 0.01 + rand.Float64()*0.02 // 1-3% churn reduction
+		duration = 12 + rand.Intn(24)               // 12-36 months
 	}
 
 	if cost > fs.Cash {
@@ -1230,6 +2435,17 @@ func (fs *FounderState) StartPartnership(partnerType string) (*Partnership, erro
 
 	fs.Cash -= cost
 	fs.Partnerships = append(fs.Partnerships, partnership)
+
+	// Apply partnership benefits immediately
+	fs.MRR += mrrBoost
+	fs.DirectMRR += mrrBoost // Partnership boost goes to direct MRR
+	fs.CustomerChurnRate -= churnReduction
+	if fs.CustomerChurnRate < 0 {
+		fs.CustomerChurnRate = 0
+	}
+
+	// Sync MRR to ensure consistency
+	fs.syncMRR()
 
 	return &partnership, nil
 }
@@ -1315,11 +2531,31 @@ func (fs *FounderState) UpdateAffiliateProgram() []string {
 
 	if newCustomers > 0 {
 		// Calculate MRR with variable deal sizes
+		// Use template AvgDealSize if current AvgDealSize is 0 (no customers yet)
+		baseDealSize := fs.AvgDealSize
+		if baseDealSize == 0 {
+			// Fallback to category-based defaults
+			switch fs.Category {
+			case "SaaS":
+				baseDealSize = 1000 // Default $1k/month for SaaS
+			case "DeepTech":
+				baseDealSize = 5000 // Default $5k/month for DeepTech
+			case "GovTech":
+				baseDealSize = 2000 // Default $2k/month for GovTech
+			case "Hardware":
+				baseDealSize = 3000 // Default $3k/month for Hardware
+			default:
+				baseDealSize = 1000 // Default $1k/month
+			}
+		}
+
 		var totalMRR int64
+		var dealSizes []int64 // Store deal sizes for customer tracking
 		for i := 0; i < newCustomers; i++ {
-			dealSize := generateDealSize(fs.AvgDealSize)
+			dealSize := generateDealSize(baseDealSize, fs.Category)
 			fs.updateDealSizeRange(dealSize)
 			totalMRR += dealSize
+			dealSizes = append(dealSizes, dealSize)
 		}
 
 		commissionPaid := int64(float64(totalMRR) * prog.Commission)
@@ -1327,12 +2563,19 @@ func (fs *FounderState) UpdateAffiliateProgram() []string {
 		// These are affiliate customers
 		fs.Customers += newCustomers
 		fs.AffiliateCustomers += newCustomers
-		fs.MRR += totalMRR
 		fs.AffiliateMRR += totalMRR
 		fs.Cash -= commissionPaid
 
+		// Add customers to tracking system
+		for _, dealSize := range dealSizes {
+			fs.addCustomer(dealSize, "affiliate")
+		}
+
 		prog.CustomersAcquired += newCustomers
 		prog.MonthlyRevenue += totalMRR
+
+		// Sync MRR from DirectMRR + AffiliateMRR
+		fs.syncMRR()
 
 		// Recalculate average deal size
 		if fs.Customers > 0 {
@@ -1445,17 +2688,26 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 
 		// Calculate MRR with variable deal sizes
 		var totalMRR int64
+		var dealSizes []int64 // Store deal sizes for customer tracking
 		for i := 0; i < newCustomers; i++ {
-			dealSize := generateDealSize(fs.AvgDealSize)
+			dealSize := generateDealSize(fs.AvgDealSize, fs.Category)
 			fs.updateDealSizeRange(dealSize)
 			totalMRR += dealSize
+			dealSizes = append(dealSizes, dealSize)
 		}
 
 		// These are direct customers (acquired via partnership)
 		fs.Customers += newCustomers
 		fs.DirectCustomers += newCustomers
-		fs.MRR += totalMRR
 		fs.DirectMRR += totalMRR
+
+		// Add customers to tracking system
+		for _, dealSize := range dealSizes {
+			fs.addCustomer(dealSize, "partnership")
+		}
+
+		// Sync MRR from DirectMRR + AffiliateMRR
+		fs.syncMRR()
 
 		// Recalculate average deal size
 		if fs.Customers > 0 {
@@ -1594,10 +2846,12 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 
 	// Calculate MRR with variable deal sizes
 	var initialMRR int64
+	var dealSizes []int64 // Store deal sizes for customer tracking
 	for i := 0; i < initialCustomers; i++ {
-		dealSize := generateDealSize(fs.AvgDealSize)
+		dealSize := generateDealSize(fs.AvgDealSize, fs.Category)
 		fs.updateDealSizeRange(dealSize)
 		initialMRR += dealSize
+		dealSizes = append(dealSizes, dealSize)
 	}
 
 	market := Market{
@@ -1616,8 +2870,15 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 	// These are direct customers (from market expansion)
 	fs.Customers += initialCustomers
 	fs.DirectCustomers += initialCustomers
-	fs.MRR += initialMRR
 	fs.DirectMRR += initialMRR
+
+	// Add customers to tracking system
+	for _, dealSize := range dealSizes {
+		fs.addCustomer(dealSize, "market")
+	}
+
+	// Sync MRR from DirectMRR + AffiliateMRR
+	fs.syncMRR()
 
 	// Recalculate average deal size
 	if fs.Customers > 0 {
@@ -1768,7 +3029,7 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 			// Calculate MRR with variable deal sizes
 			var totalMRR int64
 			for i := 0; i < newCustomers; i++ {
-				dealSize := generateDealSize(fs.AvgDealSize)
+				dealSize := generateDealSize(fs.AvgDealSize, fs.Category)
 				fs.updateDealSizeRange(dealSize)
 				totalMRR += dealSize
 			}
@@ -1776,10 +3037,12 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 			m.CustomerCount += newCustomers
 			m.MRR += totalMRR
 			// These are direct customers (from market expansion)
-			fs.MRR += totalMRR
 			fs.DirectMRR += totalMRR
 			fs.Customers += newCustomers
 			fs.DirectCustomers += newCustomers
+
+			// Sync MRR from DirectMRR + AffiliateMRR
+			fs.syncMRR()
 
 			// Recalculate average deal size
 			if fs.Customers > 0 {
