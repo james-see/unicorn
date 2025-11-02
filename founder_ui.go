@@ -1286,7 +1286,7 @@ func askToSubmitFounderToGlobalLeaderboard(fs *founder.FounderState) {
 
 	// Calculate final metrics
 	_, valuation, founderEquity := fs.GetFinalScore()
-	
+
 	// Calculate founder payout based on exit type
 	var founderPayout int64
 	if fs.HasExited {
@@ -2128,6 +2128,22 @@ func handleExitOptions(fs *founder.FounderState) bool {
 func formatFounderCurrency(amount int64) string {
 	if amount < 0 {
 		return fmt.Sprintf("-$%s", formatFounderCurrency(-amount))
+	}
+
+	str := fmt.Sprintf("%d", amount)
+	var result string
+	for i, digit := range str {
+		if i > 0 && (len(str)-i)%3 == 0 {
+			result += ","
+		}
+		result += string(digit)
+	}
+	return result
+}
+
+func formatFounderNumber(amount int64) string {
+	if amount < 0 {
+		return fmt.Sprintf("-%s", formatFounderNumber(-amount))
 	}
 
 	str := fmt.Sprintf("%d", amount)
