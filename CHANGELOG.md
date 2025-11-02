@@ -1,5 +1,82 @@
 # Changelog
 
+## Version 3.12.0 - International Market Management & Regional Competitors (2025-11-02)
+
+### Major Features Added
+
+#### 📍 Market Assignment for Employees
+- **Assign Employees to Specific Markets**: When hiring Sales, Marketing, or CS roles with active international markets:
+  - Choose which market they focus on (USA, Europe, Asia, etc.)
+  - Option to assign to "All Markets" (works globally)
+  - Growth and churn mitigation now market-specific
+- **Market-Based Impact**:
+  - Sales/Marketing only boost growth in their assigned market
+  - CS team only reduces churn in their assigned market
+  - Executives (CGO, COO) work across all markets
+- **Team Roster Shows Assignments**: View which employees are assigned to which markets
+- **Example Impact**:
+  - Before: All sales reps boosted all markets equally (unrealistic)
+  - After: Assign 2 sales reps to Asia, 1 to Europe for targeted growth
+
+#### 🌍 Regional Competitors Appear in New Markets
+- **Competitors Generated on Market Entry**:
+  - **Very High Competition**: 2-3 competitors appear (10-30% market share each)
+  - **High Competition**: 1-2 competitors (8-23% market share)
+  - **Medium Competition**: 0-1 competitors (5-15% market share)
+  - **Low Competition**: No competitors
+- **Real Regional Companies**:
+  - **Europe**: Zalando, Klarna, N26, TransferWise, BlaBlaCar, Deliveroo EU
+  - **Asia**: Grab, GoJek, Alibaba Local, Meituan, Tokopedia, Paytm
+  - **LATAM**: Nubank, Mercado Libre, Rappi, Kavak, Creditas, QuintoAndar
+  - **Middle East**: Careem, Souq, Fetchr, Talabat, Noon, Swvl
+  - **Africa**: Jumia, Flutterwave, Andela, Paystack, Konga, M-Pesa
+  - **Australia**: Afterpay, Canva AU, Atlassian, WiseTech, Xero, SEEK
+- **Manage Like Other Competitors**: View in competitor menu, choose strategy (ignore/compete/partner)
+- **Impact**: Competitive markets now have actual named competitors to deal with
+
+#### 💬 Clearer Churn Mitigation in International Markets
+- **Improved Messaging**: When expanding to new markets, clear guidance on:
+  - "Assign CS team to this market to reduce churn!"
+  - "Assign Sales/Marketing to grow this market faster!"
+- **Churn Calculation Now Market-Specific**:
+  - CS reps assigned to market reduce churn by 2% each
+  - COO reduces churn by 6% across all markets
+  - No CS in market = +30% churn penalty
+  - Shows exactly which team members help which markets
+- **Visual Feedback**: Competitor alerts show threat level and market share immediately
+
+### Technical Changes
+
+#### Modified Files
+- `founder/founder.go`:
+  - Added `AssignedMarket` field to `Employee` struct
+  - Created `HireEmployeeWithMarket()` function for market-specific hiring
+  - Updated `UpdateGlobalMarkets()` to only count employees assigned to each market
+  - Rewrote churn calculation to check CS team assigned to specific markets
+  - Added regional competitor generation in `ExpandToMarket()`
+  - 40+ regional competitor names across 6 markets
+  - Threat levels and market share based on competition level
+
+- `founder_ui.go`:
+  - Updated `handleHiring()` to ask for market assignment for Sales/Marketing/CS
+  - Shows available markets with current performance metrics
+  - Modified `handleViewTeamRoster()` to display market assignments
+  - Enhanced `handleGlobalExpansion()` messaging with churn mitigation tips
+  - Added competitor detection alerts when entering new markets
+  - Shows new competitor names, threat levels, and market share
+
+### Examples
+
+**Before**: "Hired 3 sales reps" → all helped all markets equally
+
+**After**: "Hired sales rep for Asia" → only boosts Asia growth; "Hired sales rep for All Markets" → helps globally
+
+**Before**: Expand to Asia → no competitors mentioned
+
+**After**: Expand to Asia → "2 new competitors detected! Grab (Asia) - High threat, 15% market share, Meituan (Asia) - High threat, 22% market share"
+
+---
+
 ## Version 3.11.1 - Bug Fix: Acquisition Payout Breakdown on Final Screen (2025-11-02)
 
 ### Bug Fixes

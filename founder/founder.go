@@ -25,17 +25,18 @@ const (
 
 // Employee represents a team member
 type Employee struct {
-	Name          string
-	Role          EmployeeRole
-	MonthlyCost   int64
-	Impact        float64 // Productivity/effectiveness multiplier
-	IsExecutive   bool    // C-level executives have 3x impact, $300k/year salary
-	Equity        float64 // Equity percentage owned by this employee
-	VestingMonths int     // Total vesting period (typically 48 months)
-	CliffMonths   int     // Cliff period (typically 12 months)
-	VestedMonths  int     // Months vested so far
-	HasCliff      bool    // Has cliff been reached
-	MonthHired    int     // Month when hired
+	Name            string
+	Role            EmployeeRole
+	MonthlyCost     int64
+	Impact          float64 // Productivity/effectiveness multiplier
+	IsExecutive     bool    // C-level executives have 3x impact, $300k/year salary
+	Equity          float64 // Equity percentage owned by this employee
+	VestingMonths   int     // Total vesting period (typically 48 months)
+	CliffMonths     int     // Cliff period (typically 12 months)
+	VestedMonths    int     // Months vested so far
+	HasCliff        bool    // Has cliff been reached
+	MonthHired      int     // Month when hired
+	AssignedMarket  string  // Market assignment: "USA", "Europe", "Asia", "All", etc.
 }
 
 // CapTableEntry tracks individual equity ownership
@@ -1075,10 +1076,11 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 		})
 	} else {
 		employee = Employee{
-			Role:        role,
-			MonthlyCost: avgSalary / 12,
-			Impact:      0.8 + rand.Float64()*0.4,
-			IsExecutive: false,
+			Role:           role,
+			MonthlyCost:    avgSalary / 12,
+			Impact:         0.8 + rand.Float64()*0.4,
+			IsExecutive:    false,
+			AssignedMarket: "USA", // Default to USA market
 		}
 
 		switch role {
@@ -1093,6 +1095,43 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 		default:
 			return fmt.Errorf("unknown role: %s", role)
 		}
+	}
+
+	fs.CalculateTeamCost()
+	fs.CalculateRunway()
+
+	// Recalculate churn rate if hiring CS or COO (affects churn)
+	if role == RoleCustomerSuccess || role == RoleCOO {
+		fs.RecalculateChurnRate()
+	}
+
+	return nil
+}
+
+// HireEmployeeWithMarket adds a new team member assigned to a specific market
+func (fs *FounderState) HireEmployeeWithMarket(role EmployeeRole, market string) error {
+	avgSalary := int64(100000)
+	
+	employee := Employee{
+		Role:           role,
+		MonthlyCost:    avgSalary / 12,
+		Impact:         0.8 + rand.Float64()*0.4,
+		IsExecutive:    false,
+		AssignedMarket: market,
+		MonthHired:     fs.Turn,
+	}
+
+	switch role {
+	case RoleEngineer:
+		fs.Team.Engineers = append(fs.Team.Engineers, employee)
+	case RoleSales:
+		fs.Team.Sales = append(fs.Team.Sales, employee)
+	case RoleCustomerSuccess:
+		fs.Team.CustomerSuccess = append(fs.Team.CustomerSuccess, employee)
+	case RoleMarketing:
+		fs.Team.Marketing = append(fs.Team.Marketing, employee)
+	default:
+		return fmt.Errorf("unknown role: %s", role)
 	}
 
 	fs.CalculateTeamCost()
@@ -2994,8 +3033,72 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 	}
 
 	// Increase global churn rate due to operational complexity
-
 	fs.CustomerChurnRate += 0.01 + (rand.Float64() * 0.01)
+
+	// Add regional competitors based on competition level
+	numCompetitors := 0
+	switch competition {
+	case "very_high":
+		numCompetitors = 2 + rand.Intn(2) // 2-3 competitors
+	case "high":
+		numCompetitors = 1 + rand.Intn(2) // 1-2 competitors
+	case "medium":
+		numCompetitors = rand.Intn(2) // 0-1 competitors
+	case "low":
+		numCompetitors = 0 // No competitors
+	}
+
+	// Regional competitor names by market
+	regionalCompetitors := map[string][]string{
+		"Europe":      {"Zalando", "Klarna", "N26", "TransferWise", "BlaBlaCar", "Deliveroo EU"},
+		"Asia":        {"Grab", "GoJek", "Alibaba Local", "Meituan", "Tokopedia", "Paytm"},
+		"LATAM":       {"Nubank", "Mercado Libre", "Rappi", "Kavak", "Creditas", "QuintoAndar"},
+		"Middle East": {"Careem", "Souq", "Fetchr", "Talabat", "Noon", "Swvl"},
+		"Africa":      {"Jumia", "Flutterwave", "Andela", "Paystack", "Konga", "M-Pesa"},
+		"Australia":   {"Afterpay", "Canva AU", "Atlassian", "WiseTech", "Xero", "SEEK"},
+	}
+
+	if names, ok := regionalCompetitors[region]; ok && numCompetitors > 0 {
+		for i := 0; i < numCompetitors && i < len(names); i++ {
+			compName := names[rand.Intn(len(names))]
+			
+			// Check if competitor already exists
+			exists := false
+			for _, existing := range fs.Competitors {
+				if existing.Name == compName {
+					exists = true
+					break
+				}
+			}
+			
+			if !exists {
+				threatLevel := "medium"
+				marketShare := 0.05 + rand.Float64()*0.15 // 5-20% market share
+				
+				switch competition {
+				case "very_high":
+					threatLevel = "high"
+					marketShare = 0.10 + rand.Float64()*0.20 // 10-30%
+				case "high":
+					threatLevel = "high"
+					marketShare = 0.08 + rand.Float64()*0.15 // 8-23%
+				case "medium":
+					threatLevel = "medium"
+					marketShare = 0.05 + rand.Float64()*0.10 // 5-15%
+				}
+				
+				competitor := Competitor{
+					Name:          compName + " (" + region + ")",
+					Threat:        threatLevel,
+					MarketShare:   marketShare,
+					Strategy:      "ignore", // Default strategy
+					MonthAppeared: fs.Turn,
+					Active:        true,
+				}
+				fs.Competitors = append(fs.Competitors, competitor)
+			}
+		}
+	}
 
 	return &market, nil
 }
@@ -3013,9 +3116,36 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		// Calculate market-specific churn rate
 		marketChurn := fs.CustomerChurnRate
 
-		// No CS team? Much higher churn (up to 50% in new markets)
-		if len(fs.Team.CustomerSuccess) == 0 {
-			marketChurn += 0.30 // +30% base churn without CS
+		// Count CS team assigned to this market or "All" markets
+		csAssignedToMarket := 0
+		for _, cs := range fs.Team.CustomerSuccess {
+			if cs.AssignedMarket == m.Region || cs.AssignedMarket == "All" {
+				csAssignedToMarket++
+			}
+		}
+		
+		// COO also helps with churn across all markets
+		hasCOO := false
+		for _, exec := range fs.Team.Executives {
+			if exec.Role == RoleCOO {
+				hasCOO = true
+				break
+			}
+		}
+
+		// No CS team assigned to this market? Much higher churn (up to 50% in new markets)
+		if csAssignedToMarket == 0 && !hasCOO {
+			marketChurn += 0.30 // +30% base churn without CS in this market
+		} else {
+			// Each CS rep assigned to market reduces churn by ~2%
+			churnReduction := float64(csAssignedToMarket) * 0.02
+			if hasCOO {
+				churnReduction += 0.06 // COO equivalent to 3 CS reps
+			}
+			marketChurn -= churnReduction
+			if marketChurn < 0.01 {
+				marketChurn = 0.01 // Min 1% churn
+			}
 		}
 
 		// Product not mature? Higher churn
@@ -3096,10 +3226,32 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		// Base growth rate - you need sales/marketing to grow in new markets
 		baseGrowth := 0.03 + (rand.Float64() * 0.02) // 3-5% base monthly growth
 
-		// Sales team impact (critical for growing in new markets)
-		salesImpact := float64(len(fs.Team.Sales)) * 0.05 // Each sales rep adds 5%
+		// Count employees assigned to this market or "All" markets
+		salesInMarket := 0
+		for _, sales := range fs.Team.Sales {
+			if sales.AssignedMarket == m.Region || sales.AssignedMarket == "All" {
+				salesInMarket++
+			}
+		}
+		
+		marketingInMarket := 0
+		for _, marketing := range fs.Team.Marketing {
+			if marketing.AssignedMarket == m.Region || marketing.AssignedMarket == "All" {
+				marketingInMarket++
+			}
+		}
+		
+		csInMarket := 0
+		for _, cs := range fs.Team.CustomerSuccess {
+			if cs.AssignedMarket == m.Region || cs.AssignedMarket == "All" {
+				csInMarket++
+			}
+		}
 
-		// CGO amplifies sales impact
+		// Sales team impact (critical for growing in new markets)
+		salesImpact := float64(salesInMarket) * 0.05 // Each sales rep adds 5%
+		
+		// CGO amplifies sales impact (CGO works across all markets)
 		for _, exec := range fs.Team.Executives {
 			if exec.Role == RoleCGO {
 				salesImpact += (exec.Impact * 0.05) // CGO adds significant growth boost
@@ -3107,7 +3259,7 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		}
 
 		// Marketing team impact (brand awareness in new markets)
-		marketingImpact := 0.03 * float64(len(fs.Team.Marketing)) // Each marketer adds 3%
+		marketingImpact := 0.03 * float64(marketingInMarket) // Each marketer adds 3%
 
 		// Adjust for competition
 		competitionMultiplier := 1.0
@@ -3133,18 +3285,19 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		// Calculate new customers
 		// Percentage growth based on current base (compounds over time)
 		percentageGrowth := int(float64(m.CustomerCount) * totalGrowthRate)
-
+		
 		// Plus absolute growth (helps new/small markets grow)
 		// Sales/marketing teams directly acquire customers even in new markets
-		absoluteGrowth := (len(fs.Team.Sales) * 2) + (len(fs.Team.Marketing) * 1)
-
-		// CGO contributes to absolute growth
+		// Only count employees assigned to this market or "All"
+		absoluteGrowth := (salesInMarket * 2) + (marketingInMarket * 1)
+		
+		// CGO contributes to absolute growth (works across all markets)
 		for _, exec := range fs.Team.Executives {
 			if exec.Role == RoleCGO {
 				absoluteGrowth += int(exec.Impact * 3) // CGO brings in customers directly
 			}
 		}
-
+		
 		newCustomers := percentageGrowth + absoluteGrowth
 
 		// But cap at remaining market opportunity

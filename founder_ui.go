@@ -868,7 +868,45 @@ func handleHiring(fs *founder.FounderState) bool {
 		return true // Invalid, go back to menu
 	}
 
-	err := fs.HireEmployee(role)
+	// For sales, marketing, and CS roles, ask about market assignment if there are global markets
+	var market string = "USA"
+	if !isExec && (role == founder.RoleSales || role == founder.RoleMarketing || role == founder.RoleCustomerSuccess) && len(fs.GlobalMarkets) > 0 {
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		yellow.Println("📍 MARKET ASSIGNMENT")
+		fmt.Println(strings.Repeat("─", 70))
+		fmt.Println("\nWhich market should this employee focus on?")
+		fmt.Println("1. USA (home market)")
+		
+		marketOptions := []string{"USA"}
+		optionNum := 2
+		for _, m := range fs.GlobalMarkets {
+			fmt.Printf("%d. %s (%d customers, $%s MRR)\n", optionNum, m.Region, m.CustomerCount, formatFounderCurrency(m.MRR))
+			marketOptions = append(marketOptions, m.Region)
+			optionNum++
+		}
+		fmt.Printf("%d. All Markets (works globally)\n", optionNum)
+		marketOptions = append(marketOptions, "All")
+		
+		fmt.Print("\nSelect market (1-" + fmt.Sprintf("%d", optionNum) + "): ")
+		marketChoice, _ := reader.ReadString('\n')
+		marketChoice = strings.TrimSpace(marketChoice)
+		
+		marketNum, err := strconv.Atoi(marketChoice)
+		if err != nil || marketNum < 1 || marketNum > len(marketOptions) {
+			color.Red("\nInvalid choice! Defaulting to USA")
+			market = "USA"
+		} else {
+			market = marketOptions[marketNum-1]
+		}
+	}
+
+	var err error
+	if !isExec && market != "USA" {
+		err = fs.HireEmployeeWithMarket(role, market)
+	} else {
+		err = fs.HireEmployee(role)
+	}
+	
 	if err != nil {
 		color.Red("\n❌ Error: %v", err)
 		return true // Error, go back to menu
@@ -879,6 +917,10 @@ func handleHiring(fs *founder.FounderState) bool {
 		} else {
 			color.Green("\n✓ Hired a new %s!", role)
 			fmt.Printf("   Cost: $100k/year ($8.3k/month)\n")
+			if market != "USA" {
+				cyan := color.New(color.FgCyan)
+				cyan.Printf("   Assigned to: %s\n", market)
+			}
 		}
 		if fs.CashRunwayMonths < 0 {
 			fmt.Printf("   Runway: ∞ (still profitable!)\n")
@@ -1710,6 +1752,9 @@ func handleGlobalExpansion(fs *founder.FounderState) bool {
 		return true
 	}
 
+	// Count competitors before expansion
+	competitorsBefore := len(fs.Competitors)
+	
 	market, err := fs.ExpandToMarket(region)
 	if err != nil {
 		color.Red("\n❌ Error: %v", err)
@@ -1722,8 +1767,22 @@ func handleGlobalExpansion(fs *founder.FounderState) bool {
 		fmt.Printf("  Market Size: %d potential customers\n", market.MarketSize)
 		fmt.Printf("  Initial Penetration: %.2f%%\n", market.Penetration*100)
 
-		yellow.Println("\n⚠️  Your global churn rate increased due to operational complexity")
-		fmt.Printf("  New churn rate: %.1f%%\n", fs.CustomerChurnRate*100)
+		yellow.Println("\n⚠️  IMPORTANT:")
+		fmt.Printf("  • Global churn increased to %.1f%% (operational complexity)\n", fs.CustomerChurnRate*100)
+		cyan := color.New(color.FgCyan)
+		cyan.Println("  • Assign CS team to this market to reduce churn!")
+		cyan.Println("  • Assign Sales/Marketing to grow this market faster!")
+		
+		// Show new competitors
+		newCompetitors := len(fs.Competitors) - competitorsBefore
+		if newCompetitors > 0 {
+			yellow.Printf("\n🔴 %d new competitor(s) detected in %s!\n", newCompetitors, region)
+			fmt.Println("  View them in the 'Handle Competitors' menu to choose your strategy")
+			for i := competitorsBefore; i < len(fs.Competitors); i++ {
+				comp := fs.Competitors[i]
+				fmt.Printf("    • %s (Threat: %s, Market Share: %.1f%%)\n", comp.Name, comp.Threat, comp.MarketShare*100)
+			}
+		}
 	}
 	return false
 }
@@ -2593,6 +2652,15 @@ func handleViewTeamRoster(fs *founder.FounderState) {
 		fmt.Printf("Name: %s\n", e.Name)
 		fmt.Printf("Salary: $%s/year ($%s/month)\n",
 			formatFounderCurrency(e.MonthlyCost*12), formatFounderCurrency(e.MonthlyCost))
+		
+		// Show market assignment for non-executives
+		if !e.IsExecutive && e.AssignedMarket != "" {
+			if e.AssignedMarket == "All" {
+				cyan.Printf("Assigned Market: %s (works globally)\n", e.AssignedMarket)
+			} else {
+				fmt.Printf("Assigned Market: %s\n", e.AssignedMarket)
+			}
+		}
 
 		if e.Equity > 0 {
 			vestedEquity := 0.0
