@@ -196,7 +196,8 @@ type FundingRound struct {
 	Valuation   int64
 	EquityGiven float64
 	Month       int
-	Terms       string // "Founder-friendly", "Standard", "Investor-heavy"
+	Terms       string   // "Founder-friendly", "Standard", "Investor-heavy"
+	Investors   []string // Names of investors in this round
 }
 
 // TermSheetOption represents different fundraising options to choose from
@@ -1042,24 +1043,32 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 
 		fs.EquityPool -= executiveEquity
 
+		// Famous C-suite names from Silicon Valley (show & real life)
+		execNames := map[EmployeeRole][]string{
+			RoleCTO: {"Gilfoyle", "Steve Wozniak", "Sergey Brin", "Marc Andreessen", "Brendan Eich"},
+			RoleCFO: {"Jared Dunn", "Ruth Porat", "David Wehner", "Ned Segal", "Luca Maestri"},
+			RoleCOO: {"Sheryl Sandberg", "Gwart", "Tim Cook", "Jeff Weiner", "Stephanie McMahon"},
+			RoleCGO: {"Richard Hendricks", "Erlich Bachman", "Andrew Chen", "Alex Schultz", "Sean Ellis"},
+		}
+
 		employee = Employee{
-			Role:        role,
-			MonthlyCost: 25000,                            // $300k/year
-			Impact:      3.0 * (0.8 + rand.Float64()*0.4), // 3x impact (2.4-3.6x)
-			IsExecutive: true,
-			Equity:      executiveEquity,
+			Name:          execNames[role][rand.Intn(len(execNames[role]))],
+			Role:          role,
+			MonthlyCost:   25000,                            // $300k/year
+			Impact:        3.0 * (0.8 + rand.Float64()*0.4), // 3x impact (2.4-3.6x)
+			IsExecutive:   true,
+			Equity:        executiveEquity,
+			VestingMonths: 48, // 4 year vesting
+			CliffMonths:   12, // 1 year cliff
+			VestedMonths:  0,
+			HasCliff:      false,
+			MonthHired:    fs.Turn,
 		}
 		fs.Team.Executives = append(fs.Team.Executives, employee)
 
-		// Add to cap table
-		execTitle := map[EmployeeRole]string{
-			RoleCTO: "CTO",
-			RoleCFO: "CFO",
-			RoleCOO: "COO",
-			RoleCGO: "CGO",
-		}
+		// Add to cap table with executive's name
 		fs.CapTable = append(fs.CapTable, CapTableEntry{
-			Name:         execTitle[role],
+			Name:         employee.Name,
 			Type:         "executive",
 			Equity:       executiveEquity,
 			MonthGranted: fs.Turn,
@@ -1241,10 +1250,99 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 	return options
 }
 
+// GenerateInvestorNames creates realistic investor names based on round type
+func GenerateInvestorNames(roundName string, amount int64) []string {
+	var investors []string
+
+	// Angel/Pre-Seed: individual angels
+	angelInvestors := []string{
+		"Naval Ravikant", "Balaji Srinivasan", "Jason Calacanis", "David Sacks",
+		"Elad Gil", "Lachy Groom", "Sahil Bloom", "Anthony Pompliano",
+		"Cyan Banister", "Alexis Ohanian", "Arlan Hamilton", "Kevin Hale",
+	}
+
+	// Seed: Mix of angels and micro VCs
+	seedFirms := []string{
+		"Y Combinator", "Sequoia Scout", "First Round", "SV Angel",
+		"Hustle Fund", "Khosla Ventures", "Initialized Capital", "Haystack",
+		"Precursor Ventures", "Boost VC", "Felicis Ventures", "Homebrew",
+	}
+
+	// Series A: Traditional VCs
+	seriesAFirms := []string{
+		"Sequoia Capital", "Andreessen Horowitz", "Accel Partners", "Benchmark",
+		"Greylock Partners", "Kleiner Perkins", "Lightspeed Venture Partners",
+		"Index Ventures", "General Catalyst", "NEA", "GGV Capital", "Bessemer",
+	}
+
+	// Series B+: Growth firms and strategics
+	growthFirms := []string{
+		"Tiger Global", "Insight Partners", "Coatue Management", "DST Global",
+		"SoftBank Vision Fund", "General Atlantic", "Thrive Capital", "IVP",
+		"Ribbit Capital", "T. Rowe Price", "Fidelity Investments", "BlackRock",
+	}
+
+	// Family offices and strategics
+	familyOffices := []string{
+		"Founders Fund", "Bezos Expeditions", "Schmidt Futures", "Emerson Collective",
+		"Zuckerberg Family Office", "Gates Ventures", "Cuban Companies", "Thiel Capital",
+	}
+
+	switch roundName {
+	case "Angel", "Pre-Seed":
+		// 2-4 angels
+		count := 2 + rand.Intn(3)
+		for i := 0; i < count && i < len(angelInvestors); i++ {
+			investors = append(investors, angelInvestors[rand.Intn(len(angelInvestors))])
+		}
+
+	case "Seed":
+		// Lead VC + 1-2 angels or micro VCs
+		investors = append(investors, seedFirms[rand.Intn(len(seedFirms))])
+		if rand.Float64() > 0.5 {
+			investors = append(investors, angelInvestors[rand.Intn(len(angelInvestors))])
+		}
+		if amount > 2000000 { // Larger seed rounds have more investors
+			investors = append(investors, seedFirms[rand.Intn(len(seedFirms))])
+		}
+
+	case "Series A":
+		// Lead VC + co-investors
+		investors = append(investors, seriesAFirms[rand.Intn(len(seriesAFirms))])
+		if amount > 10000000 {
+			investors = append(investors, seriesAFirms[rand.Intn(len(seriesAFirms))])
+		}
+		// Sometimes strategic or family office
+		if rand.Float64() > 0.7 {
+			investors = append(investors, familyOffices[rand.Intn(len(familyOffices))])
+		}
+
+	case "Series B", "Series C", "Series D":
+		// Growth firms + existing investors
+		investors = append(investors, growthFirms[rand.Intn(len(growthFirms))])
+		investors = append(investors, seriesAFirms[rand.Intn(len(seriesAFirms))])
+		if amount > 50000000 {
+			investors = append(investors, growthFirms[rand.Intn(len(growthFirms))])
+		}
+		if rand.Float64() > 0.6 {
+			investors = append(investors, familyOffices[rand.Intn(len(familyOffices))])
+		}
+
+	default:
+		// Generic round - mix it up
+		investors = append(investors, seriesAFirms[rand.Intn(len(seriesAFirms))])
+	}
+
+	return investors
+}
+
 // RaiseFunding attempts to raise a funding round with a chosen term sheet
 func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheetOption) (success bool) {
 	fs.Cash += option.Amount
 	fs.EquityGivenAway += option.Equity
+
+	// Generate investor names for this round
+	investors := GenerateInvestorNames(roundName, option.Amount)
 
 	round := FundingRound{
 		RoundName:   roundName,
@@ -1253,16 +1351,20 @@ func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheet
 		EquityGiven: option.Equity,
 		Month:       fs.Turn,
 		Terms:       option.Terms,
+		Investors:   investors,
 	}
 	fs.FundingRounds = append(fs.FundingRounds, round)
 
-	// Add investor to cap table
-	fs.CapTable = append(fs.CapTable, CapTableEntry{
-		Name:         roundName + " Investors",
-		Type:         "investor",
-		Equity:       option.Equity,
-		MonthGranted: fs.Turn,
-	})
+	// Add investors to cap table (split equity among them)
+	equityPerInvestor := option.Equity / float64(len(investors))
+	for _, investor := range investors {
+		fs.CapTable = append(fs.CapTable, CapTableEntry{
+			Name:         investor,
+			Type:         "investor",
+			Equity:       equityPerInvestor,
+			MonthGranted: fs.Turn,
+		})
+	}
 
 	fs.CalculateRunway()
 
@@ -1504,6 +1606,12 @@ func (fs *FounderState) SolicitCustomerFeedback() error {
 	}
 
 	fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity+improvement)
+
+	// Customer feedback also reduces churn by 3-10%
+	churnReduction := 0.03 + rand.Float64()*0.07                               // 3-10% reduction
+	fs.CustomerChurnRate = math.Max(0.01, fs.CustomerChurnRate-churnReduction) // Minimum 1% churn
+	fs.ChurnRate = fs.CustomerChurnRate
+
 	return nil
 }
 
@@ -2985,26 +3093,33 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		}
 
 		// Now attempt growth
-		// Base growth rate much lower - you need to work for it
-		baseGrowth := 0.02 + (rand.Float64() * 0.03) // 2-5% base monthly growth
+		// Base growth rate - you need sales/marketing to grow in new markets
+		baseGrowth := 0.03 + (rand.Float64() * 0.02) // 3-5% base monthly growth
 
-		// Sales team impact (need sales to grow in new markets)
-		salesImpact := float64(len(fs.Team.Sales)) * 0.02 // Each sales rep adds 2%
+		// Sales team impact (critical for growing in new markets)
+		salesImpact := float64(len(fs.Team.Sales)) * 0.05 // Each sales rep adds 5%
 
-		// Marketing spend helps (if they spent on marketing this turn, residual effect)
-		marketingImpact := 0.01 * float64(len(fs.Team.Marketing)) // Each marketer adds 1%
+		// CGO amplifies sales impact
+		for _, exec := range fs.Team.Executives {
+			if exec.Role == RoleCGO {
+				salesImpact += (exec.Impact * 0.05) // CGO adds significant growth boost
+			}
+		}
+
+		// Marketing team impact (brand awareness in new markets)
+		marketingImpact := 0.03 * float64(len(fs.Team.Marketing)) // Each marketer adds 3%
 
 		// Adjust for competition
 		competitionMultiplier := 1.0
 		switch m.LocalCompetition {
 		case "very_high":
-			competitionMultiplier = 0.5 // Half growth in very competitive markets
+			competitionMultiplier = 0.6 // Harder growth in very competitive markets
 		case "high":
-			competitionMultiplier = 0.7
+			competitionMultiplier = 0.75
 		case "medium":
-			competitionMultiplier = 0.85
+			competitionMultiplier = 0.9
 		case "low":
-			competitionMultiplier = 1.1 // Easier growth in low competition
+			competitionMultiplier = 1.2 // Much easier growth in low competition
 		}
 
 		// Product maturity affects conversion
@@ -3013,11 +3128,24 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 			productMultiplier = 0.5 // Can't grow much with immature product
 		}
 
-		totalGrowth := (baseGrowth + salesImpact + marketingImpact) * competitionMultiplier * productMultiplier
+		totalGrowthRate := (baseGrowth + salesImpact + marketingImpact) * competitionMultiplier * productMultiplier
 
-		// Calculate new customers (as % of CURRENT customer base in this market)
-		// This is much more realistic - you grow based on what you already have
-		newCustomers := int(float64(m.CustomerCount) * totalGrowth)
+		// Calculate new customers
+		// Percentage growth based on current base (compounds over time)
+		percentageGrowth := int(float64(m.CustomerCount) * totalGrowthRate)
+
+		// Plus absolute growth (helps new/small markets grow)
+		// Sales/marketing teams directly acquire customers even in new markets
+		absoluteGrowth := (len(fs.Team.Sales) * 2) + (len(fs.Team.Marketing) * 1)
+
+		// CGO contributes to absolute growth
+		for _, exec := range fs.Team.Executives {
+			if exec.Role == RoleCGO {
+				absoluteGrowth += int(exec.Impact * 3) // CGO brings in customers directly
+			}
+		}
+
+		newCustomers := percentageGrowth + absoluteGrowth
 
 		// But cap at remaining market opportunity
 		remainingMarket := m.MarketSize - m.CustomerCount

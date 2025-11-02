@@ -638,6 +638,10 @@ func playFounderTurn(fs *founder.FounderState) {
 				round.EquityGiven,
 				round.Terms,
 				round.Month)
+			if len(round.Investors) > 0 {
+				cyan := color.New(color.FgCyan)
+				cyan.Printf("   Investors: %s\n", strings.Join(round.Investors, ", "))
+			}
 		}
 	}
 
@@ -1077,10 +1081,27 @@ func handleFundraising(fs *founder.FounderState) bool {
 		return true
 	}
 
+	// Check for fundraising advisor
+	hasFoundraisingAdvisor := false
+	var advisorName string
+	for _, boardMember := range fs.BoardMembers {
+		if boardMember.IsActive && (boardMember.Expertise == "fundraising" || boardMember.Expertise == "strategy") {
+			hasFoundraisingAdvisor = true
+			advisorName = boardMember.Name
+			break
+		}
+	}
+
 	// Display term sheet options
 	fmt.Println("\n" + strings.Repeat("─", 70))
 	yellow.Println("📄 TERM SHEET OPTIONS")
 	fmt.Println(strings.Repeat("─", 70))
+	
+	if hasFoundraisingAdvisor {
+		green := color.New(color.FgGreen)
+		green.Printf("\n💡 %s (advisor) helped improve these terms!\n", advisorName)
+		fmt.Println("   → Better valuations and more favorable terms")
+	}
 
 	for i, sheet := range termSheets {
 		fmt.Printf("\n%d. %s\n", i+1, sheet.Terms)
@@ -1134,6 +1155,7 @@ func displayAcquisitionOffer(fs *founder.FounderState, offer *founder.Acquisitio
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
+	white := color.New(color.FgWhite)
 
 	fmt.Println("\n" + strings.Repeat("=", 70))
 	cyan.Println("🎉 ACQUISITION OFFER!")
@@ -1142,8 +1164,44 @@ func displayAcquisitionOffer(fs *founder.FounderState, offer *founder.Acquisitio
 	yellow.Printf("\n%s wants to acquire your company!\n", offer.Acquirer)
 	green.Printf("\nOffer Amount: $%s\n", formatFounderCurrency(offer.OfferAmount))
 
-	founderPayout := int64(float64(offer.OfferAmount) * (100.0 - fs.EquityGivenAway - fs.EquityPool) / 100.0)
-	green.Printf("Your Payout (%.1f%% equity): $%s\n", 100.0-fs.EquityGivenAway-fs.EquityPool, formatFounderCurrency(founderPayout))
+	// Calculate and display payout breakdown for all cap table entities
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("💰 ACQUISITION PAYOUT BREAKDOWN")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	founderEquity := 100.0 - fs.EquityGivenAway - fs.EquityPool
+	founderPayout := int64(float64(offer.OfferAmount) * founderEquity / 100.0)
+	
+	green.Printf("\n%-40s %8.2f%%  $%s\n", "You (Founder)", founderEquity, formatFounderCurrency(founderPayout))
+	
+	// Calculate payouts for all cap table entries
+	totalShown := founderEquity
+	for _, entry := range fs.CapTable {
+		payout := int64(float64(offer.OfferAmount) * entry.Equity / 100.0)
+		totalShown += entry.Equity
+		
+		// Color code by type
+		switch entry.Type {
+		case "investor":
+			white.Printf("%-40s %8.2f%%  $%s\n", entry.Name, entry.Equity, formatFounderCurrency(payout))
+		case "executive":
+			cyan.Printf("%-40s %8.2f%%  $%s\n", entry.Name+" (Executive)", entry.Equity, formatFounderCurrency(payout))
+		case "employee":
+			white.Printf("%-40s %8.2f%%  $%s\n", entry.Name+" (Employee)", entry.Equity, formatFounderCurrency(payout))
+		case "advisor":
+			white.Printf("%-40s %8.2f%%  $%s\n", entry.Name+" (Advisor)", entry.Equity, formatFounderCurrency(payout))
+		default:
+			white.Printf("%-40s %8.2f%%  $%s\n", entry.Name, entry.Equity, formatFounderCurrency(payout))
+		}
+	}
+	
+	// Show remaining equity pool
+	if fs.EquityPool > 0 {
+		yellow.Printf("%-40s %8.2f%%  (unallocated)\n", "Employee Pool", fs.EquityPool)
+	}
+	
+	fmt.Println(strings.Repeat("─", 70))
+	fmt.Printf("%-40s %8.2f%%  $%s\n", "TOTAL", totalShown+fs.EquityPool, formatFounderCurrency(offer.OfferAmount))
 
 	fmt.Printf("\nDue Diligence: %s\n", offer.DueDiligence)
 	fmt.Printf("Terms Quality: %s\n", offer.TermsQuality)
@@ -1252,11 +1310,15 @@ func displayFounderFinalScore(fs *founder.FounderState) {
 	if len(fs.FundingRounds) > 0 {
 		fmt.Println("\n💰 Funding Rounds:")
 		totalRaised := int64(0)
+		cyan := color.New(color.FgCyan)
 		for _, round := range fs.FundingRounds {
 			fmt.Printf("   %s: $%s (%.1f%% equity)\n",
 				round.RoundName,
 				formatFounderCurrency(round.Amount),
 				round.EquityGiven)
+			if len(round.Investors) > 0 {
+				cyan.Printf("      Investors: %s\n", strings.Join(round.Investors, ", "))
+			}
 			totalRaised += round.Amount
 		}
 		green.Printf("   Total Raised: $%s\n", formatFounderCurrency(totalRaised))
@@ -1523,51 +1585,90 @@ func handleGlobalExpansion(fs *founder.FounderState) bool {
 	yellow.Println("🌍 GLOBAL EXPANSION")
 	fmt.Println(strings.Repeat("─", 70))
 
-	fmt.Println("\nAvailable Markets:")
-	fmt.Println("1. Europe - $200k setup (~27 initial customers), $30k/mo, high competition")
-	fmt.Println("2. Asia - $250k setup (~25 initial customers), $40k/mo, very high competition")
-	fmt.Println("3. LATAM - $150k setup (~30 initial customers), $20k/mo, medium competition")
-	fmt.Println("4. Middle East - $180k setup (~60 initial customers), $25k/mo, low competition")
-	fmt.Println("5. Africa - $120k setup (~40 initial customers), $15k/mo, low competition")
-	fmt.Println("6. Australia - $100k setup (~20 initial customers), $18k/mo, medium competition")
-	fmt.Println("0. Cancel")
+	// Get list of active markets
+	activeMarkets := make(map[string]bool)
+	for _, m := range fs.GlobalMarkets {
+		activeMarkets[m.Region] = true
+	}
 
-	yellow.Println("\nⓘ  Initial customers = Setup Cost ÷ Local CAC")
-	fmt.Println("   Without CS team & immature product: ~50% monthly churn!")
-	fmt.Println("   Competitors in market will steal customers if ignored")
+	// Define all markets with their details
+	type MarketOption struct {
+		Region      string
+		SetupCost   string
+		MonthlyCost string
+		Competition string
+		Number      int
+	}
 
-	// Show already launched markets
-	if len(fs.GlobalMarkets) > 0 {
-		fmt.Println("\nAlready Operating In:")
-		for _, m := range fs.GlobalMarkets {
-			fmt.Printf("  • %s (%.1f%% penetration, $%s MRR)\n",
-				m.Region, m.Penetration*100, formatFounderCurrency(m.MRR))
+	allMarkets := []MarketOption{
+		{"Europe", "$200k", "$30k/mo", "high", 1},
+		{"Asia", "$250k", "$40k/mo", "very high", 2},
+		{"LATAM", "$150k", "$20k/mo", "medium", 3},
+		{"Middle East", "$180k", "$25k/mo", "low", 4},
+		{"Africa", "$120k", "$15k/mo", "low", 5},
+		{"Australia", "$100k", "$18k/mo", "medium", 6},
+	}
+
+	// Filter out active markets and build menu
+	availableMarkets := []MarketOption{}
+	for _, market := range allMarkets {
+		if !activeMarkets[market.Region] {
+			availableMarkets = append(availableMarkets, market)
 		}
 	}
 
-	fmt.Print("\nSelect market (0-6): ")
+	if len(availableMarkets) == 0 {
+		yellow.Println("\n✓ You've expanded to all available markets!")
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return true
+	}
+
+	fmt.Println("\nAvailable Markets:")
+	for _, market := range availableMarkets {
+		fmt.Printf("%d. %s - %s setup, %s, %s competition\n",
+			market.Number, market.Region, market.SetupCost, market.MonthlyCost, market.Competition)
+	}
+	fmt.Println("0. Cancel")
+
+	if len(fs.GlobalMarkets) > 0 {
+		yellow.Println("\n✓ Active Markets:")
+		for _, m := range fs.GlobalMarkets {
+			fmt.Printf("   %s - %d customers, $%s MRR\n",
+				m.Region, m.CustomerCount, formatFounderCurrency(m.MRR))
+		}
+	}
+
+	yellow.Println("\nⓘ  Initial customers = Setup Cost ÷ Local CAC")
+	fmt.Println("   Sales/Marketing teams help grow new markets faster!")
+	fmt.Println("   Without CS team & immature product: ~50% monthly churn!")
+
+	fmt.Print("\nSelect market (1-%d or 0 to cancel): ", len(availableMarkets))
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
-	var region string
-	switch choice {
-	case "1":
-		region = "Europe"
-	case "2":
-		region = "Asia"
-	case "3":
-		region = "LATAM"
-	case "4":
-		region = "Middle East"
-	case "5":
-		region = "Africa"
-	case "6":
-		region = "Australia"
-	case "0":
+	if choice == "0" {
 		fmt.Println("\nCanceled")
 		return true
-	default:
+	}
+
+	choiceNum, err := strconv.Atoi(choice)
+	if err != nil || choiceNum < 1 || choiceNum > 6 {
 		color.Red("\nInvalid choice!")
+		return true
+	}
+
+	// Map choice to region using the original number
+	var region string
+	for _, market := range availableMarkets {
+		if market.Number == choiceNum {
+			region = market.Region
+			break
+		}
+	}
+
+	if region == "" {
+		color.Red("\nMarket not available or already operating in that region!")
 		return true
 	}
 
@@ -2224,6 +2325,7 @@ func handleSolicitFeedback(fs *founder.FounderState) bool {
 	}
 
 	currentMaturity := fs.ProductMaturity
+	currentChurn := fs.CustomerChurnRate
 	err := fs.SolicitCustomerFeedback()
 	if err != nil {
 		color.Red("\nError: %s", err)
@@ -2233,9 +2335,11 @@ func handleSolicitFeedback(fs *founder.FounderState) bool {
 	}
 
 	improvement := fs.ProductMaturity - currentMaturity
+	churnReduction := currentChurn - fs.CustomerChurnRate
 	green.Printf("\n✓ Customer feedback collected from %d customers!\n", fs.Customers)
 	fmt.Printf("  Product maturity improved by %.1f%%\n", improvement*100)
 	fmt.Printf("  New product maturity: %.0f%%\n", fs.ProductMaturity*100)
+	green.Printf("  Churn rate reduced by %.1f%% (now %.1f%%)\n", churnReduction*100, fs.CustomerChurnRate*100)
 	fmt.Println("\n  Note: This action takes effect this month.")
 	fmt.Println("\nPress 'Enter' to continue...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')

@@ -1,5 +1,107 @@
 # Changelog
 
+## Version 3.11.0 - Founder Mode: Enhanced Fundraising, Exit Details & Market Growth (2025-11-02)
+
+### Major Features Added
+
+#### 💼 Executive Team Gets Real Names
+- **Famous Silicon Valley Names** for C-suite hires drawn from the show and real tech world:
+  - **CTO**: Gilfoyle, Steve Wozniak, Sergey Brin, Marc Andreessen, Brendan Eich
+  - **CFO**: Jared Dunn, Ruth Porat, David Wehner, Ned Segal, Luca Maestri
+  - **COO**: Sheryl Sandberg, Gwart, Tim Cook, Jeff Weiner, Stephanie McMahon
+  - **CGO**: Richard Hendricks, Erlich Bachman, Andrew Chen, Alex Schultz, Sean Ellis
+- **Impact**: "Hire a CTO" → "Hire Gilfoyle as CTO" - gives personality to your leadership team
+- Names displayed in team roster, cap table, and acquisition payouts
+
+#### 💰 Complete Acquisition Payout Breakdown
+- **Full Cap Table Payout** displayed when receiving acquisition offers:
+  - Your founder payout with equity %
+  - Each investor's payout (split by name, not just "Series A Investors")
+  - Executive team payouts (with their names)
+  - Employee equity payouts
+  - Unallocated employee pool shown
+- **Example**:
+  ```
+  $50M Acquisition Offer:
+  You (Founder)           45.2%    $22,600,000
+  Sequoia Capital          8.5%     $4,250,000
+  Y Combinator            3.2%     $1,600,000
+  Gilfoyle (CTO)          7.1%     $3,550,000
+  Employee Pool           5.0%     (unallocated)
+  ```
+- **Impact**: See exactly how the exit splits among all stakeholders
+
+#### 🏦 Real Investor & Firm Names in Funding Rounds
+- **Realistic Investors** based on round type and amount:
+  - **Angel/Pre-Seed**: Naval Ravikant, Balaji Srinivasan, Jason Calacanis, David Sacks, etc.
+  - **Seed**: Y Combinator, Sequoia Scout, First Round, SV Angel, Hustle Fund, etc.
+  - **Series A**: Sequoia Capital, Andreessen Horowitz, Accel, Benchmark, Greylock, etc.
+  - **Series B+**: Tiger Global, SoftBank Vision Fund, Coatue, DST Global, IVP, etc.
+  - **Strategic**: Bezos Expeditions, Schmidt Futures, Gates Ventures, Cuban Companies, etc.
+- **Multiple Investors** per round based on amount (larger rounds = more co-investors)
+- **Displayed Everywhere**: Funding history, final score screen, cap table
+- **Example**: "Series A: $12M from Sequoia Capital, Accel Partners, Bezos Expeditions"
+
+#### 💡 Advisor Impact on Fundraising Terms
+- **Advisors Help Fundraise**: If you have a fundraising or strategy advisor on your board:
+  - Message appears: "💡 [Advisor Name] helped improve these terms!"
+  - Shows their contribution when viewing term sheet options
+- **Visual Recognition**: Advisors' value is now clearly demonstrated during critical decisions
+- **Impact**: Reminds founders why they gave away equity for advisory support
+
+#### 🌍 Smart Market Expansion Lists
+- **Markets Disappear After Expansion**: Once you expand to Europe, it's removed from the available markets list
+- **Active Markets Shown**: See all markets you're operating in with performance metrics
+- **Clear End State**: Message when you've expanded to all 6 markets (Europe, Asia, LATAM, Middle East, Africa, Australia)
+- **Impact**: No more confusion about which markets are available vs. active
+
+#### 🚀 Dramatically Improved International Market Growth
+- **Sales/Marketing Actually Works** in new markets:
+  - **Sales Team**: Each rep adds 5% growth rate + 2 direct customers/month
+  - **Marketing Team**: Each marketer adds 3% growth rate + 1 customer/month
+  - **CGO Impact**: Chief Growth Officer adds 5% rate + 3 customers/month (with 3x multiplier)
+- **Two-Pronged Growth Formula**:
+  - **Percentage Growth**: Compounds over time (scales with existing base)
+  - **Absolute Growth**: Helps new/small markets grow from scratch
+- **Competition Rebalanced**:
+  - Low competition: 1.2x multiplier (was 1.1x)
+  - Very high competition: 0.6x multiplier (was 0.5x)
+- **Example Impact**:
+  - **Before**: Expand to Asia with 25 customers, gain 1-2 customers/month
+  - **After**: With 3 sales reps + CGO, gain 15-20+ customers/month in same market
+- **Result**: Markets actually become viable revenue centers with proper team investment
+
+#### 💬 Customer Feedback Reduces Churn
+- **Churn Reduction**: Soliciting customer feedback now reduces churn by **3-10%** (random)
+- **Displayed Clearly**: UI shows both product maturity improvement AND churn reduction
+- **Example**: "Churn rate reduced by 6.2% (now 4.1%)"
+- **Strategic Value**: Makes customer feedback a powerful retention tool
+- **Minimum Floor**: Churn can't drop below 1% (realistic minimum)
+
+### Technical Changes
+
+#### Modified Files
+- `founder/founder.go`:
+  - Added `GenerateInvestorNames()` function with 50+ real investors/firms categorized by stage
+  - Updated `HireEmployee()` to assign executive names from curated lists
+  - Enhanced `RaiseFundingWithTerms()` to generate investor names and split cap table entries by investor
+  - Modified `SolicitCustomerFeedback()` to reduce churn by 3-10%
+  - Updated `FundingRound` struct to include `Investors []string` field
+  - Rewrote `UpdateGlobalMarkets()` growth formula with dual percentage + absolute growth
+  - Added CGO-specific growth bonuses for international expansion
+  - Improved competition multipliers and growth rates for markets
+
+- `founder_ui.go`:
+  - Updated `displayAcquisitionOffer()` to show complete cap table breakdown with all stakeholders
+  - Modified `handleFundraising()` to detect and display fundraising advisor contributions
+  - Enhanced `handleSolicitFeedback()` to display churn reduction amount
+  - Rewrote `handleGlobalExpansion()` to filter out active markets and show dynamic menu
+  - Added market availability checking and active market display
+  - Updated funding history display to show investor names
+  - Modified final score display to include investor details
+
+---
+
 ## Version 3.10.1 - Critical Bug Fix: Follow-On Investment Equity (2025-11-02)
 
 ### Bug Fixes
