@@ -28,12 +28,67 @@ type gameData struct {
 	Foreground string `yaml:"foreground-color"`
 }
 
+func formatCurrency(amount int64) string {
+	if amount < 0 {
+		return fmt.Sprintf("-$%s", formatCurrency(-amount))
+	}
+
+	str := fmt.Sprintf("%d", amount)
+	var result string
+	for i, digit := range str {
+		if i > 0 && (len(str)-i)%3 == 0 {
+			result += ","
+		}
+		result += string(digit)
+	}
+	return result
+}
+
 func initMenu() (username string) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Enter your Name: ")
 	text, _ := reader.ReadString('\n')
 	text = strings.TrimSpace(text)
-	fmt.Printf("\nWelcome %s!\n", text)
+	
+	// Check if this player has played before
+	stats, err := db.GetPlayerStats(text)
+	if err == nil && stats.TotalGames > 0 {
+		// Returning player - show welcome back message with stats
+		fmt.Println()
+		green.Printf("🎉 Welcome back, %s!\n\n", text)
+		
+		cyan.Println(strings.Repeat("=", 60))
+		cyan.Println("                  YOUR PLAYER STATS")
+		cyan.Println(strings.Repeat("=", 60))
+		
+		yellow.Printf("\n📊 Games Played: %d\n", stats.TotalGames)
+		yellow.Printf("💰 Best Net Worth: $%s\n", formatCurrency(stats.BestNetWorth))
+		yellow.Printf("📈 Best ROI: %.1f%%\n", stats.BestROI*100)
+		yellow.Printf("🚀 Total Exits: %d\n", stats.TotalExits)
+		yellow.Printf("📊 Average Net Worth: $%s\n", formatCurrency(int64(stats.AverageNetWorth)))
+		yellow.Printf("🎯 Win Rate: %.1f%%\n", stats.WinRate)
+		
+		// Get achievement count
+		achievementCount, _ := db.GetPlayerAchievementCount(text)
+		if achievementCount > 0 {
+			yellow.Printf("🏆 Achievements Unlocked: %d\n", achievementCount)
+		}
+		
+		cyan.Println(strings.Repeat("=", 60))
+		fmt.Println()
+		
+		fmt.Print("Press 'Enter' to continue...")
+		reader.ReadBytes('\n')
+		fmt.Println()
+	} else {
+		// New player
+		fmt.Printf("\nWelcome %s!\n", text)
+	}
+	
 	return text
 }
 

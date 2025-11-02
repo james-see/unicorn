@@ -1,5 +1,30 @@
 # Changelog
 
+## Version 3.7.1 - Welcome Back Player Stats (2025-11-02)
+
+### Major Features Added
+
+#### 🎉 Welcome Back Feature
+- **Returning Player Recognition** - Game now checks if player has played before when entering their name
+- **Player Stats Display** - Shows key stats for returning players:
+  - Total games played
+  - Best net worth achieved
+  - Best ROI percentage
+  - Total successful exits
+  - Average net worth across all games
+  - Win rate (% of games with positive ROI)
+  - Total achievements unlocked
+- **Seamless Experience** - Stats display automatically before game mode selection
+- **Press to Continue** - Lets players review their stats before continuing
+
+### Technical Changes
+
+#### Modified Files
+- `main.go` - Enhanced `initMenu()` to check player stats and display welcome back message
+- Added `formatCurrency()` helper function for clean currency display
+
+---
+
 ## Version 3.7.0 - Founder Mode: Enhanced Metrics & Equity Fixes (2025-01-XX)
 
 ### Major Features Added
