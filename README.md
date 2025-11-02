@@ -1,5 +1,5 @@
 # unicorn
-text based startup adventure - play as vc and make bets on startups or try to be the unicorn
+text based startup adventure - play as vc and make bets on startups **OR** build your own startup and try to become the unicorn! 🦄
 
 <pre>
                \
@@ -28,9 +28,67 @@ text based startup adventure - play as vc and make bets on startups or try to be
 
 ## Nutshell
 
+**TWO GAME MODES:**
+
+### 🎩 VC Investor Mode (Classic)
 You manage a realistic VC fund ($500K-$1M) competing against AI investors like CARL from Sterling & Cooper! Over 10 years (120 turns), navigate multiple funding rounds, manage dilution, and pay 2% annual management fees while building your portfolio. Each month brings events, company funding rounds, and competitive rankings. Will you beat the AI VCs and become the top investor?
 
+### 🚀 Startup Founder Mode (NEW!)
+**Build your own startup from the ground up!** Choose from 10 different startup templates (SaaS, DeepTech, GovTech, Hardware), hire your team, acquire customers, raise funding rounds, and navigate the challenges of being a founder. Make strategic decisions about product development, marketing, hiring, partnerships, and more. Can you grow to $20M ARR and IPO? Or will you get acquired along the way?
+
 ## Features
+
+## 🚀 Founder Mode Features (v3.8.0)
+
+### 🎯 Build Your Startup
+- **10 Startup Templates:** SaaS, DeepTech, GovTech, Hardware - each with unique metrics
+- **Customer Acquisition:** Multiple channels - direct sales, affiliate program, partnerships, global expansion
+- **Revenue Growth:** Build MRR through customer deals with variable pricing
+- **Product Development:** Improve product maturity to reduce churn and increase sales velocity
+- **Team Building:** Hire engineers, sales, customer success, marketing, and C-suite executives
+
+### 💰 Funding & Equity
+- **Funding Rounds:** Raise Seed, Series A, Series B with realistic term sheets
+- **Equity Management:** Track dilution, manage employee equity pool, add board seats
+- **Advisory Board:** Hire real Silicon Valley legends with equity + cash costs:
+  - **Sales Advisors:** Gary Vaynerchuk, Aaron Ross, Grant Cardone
+  - **Product Advisors:** Marty Cagan, Julie Zhuo, April Dunford
+  - **Fundraising Advisors:** Marc Andreessen, Naval Ravikant, Jason Calacanis
+  - **Operations Advisors:** Sheryl Sandberg, Keith Rabois, Frank Slootman
+  - **Strategy Advisors:** Reid Hoffman, Eric Ries, Paul Graham, Ben Horowitz
+- **Monthly Board Guidance:** Advisors provide tangible benefits (MRR boosts, cost savings, churn reduction)
+
+### 🏆 Exit Options (Win the Game!)
+Three ways to exit and cash out:
+1. **🏛️ IPO** - Take company public ($20M ARR, 40%+ growth, multiple rounds)
+2. **🤝 Strategic Acquisition** - Sell to acquirer ($5M ARR, 50+ customers)
+3. **💼 Secondary Sale** - Sell 50% to private equity ($10M ARR, profitable)
+
+### 📊 Realistic Business Metrics
+- **Key SaaS Metrics:** LTV:CAC, CAC Payback, Rule of 40, Burn Multiple, Magic Number
+- **Customer Health:** Track healthy, at-risk, and critical customers
+- **Financial Dashboard:** View detailed revenue breakdown, expenses, net income, margins
+- **Monthly Highlights:** Auto-generated wins and concerns
+- **Board Sentiment:** Investor happiness and pressure tracking
+- **Infrastructure Costs:** Cloud compute and ODC scale with customers
+
+### 🎮 Strategic Decisions
+- **Partnerships:** Distribution, technology, co-marketing, data partnerships
+- **Global Expansion:** Launch in Europe, Asia, LATAM, Middle East, Africa, Australia
+- **Affiliate Program:** Launch and manage affiliate sales channel
+- **Pivot Strategy:** Change direction when needed (30-70% success rate)
+- **Competitor Management:** Handle competition through various strategies
+- **Marketing Spend:** Acquire customers through paid campaigns
+- **Customer Feedback:** Improve product maturity by listening to customers
+
+### 📈 Advanced Features
+- **Individual Customer Tracking:** View all customer deals, terms, and health scores
+- **Team Roster:** Track employee equity vesting, cliffs, and performance
+- **Strategic Opportunities:** Random time-sensitive events (enterprise pilots, press, conferences)
+- **Cancel-Friendly Menus:** View data and explore options without wasting a month
+- **60 Month Journey:** Build over 5 years or exit early once requirements are met
+
+## 🎩 VC Investor Mode Features
 
 ### 🎮 Core Gameplay
 - **Investment Mechanics:** Invest any amount in 20 different startups (NEW!)
@@ -117,18 +175,59 @@ go build -o unicorn
 # Run it
 ./unicorn
 
-# Menu options:
-# 1. New Game - Start a new investment game
+# Main Menu:
+# 1. New Game - Choose VC Mode or Founder Mode
 # 2. Leaderboards - View top scores
 # 3. Player Statistics - Check your career stats
-# 4. Achievements - View achievements & career level (NEW!)
+# 4. Achievements - View achievements & career level
 # 5. Help & Info - Complete game guide
 # 6. Quit
+
+# After starting a new game, you'll be prompted:
+# 1. VC Investor Mode (Classic) - Build a portfolio of startups
+# 2. Startup Founder Mode (New!) - Build your own startup
 ```
+
+### 🚀 Founder Mode Quick Start
+1. Select "Startup Founder Mode" from the game mode menu
+2. Choose your startup from 10 templates (SaaS, DeepTech, GovTech, Hardware)
+3. Each month, make strategic decisions:
+   - Hire team members (engineers, sales, CS, marketing, executives)
+   - Spend on marketing to acquire customers
+   - Launch partnerships and affiliate programs
+   - Raise funding rounds when needed
+   - Manage board and equity pool
+   - Expand to new markets
+   - Hire advisors for strategic guidance
+   - View financials, team roster, customer deals
+4. Watch your MRR grow, manage churn, and track metrics
+5. Once you meet exit requirements, choose your path:
+   - IPO on NASDAQ
+   - Sell to strategic acquirer
+   - Take secondary liquidity from PE
+6. Game ends at 60 months or when you exit - **aim for the highest valuation!**
 
 ## What's New
 
-### Phase 5 - Realistic VC Fund Simulation! (LATEST)
+### v3.8.0 - Exit Options & Advisory Board! (LATEST)
+🏛️ **Exit Options** - IPO, Strategic Acquisition, or Secondary Sale with realistic requirements
+👔 **Advisory Board** - Hire real Silicon Valley legends (Gary V, Marc Andreessen, Reid Hoffman, etc.)
+💰 **Advisor Costs** - Setup fees ($10-50k) + equity (0.25-1%) + optional monthly retainers
+📊 **Monthly Guidance** - Advisors provide tangible benefits (MRR growth, cost savings, churn reduction)
+🎯 **Cancel-Friendly Menus** - View data and cancel decisions without wasting turns
+💼 **Financial Dashboard** - Comprehensive view of revenue, expenses, margins, and runway
+🎉 **Victory Screens** - Detailed exit-specific endings with payout breakdowns
+
+### v3.7.0 - Founder Mode!
+🚀 **Build Your Own Startup** - Play as a founder, not just an investor!
+📈 **Realistic Growth** - Customer acquisition, MRR tracking, churn management
+💵 **Funding Rounds** - Raise Seed, Series A, Series B with proper term sheets
+👥 **Team Management** - Hire engineers, sales, CS, marketing, C-suite
+🌍 **Global Expansion** - Launch in 6 international markets
+🤝 **Partnerships** - Strategic partnerships for growth
+📊 **SaaS Metrics** - LTV:CAC, Rule of 40, Burn Multiple, and more
+
+### Phase 5 - Realistic VC Fund Simulation!
 🎯 **AI Competition** - Play against 3 computer VCs with different strategies
 💰 **Management Fees** - 2% annual fees reduce your capital (realistic!)
 📊 **Multiple Funding Rounds** - Companies raise Seed, Series A/B/C
@@ -155,7 +254,19 @@ go build -o unicorn
 
 ## Future Plans
 
-**Long-term:** Game mode where you run a startup trying to become a Unicorn
+- **Founder Mode Enhancements:** 
+  - Competitor AI that can acquire your startup
+  - More strategic opportunities and random events
+  - Multiplayer founder mode
+  - Enhanced product development mechanics
+- **VC Mode Enhancements:**
+  - Follow-on investment rounds
+  - Board seats and involvement
+  - Co-investment with other VCs
+- **Cross-Mode Features:**
+  - Start as founder, then become VC with your exit money
+  - Global leaderboards
+  - Achievements for founder mode
 
 ## Demo
 
