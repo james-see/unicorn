@@ -571,8 +571,9 @@ func (gs *GameState) ProcessTurn() []string {
 		startup := &gs.AvailableStartups[i]
 		gs.UpdateCompanyFinancials(startup)
 		
-		// Do 409A valuation quarterly (every 3 months)
-		if gs.Portfolio.Turn%3 == 0 {
+		// Do 409A valuation quarterly (every 3 months, starting at month 4)
+		// First 409A should be at month 4 (not month 3), then every 3 months: 4, 7, 10, 13...
+		if gs.Portfolio.Turn >= 4 && (gs.Portfolio.Turn-1)%3 == 0 {
 			val409A := gs.Calculate409AValuation(startup)
 			
 			// Show 409A for companies we're invested in

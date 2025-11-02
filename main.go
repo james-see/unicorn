@@ -359,6 +359,25 @@ func playTurn(gs *game.GameState, autoMode bool) {
 
 	messages := gs.ProcessTurn()
 
+	// Separate critical messages (that need pause) from informational messages
+	criticalMessages := []string{}
+	infoMessages := []string{}
+	
+	for _, msg := range messages {
+		// Critical messages: funding rounds, acquisitions, negative news
+		// Non-critical: 409A, growth news, management fees
+		if strings.Contains(msg, "raised") || 
+		   strings.Contains(msg, "diluted") || 
+		   strings.Contains(msg, "acquisition") || 
+		   strings.Contains(msg, "acquired") ||
+		   strings.Contains(msg, "DOWN ROUND") {
+			criticalMessages = append(criticalMessages, msg)
+		} else {
+			infoMessages = append(infoMessages, msg)
+		}
+	}
+
+	// Always show all messages
 	if len(messages) > 0 {
 		cyan.Print(ascii.NewsHeader)
 		for _, msg := range messages {
@@ -412,13 +431,16 @@ func playTurn(gs *game.GameState, autoMode bool) {
 		displayMiniLeaderboard(gs)
 	}
 
-	// Always wait for user input when there are news messages, otherwise use auto mode logic
-	if len(messages) > 0 {
+	// Only pause for critical messages in auto mode; informational messages don't pause
+	if len(criticalMessages) > 0 {
+		// Critical message - always pause
 		fmt.Print("\nPress 'Enter' to continue to next month...")
 		bufio.NewReader(os.Stdin).ReadBytes('\n')
 	} else if autoMode {
+		// No critical messages and auto mode - don't pause
 		time.Sleep(1 * time.Second)
 	} else {
+		// Manual mode - always pause
 		fmt.Print("\nPress 'Enter' to continue to next month...")
 		bufio.NewReader(os.Stdin).ReadBytes('\n')
 	}
@@ -1378,7 +1400,7 @@ func displayHelpGuide() {
 	yellow.Printf("\n%s GAME OVERVIEW\n", ascii.Lightbulb)
 	fmt.Println("You're a VC investor with limited capital. Invest in 15 randomly")
 	fmt.Println("selected startups from a pool of 30 and watch your portfolio")
-	fmt.Println("grow (or shrink) over 10 years.")
+	fmt.Println("grow (or shrink) over 5 years.")
 
 	yellow.Printf("\n%s HOW TO PLAY\n", ascii.Target)
 	fmt.Println("1. Select difficulty (Easy/Medium/Hard/Expert)")
