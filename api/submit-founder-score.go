@@ -137,7 +137,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	CREATE INDEX IF NOT EXISTS idx_founder_exit ON founder_scores(exit_type);
 	CREATE INDEX IF NOT EXISTS idx_founder_template ON founder_scores(startup_template);
 	`
-	
+
 	_, err = db.Exec(createTableSQL)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -193,4 +193,3 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		ID:      scoreID,
 	})
 }
-

@@ -188,4 +188,3 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		Scores:  scores,
 	})
 }
-
