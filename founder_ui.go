@@ -201,12 +201,17 @@ func playFounderTurn(fs *founder.FounderState) {
 	}
 	
 	fmt.Printf("📈 MRR: $%s", formatFounderCurrency(fs.MRR))
-	if fs.MonthlyGrowthRate > 0 {
-		green.Printf(" (↑%.1f%%)\n", fs.MonthlyGrowthRate*100)
-	} else if fs.MonthlyGrowthRate < 0 {
-		red.Printf(" (↓%.1f%%)\n", -fs.MonthlyGrowthRate*100)
+	// Only show growth rate if we have MRR and it's not the first month
+	if fs.MRR > 0 && fs.Turn > 1 {
+		if fs.MonthlyGrowthRate > 0 {
+			green.Printf(" (↑%.1f%%)\n", fs.MonthlyGrowthRate*100)
+		} else if fs.MonthlyGrowthRate < 0 {
+			red.Printf(" (↓%.1f%%)\n", -fs.MonthlyGrowthRate*100)
+		} else {
+			fmt.Println(" (flat)")
+		}
 	} else {
-		fmt.Println(" (flat)")
+		fmt.Println() // Just newline, no growth indicator
 	}
 	
 	// Show MRR breakdown if affiliate program is active
@@ -254,8 +259,8 @@ func playFounderTurn(fs *founder.FounderState) {
 	}
 	fmt.Printf("🔄 Churn Rate: %.1f%% | ", fs.CustomerChurnRate*100)
 	fmt.Printf("📦 Product Maturity: %.0f%%\n", fs.ProductMaturity*100)
-	fmt.Printf("💼 Your Equity: %.1f%%", 100.0-fs.EquityGivenAway-fs.EquityAllocated)
-	if fs.EquityAllocated > 0 {
+	fmt.Printf("	💼 Your Equity: %.1f%%", 100.0-fs.EquityPool-fs.EquityGivenAway)
+	if fs.EquityPool > 0 {
 		fmt.Printf(" | Employee Pool: %.1f%% (%.1f%% allocated, %.1f%% available)\n",
 			fs.EquityPool, fs.EquityAllocated, fs.EquityPool-fs.EquityAllocated)
 	} else {
@@ -1611,7 +1616,7 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 	
 	fmt.Printf("\nCurrent Board Seats: %d\n", fs.BoardSeats)
 	fmt.Printf("Employee Equity Pool: %.1f%%\n", fs.EquityPool)
-	fmt.Printf("Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityAllocated)
+	fmt.Printf("Your Equity: %.1f%%\n", 100.0-fs.EquityPool-fs.EquityGivenAway)
 	
 	// Show current advisors/board members
 	if len(fs.BoardMembers) > 0 {
@@ -1661,7 +1666,7 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 		fs.ExpandEquityPool(pct)
 		color.Green("\n✓ Expanded equity pool by %.1f%%", pct)
 		fmt.Printf("  New equity pool: %.1f%%\n", fs.EquityPool)
-		fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityAllocated)
+		fmt.Printf("  Your equity: %.1f%%\n", 100.0-fs.EquityPool-fs.EquityGivenAway)
 
 	case "3":
 		handleAddAdvisor(fs)
@@ -1805,9 +1810,11 @@ func handleAddAdvisor(fs *founder.FounderState) {
 	fmt.Printf("\nAfter hiring:\n")
 	fmt.Printf("  Cash: $%s → $%s\n", 
 		formatFounderCurrency(fs.Cash), formatFounderCurrency(fs.Cash-setupFee))
-	fmt.Printf("  Your Equity: %.1f%% → %.1f%%\n", 
-		100.0-fs.EquityGivenAway-fs.EquityAllocated,
-		100.0-fs.EquityGivenAway-fs.EquityAllocated-equityCost)
+	fmt.Printf("  Employee Pool: %.1f%% → %.1f%%\n", 
+		fs.EquityPool-fs.EquityAllocated,
+		fs.EquityPool-fs.EquityAllocated-equityCost)
+	fmt.Printf("  Your Equity: %.1f%% (unchanged)\n", 
+		100.0-fs.EquityPool-fs.EquityGivenAway)
 	
 	fmt.Print("\nConfirm hire? (y/n): ")
 	confirm, _ := reader.ReadString('\n')
@@ -1846,8 +1853,9 @@ func handleAddAdvisor(fs *founder.FounderState) {
 		fmt.Printf("   Monthly Retainer: $%s/month (added to team cost)\n", formatFounderCurrency(monthlyRetainer))
 		fs.MonthlyTeamCost += monthlyRetainer
 	}
-	fmt.Printf("   Equity Cost: %.2f%%\n", equityCost)
-	fmt.Printf("   Your Equity: %.1f%%\n", 100.0-fs.EquityGivenAway-fs.EquityAllocated)
+	fmt.Printf("   Equity Cost: %.2f%% (from employee pool)\n", equityCost)
+	fmt.Printf("   Remaining Pool: %.2f%%\n", fs.EquityPool-fs.EquityAllocated)
+	fmt.Printf("   Your Equity: %.1f%% (unchanged)\n", 100.0-fs.EquityPool-fs.EquityGivenAway)
 	fmt.Println("\n   💡 They will provide monthly guidance based on their expertise.")
 }
 
@@ -1888,7 +1896,7 @@ func handleExitOptions(fs *founder.FounderState) bool {
 		fmt.Printf("   Company Valuation: $%s\n", formatFounderCurrency(exit.Valuation))
 		fmt.Printf("   Your Payout: $%s (%.1f%% equity)\n", 
 			formatFounderCurrency(exit.FounderPayout),
-			(100.0-fs.EquityGivenAway-fs.EquityAllocated))
+			(100.0-fs.EquityPool-fs.EquityGivenAway))
 		
 		fmt.Println("   Requirements:")
 		for _, req := range exit.Requirements {

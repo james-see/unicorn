@@ -818,7 +818,7 @@ func (fs *FounderState) IsGameOver() bool {
 // GetAvailableExits returns possible exit options based on current state
 func (fs *FounderState) GetAvailableExits() []ExitOption {
 	var exits []ExitOption
-	founderEquity := (100.0 - fs.EquityGivenAway - fs.EquityAllocated) / 100.0
+	founderEquity := (100.0 - fs.EquityPool - fs.EquityGivenAway) / 100.0
 
 	// Calculate current valuation (simplified: ARR * multiple based on growth/profitability)
 	arr := fs.MRR * 12
@@ -959,7 +959,7 @@ func (fs *FounderState) ExecuteExit(exitType string) {
 
 // GetFinalScore calculates the final outcome
 func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founderEquity float64) {
-	founderEquity = 100.0 - fs.EquityGivenAway - fs.EquityAllocated
+	founderEquity = 100.0 - fs.EquityPool - fs.EquityGivenAway
 
 	// Calculate final valuation based on MRR
 	if fs.MRR > 0 {
