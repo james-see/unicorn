@@ -18,6 +18,17 @@ type FundingRound struct {
 	Month            int     // Game turn when this happened
 }
 
+// InvestmentTerms represents the terms of an investment deal
+type InvestmentTerms struct {
+	Type               string  // "Common", "Preferred", "SAFE", "Convertible"
+	HasProRataRights   bool    // Right to participate in future rounds
+	HasInfoRights      bool    // Right to company information
+	HasBoardSeat       bool    // Board seat (for larger investments)
+	LiquidationPref    float64 // Liquidation preference (1x, 2x, etc.)
+	HasAntiDilution    bool    // Anti-dilution protection
+	ConversionDiscount float64 // Discount on conversion (for SAFE/Convertible)
+}
+
 // Investment represents a player's investment in a startup
 type Investment struct {
 	CompanyName      string
@@ -30,6 +41,7 @@ type Investment struct {
 	Category         string
 	NegativeNewsSent bool // Track if we've already sent negative news for this investment
 	Rounds           []FundingRound // Track all funding rounds
+	Terms            InvestmentTerms // Investment terms
 }
 
 // Portfolio tracks all player investments
@@ -110,6 +122,7 @@ type GameState struct {
 	AIPlayers          []AIPlayer              // Computer opponents
 	FundingRoundQueue  []FundingRoundEvent     // Scheduled future funding rounds
 	AcquisitionQueue   []AcquisitionEvent      // Scheduled acquisition offers
+	DramaticEventQueue []DramaticEvent         // Scheduled dramatic events (scandals, splits, etc.)
 }
 
 // FundingRoundEvent represents a scheduled funding round
@@ -127,6 +140,15 @@ type AcquisitionEvent struct {
 	ScheduledTurn int
 	OfferMultiple float64 // Multiple of EBITDA or revenue
 	DueDiligence  string  // "good", "bad", "normal"
+}
+
+// DramaticEvent represents scandals, co-founder splits, etc.
+type DramaticEvent struct {
+	CompanyName   string
+	ScheduledTurn int
+	EventType     string  // "cofounder_split", "scandal", "lawsuit", "pivot_fail", "fraud", "data_breach", "key_hire_quit"
+	Severity      string  // "minor", "moderate", "severe"
+	ImpactPercent float64 // Valuation impact as a multiplier (0.3 = 70% drop)
 }
 
 // FollowOnOpportunity represents a chance to invest more in a company raising a round
@@ -207,6 +229,7 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 	gs.InitializeAIPlayers()
 	gs.ScheduleFundingRounds()
 	gs.ScheduleAcquisitions()
+	gs.ScheduleDramaticEvents()
 	
 	return gs
 }
@@ -284,8 +307,60 @@ func (gs *GameState) LoadEvents() {
 	}
 }
 
+// GenerateTermOptions generates 3 term sheet options for an investment
+func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []InvestmentTerms {
+	options := []InvestmentTerms{}
+	
+	// Option 1: Preferred Stock (VC standard)
+	options = append(options, InvestmentTerms{
+		Type:               "Preferred Stock",
+		HasProRataRights:   true,
+		HasInfoRights:      true,
+		HasBoardSeat:       amount >= 100000, // Board seat for $100k+ investments
+		LiquidationPref:    1.0,
+		HasAntiDilution:    true,
+		ConversionDiscount: 0.0,
+	})
+	
+	// Option 2: SAFE (Simple Agreement for Future Equity)
+	options = append(options, InvestmentTerms{
+		Type:               "SAFE",
+		HasProRataRights:   true,
+		HasInfoRights:      false,
+		HasBoardSeat:       false,
+		LiquidationPref:    0.0, // No liquidation preference with SAFE
+		HasAntiDilution:    false,
+		ConversionDiscount: 0.20, // 20% discount on conversion
+	})
+	
+	// Option 3: Common Stock (founder-friendly)
+	options = append(options, InvestmentTerms{
+		Type:               "Common Stock",
+		HasProRataRights:   false,
+		HasInfoRights:      false,
+		HasBoardSeat:       false,
+		LiquidationPref:    0.0,
+		HasAntiDilution:    false,
+		ConversionDiscount: 0.0,
+	})
+	
+	return options
+}
+
 // MakeInvestment allows player to invest in a startup
 func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
+	return gs.MakeInvestmentWithTerms(startupIndex, amount, InvestmentTerms{
+		Type:             "Preferred Stock",
+		HasProRataRights: true,
+		HasInfoRights:    true,
+		HasBoardSeat:     amount >= 100000,
+		LiquidationPref:  1.0,
+		HasAntiDilution:  true,
+	})
+}
+
+// MakeInvestmentWithTerms allows player to invest with specific terms
+func (gs *GameState) MakeInvestmentWithTerms(startupIndex int, amount int64, terms InvestmentTerms) error {
 	if amount <= 0 {
 		return fmt.Errorf("investment amount must be positive")
 	}
@@ -307,8 +382,13 @@ func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
 		}
 	}
 	
-	// Calculate equity percentage (simple: investment / valuation)
+	// Calculate equity percentage
 	equityPercent := (float64(amount) / float64(startup.Valuation)) * 100.0
+	
+	// Apply SAFE discount if applicable
+	if terms.Type == "SAFE" && terms.ConversionDiscount > 0 {
+		equityPercent = equityPercent * (1 + terms.ConversionDiscount)
+	}
 	
 	investment := Investment{
 		CompanyName:      startup.Name,
@@ -321,6 +401,7 @@ func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
 		Category:         startup.Category,
 		NegativeNewsSent: false,
 		Rounds:           []FundingRound{},
+		Terms:            terms,
 	}
 	
 	gs.Portfolio.Investments = append(gs.Portfolio.Investments, investment)
@@ -559,6 +640,10 @@ func (gs *GameState) ProcessTurn() []string {
 	// Process funding rounds
 	roundMessages := gs.ProcessFundingRounds()
 	messages = append(messages, roundMessages...)
+	
+	// Process dramatic events (scandals, co-founder splits, etc.)
+	dramaMessages := gs.ProcessDramaticEvents()
+	messages = append(messages, dramaMessages...)
 	
 	// Process acquisitions
 	acqMessages := gs.ProcessAcquisitions()
@@ -863,6 +948,218 @@ func (gs *GameState) ScheduleAcquisitions() {
 			}
 		}
 	}
+}
+
+// ScheduleDramaticEvents schedules scandals, co-founder splits, etc.
+func (gs *GameState) ScheduleDramaticEvents() {
+	gs.DramaticEventQueue = []DramaticEvent{}
+	
+	// Event frequency based on difficulty
+	// Easy: 10%, Medium: 20%, Hard: 30%, Expert: 40%
+	eventChance := 0.10
+	if gs.Difficulty.Name == "Medium" {
+		eventChance = 0.20
+	} else if gs.Difficulty.Name == "Hard" {
+		eventChance = 0.30
+	} else if gs.Difficulty.Name == "Expert" {
+		eventChance = 0.40
+	}
+	
+	eventTypes := []string{
+		"cofounder_split", "scandal", "lawsuit", "pivot_fail", 
+		"fraud", "data_breach", "key_hire_quit", "regulatory_issue",
+		"competitor_attack", "product_failure",
+	}
+	
+	for _, startup := range gs.AvailableStartups {
+		if rand.Float64() < eventChance {
+			// Events happen between months 6-55
+			eventTurn := 6 + rand.Intn(50)
+			if eventTurn < gs.Portfolio.MaxTurns {
+				eventType := eventTypes[rand.Intn(len(eventTypes))]
+				
+				// Determine severity (difficulty affects this)
+				severityRoll := rand.Float64()
+				severity := "minor"
+				impactPercent := 0.85 // 15% drop
+				
+				if gs.Difficulty.Name == "Hard" || gs.Difficulty.Name == "Expert" {
+					// Harder difficulties have worse outcomes
+					if severityRoll < 0.25 {
+						severity = "severe"
+						impactPercent = 0.40 // 60% drop
+					} else if severityRoll < 0.55 {
+						severity = "moderate"
+						impactPercent = 0.65 // 35% drop
+					}
+				} else if gs.Difficulty.Name == "Medium" {
+					if severityRoll < 0.15 {
+						severity = "severe"
+						impactPercent = 0.50 // 50% drop
+					} else if severityRoll < 0.40 {
+						severity = "moderate"
+						impactPercent = 0.70 // 30% drop
+					}
+				} else {
+					// Easy mode
+					if severityRoll < 0.10 {
+						severity = "moderate"
+						impactPercent = 0.75 // 25% drop
+					}
+				}
+				
+				gs.DramaticEventQueue = append(gs.DramaticEventQueue, DramaticEvent{
+					CompanyName:   startup.Name,
+					ScheduledTurn: eventTurn,
+					EventType:     eventType,
+					Severity:      severity,
+					ImpactPercent: impactPercent,
+				})
+			}
+		}
+	}
+}
+
+// ProcessDramaticEvents handles scandals, co-founder splits, etc.
+func (gs *GameState) ProcessDramaticEvents() []string {
+	messages := []string{}
+	
+	for _, event := range gs.DramaticEventQueue {
+		if event.ScheduledTurn == gs.Portfolio.Turn {
+			// Find the company
+			for i := range gs.AvailableStartups {
+				if gs.AvailableStartups[i].Name == event.CompanyName {
+					startup := &gs.AvailableStartups[i]
+					
+					oldValuation := startup.Valuation
+					startup.Valuation = int64(float64(startup.Valuation) * event.ImpactPercent)
+					
+					// Generate message based on event type
+					var eventMsg string
+					var emoji string
+					
+					switch event.EventType {
+					case "cofounder_split":
+						emoji = "💔"
+						if event.Severity == "severe" {
+							eventMsg = "Co-founders had MAJOR falling out! CEO resigned. Board in chaos."
+						} else if event.Severity == "moderate" {
+							eventMsg = "Co-founder conflict! One founder left with equity dispute."
+						} else {
+							eventMsg = "Minor co-founder disagreement resolved, but caused delays."
+						}
+					case "scandal":
+						emoji = "🔥"
+						if event.Severity == "severe" {
+							eventMsg = "MAJOR SCANDAL! CEO involved in workplace harassment allegations."
+						} else if event.Severity == "moderate" {
+							eventMsg = "PR scandal! Questionable business practices exposed."
+						} else {
+							eventMsg = "Minor controversy in the press, manageable."
+						}
+					case "lawsuit":
+						emoji = "⚖️"
+						if event.Severity == "severe" {
+							eventMsg = "Class-action lawsuit filed! Facing $50M+ in liabilities."
+						} else if event.Severity == "moderate" {
+							eventMsg = "Patent infringement lawsuit. Legal costs mounting."
+						} else {
+							eventMsg = "Small legal dispute, expected to settle."
+						}
+					case "fraud":
+						emoji = "🚨"
+						if event.Severity == "severe" {
+							eventMsg = "FRAUD DISCOVERED! CFO cooking books. SEC investigation."
+						} else {
+							eventMsg = "Financial irregularities found. Auditors called in."
+						}
+					case "data_breach":
+						emoji = "🔓"
+						if event.Severity == "severe" {
+							eventMsg = "MASSIVE DATA BREACH! Customer data leaked. GDPR fines incoming."
+						} else if event.Severity == "moderate" {
+							eventMsg = "Security breach! Customer trust damaged."
+						} else {
+							eventMsg = "Minor security incident, quickly patched."
+						}
+					case "key_hire_quit":
+						emoji = "👋"
+						if event.Severity == "severe" {
+							eventMsg = "CTO quit and joined competitor! Taking team with them."
+						} else if event.Severity == "moderate" {
+							eventMsg = "VP Engineering resigned. Product roadmap delayed."
+						} else {
+							eventMsg = "Senior engineer left. Minor setback."
+						}
+					case "regulatory_issue":
+						emoji = "📋"
+						if event.Severity == "severe" {
+							eventMsg = "Regulatory crackdown! Business model under threat."
+						} else {
+							eventMsg = "New compliance requirements. Extra costs."
+						}
+					case "pivot_fail":
+						emoji = "🔄"
+						if event.Severity == "severe" {
+							eventMsg = "Pivot FAILED! Lost key customers and burning cash fast."
+						} else {
+							eventMsg = "Pivot struggling. Market not responding well."
+						}
+					case "competitor_attack":
+						emoji = "⚔️"
+						if event.Severity == "severe" {
+							eventMsg = "Competitor launched predatory pricing! Market share plummeting."
+						} else {
+							eventMsg = "New competitor with better product. Losing customers."
+						}
+					case "product_failure":
+						emoji = "💥"
+						if event.Severity == "severe" {
+							eventMsg = "Major product launch FLOPPED! Customers demanding refunds."
+						} else {
+							eventMsg = "Product update buggy. Customer complaints rising."
+						}
+					default:
+						emoji = "⚠️"
+						eventMsg = "Unexpected crisis hit the company."
+					}
+					
+					// Check if player invested
+					for j := range gs.Portfolio.Investments {
+						if gs.Portfolio.Investments[j].CompanyName == event.CompanyName {
+							inv := &gs.Portfolio.Investments[j]
+							inv.CurrentValuation = startup.Valuation
+							
+							valuationDrop := oldValuation - startup.Valuation
+							dropPercent := float64(valuationDrop) / float64(oldValuation) * 100
+							
+							messages = append(messages, fmt.Sprintf(
+								"%s %s: %s (Valuation: $%s → $%s, -%.0f%%)",
+								emoji,
+								event.CompanyName,
+								eventMsg,
+								formatCurrency(oldValuation),
+								formatCurrency(startup.Valuation),
+								dropPercent,
+							))
+							break
+						}
+					}
+					
+					// Update AI investments
+					for k := range gs.AIPlayers {
+						for j := range gs.AIPlayers[k].Portfolio.Investments {
+							if gs.AIPlayers[k].Portfolio.Investments[j].CompanyName == event.CompanyName {
+								gs.AIPlayers[k].Portfolio.Investments[j].CurrentValuation = startup.Valuation
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return messages
 }
 
 // ProcessFundingRounds handles any scheduled funding rounds this turn

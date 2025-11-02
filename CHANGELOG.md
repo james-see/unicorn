@@ -1,5 +1,84 @@
 # Changelog
 
+## Version 3.10.0 - VC Mode: Investment Terms & Dramatic Events (2025-11-02)
+
+### Major Features Added
+
+#### 💼 Investment Terms System
+- **Three Term Sheet Options** for investments $50k+:
+  - **Preferred Stock** (VC Standard): Pro-rata rights, information rights, board seat, 1x liquidation preference, anti-dilution protection
+  - **SAFE** (Simple Agreement for Future Equity): 20% conversion discount, pro-rata rights, simpler structure
+  - **Common Stock** (Founder-friendly): Basic equity ownership with no special protections
+- **Automated Selection** for smaller investments (<$50k) defaults to common stock
+- **Interactive Term Selection UI** with clear explanations of each term's benefits
+- **SAFE Conversion Discount** properly applies 20% bonus equity
+
+#### 🎭 Dramatic Events System
+- **10 Event Types** inspired by Silicon Valley and real startup scandals:
+  - 💔 Co-founder Splits: Falling outs, CEO resignations, board chaos
+  - 🔥 Scandals: Harassment allegations, PR disasters, questionable practices
+  - ⚖️ Lawsuits: Patent infringement, class-action suits, legal liabilities
+  - 🚨 Fraud: Financial irregularities, CFO cooking books, SEC investigations
+  - 🔓 Data Breaches: Customer data leaks, GDPR fines, security incidents
+  - 👋 Key Hires Quit: CTO/VP departures, team exodus to competitors
+  - 📋 Regulatory Issues: Compliance problems, business model threats
+  - 🔄 Pivot Failures: Failed strategic changes, lost customers
+  - ⚔️ Competitor Attacks: Predatory pricing, market share erosion
+  - 💥 Product Failures: Launch flops, buggy releases, refund demands
+- **Difficulty-Scaled Impact**:
+  - Easy: 10% event frequency, 15-25% valuation drops
+  - Medium: 20% frequency, 15-50% drops
+  - Hard/Expert: 30-40% frequency, 15-60% drops
+- **Severity Levels**: Minor, Moderate, Severe with appropriate messaging
+- **Critical Event Pausing**: Game pauses on dramatic events even in automated mode
+
+#### 📚 Comprehensive Investing FAQ
+- **Investment Terms Guide**: Preferred vs Common stock, SAFEs, Pro-Rata rights explained
+- **Valuation & Equity**: How ownership is calculated, dilution mechanics
+- **Funding Stages**: Pre-seed through IPO timeline and amounts
+- **Exit Strategies**: Acquisitions, IPOs, secondary sales
+- **Risk Management**: Diversification strategies, what kills startups
+- **Key Metrics**: MRR, burn rate, CAC, LTV, and ratios
+- **Accessible from Main Menu**: Help → Startup Investing FAQ
+
+#### 🎮 Enhanced Investment UX
+- **Press Enter to Skip**: Can now press Enter (or type 0) to skip investments
+- **Auto-Start at $0**: Game automatically starts when investment capital depleted
+- **Follow-On Skip Improvements**: Enter key skips follow-on investments
+- **Exit Event Notifications**: Game always pauses for acquisitions/IPOs, even in auto mode
+- **Special Exit Alert**: "🎉 COMPANY EXIT EVENT! 🎉" notification
+
+### Technical Changes
+
+#### New Types & Structures
+- `InvestmentTerms` struct with all term details
+- `DramaticEvent` struct for scandal/crisis events
+- `DramaticEventQueue` in GameState
+
+#### Modified Files
+- `game/game.go`:
+  - Added `GenerateTermOptions()` for term sheet generation
+  - Added `MakeInvestmentWithTerms()` for term-based investing
+  - Added `ScheduleDramaticEvents()` and `ProcessDramaticEvents()`
+  - Integrated dramatic event processing into game loop
+  - Difficulty-based event frequency and severity
+- `main.go`:
+  - Added `selectInvestmentTerms()` interactive UI
+  - Added `displayInvestingFAQ()` comprehensive FAQ
+  - Enhanced `investmentPhase()` with term selection and auto-start
+  - Updated `handleFollowOnOpportunities()` with Enter-to-skip
+  - Added dramatic event detection to critical message handling
+  - Enhanced `playTurn()` to always pause on exits
+  - Updated `displayHelpGuide()` with submenu for FAQ
+
+#### Investment Flow Changes
+- Investments $50k+ show term selection UI
+- Smaller investments auto-default to common stock
+- SAFE discount properly applied to equity calculation
+- Terms stored with each investment for future reference
+
+---
+
 ## Version 3.7.1 - Welcome Back Player Stats (2025-11-02)
 
 ### Major Features Added
