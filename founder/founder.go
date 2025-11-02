@@ -569,7 +569,7 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		Competitors:        []Competitor{},
 		GlobalMarkets:      []Market{},
 		PivotHistory:       []Pivot{},
-		EquityPool:         10.0, // Start with 10% equity pool for employees
+		EquityPool:         20.0, // Start with 20% equity pool for employees (industry standard)
 		EquityAllocated:    0.0,  // Track allocated equity separately
 		InvestorBuybacks:   []Buyback{},
 		RandomEvents:       []RandomEvent{},

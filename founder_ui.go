@@ -261,7 +261,7 @@ func playFounderTurn(fs *founder.FounderState) {
 	fmt.Printf("📦 Product Maturity: %.0f%%\n", fs.ProductMaturity*100)
 	fmt.Printf("	💼 Your Equity: %.1f%%", 100.0-fs.EquityPool-fs.EquityGivenAway)
 	if fs.EquityPool > 0 {
-		fmt.Printf(" | Employee Pool: %.1f%% (%.1f%% allocated, %.1f%% available)\n",
+		fmt.Printf(" | Employee Pool: %.1f%% (%.1f%% used, %.1f%% available)\n",
 			fs.EquityPool, fs.EquityAllocated, fs.EquityPool-fs.EquityAllocated)
 	} else {
 		fmt.Println()
