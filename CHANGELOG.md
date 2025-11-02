@@ -1,5 +1,66 @@
 # Changelog
 
+## Version 3.13.0 - 16 New Startup Options (2025-11-02)
+
+### Major Features Added
+
+#### 🚀 16 New Startup Options Across All Categories
+- **Total Startups Increased**: 21 → 36 startups (+71% more choices!)
+- **SaaS**: 9 → 14 startups (+5 new)
+  - **GrowthEngine**: Marketing automation and attribution
+  - **LegalStack**: Contract lifecycle management
+  - **DealFlow Pro**: Sales engagement and pipeline intelligence
+  - **TeamSync**: All-in-one workspace (Slack + Zoom + Asana replacement)
+  - **DataUnify**: Customer data platform for personalization
+  
+- **DeepTech**: 6 → 9 startups (+3 new)
+  - **OrbitLaunch**: Small satellite launch services and orbital logistics
+  - **NanoMat Industries**: Advanced nanomaterials (graphene-based)
+  - **FarmTech AI**: Precision agriculture with autonomous robots
+  
+- **FinTech**: 2 → 5 startups (+3 new)
+  - **CreditFlow**: AI-powered lending for underbanked businesses
+  - **ChainPay**: Cryptocurrency payment infrastructure
+  - **InsureTech Pro**: Embedded insurance platform
+  
+- **HealthTech**: 2 → 4 startups (+2 new)
+  - **MindWell AI**: Mental health platform for employers
+  - **PharmaDirect**: Digital pharmacy and prescription management
+  
+- **GovTech**: 2 → 4 startups (+2 new)
+  - **VoteSecure**: Blockchain-based voting and election management
+  - **FirstRespond**: Emergency response coordination and dispatch
+
+#### 💡 Diverse New Industries Represented
+- **Space Tech**: Satellite launch services (OrbitLaunch)
+- **Agriculture**: Autonomous farming robots (FarmTech AI)
+- **Advanced Materials**: Nanomaterials for aerospace (NanoMat)
+- **Mental Health**: Workplace wellness platforms (MindWell AI)
+- **Pharmacy Tech**: Digital prescription management (PharmaDirect)
+- **Legal Tech**: Contract management with AI (LegalStack)
+- **Crypto Infrastructure**: Business payment gateways (ChainPay)
+- **InsureTech**: Embedded insurance APIs (InsureTech Pro)
+- **Election Tech**: Secure digital voting (VoteSecure)
+- **Emergency Services**: First responder coordination (FirstRespond)
+
+#### 📊 Realistic Parameters & Variety
+- Deal sizes range from $300/mo (consumer fintech) to $500K (space launches)
+- Initial cash ranges from $650K (education SaaS) to $5M (space tech)
+- Competition levels vary from "low" (govtech) to "very high" (collaboration, marketing)
+- Market sizes from 300 (space) to 200,000 (consumer fintech)
+- Each startup has unique team compositions and growth dynamics
+
+### Technical Changes
+
+#### Modified Files
+- `founder/startups.json`:
+  - Added 16 new startup templates across all categories
+  - Balanced parameters for realistic gameplay
+  - Diverse initial team compositions
+  - Industry-appropriate CAC and churn rates
+
+---
+
 ## Version 3.12.0 - International Market Management & Regional Competitors (2025-11-02)
 
 ### Major Features Added
