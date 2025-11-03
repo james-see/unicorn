@@ -25,18 +25,18 @@ const (
 
 // Employee represents a team member
 type Employee struct {
-	Name            string
-	Role            EmployeeRole
-	MonthlyCost     int64
-	Impact          float64 // Productivity/effectiveness multiplier
-	IsExecutive     bool    // C-level executives have 3x impact, $300k/year salary
-	Equity          float64 // Equity percentage owned by this employee
-	VestingMonths   int     // Total vesting period (typically 48 months)
-	CliffMonths     int     // Cliff period (typically 12 months)
-	VestedMonths    int     // Months vested so far
-	HasCliff        bool    // Has cliff been reached
-	MonthHired      int     // Month when hired
-	AssignedMarket  string  // Market assignment: "USA", "Europe", "Asia", "All", etc.
+	Name           string
+	Role           EmployeeRole
+	MonthlyCost    int64
+	Impact         float64 // Productivity/effectiveness multiplier
+	IsExecutive    bool    // C-level executives have 3x impact, $300k/year salary
+	Equity         float64 // Equity percentage owned by this employee
+	VestingMonths  int     // Total vesting period (typically 48 months)
+	CliffMonths    int     // Cliff period (typically 12 months)
+	VestedMonths   int     // Months vested so far
+	HasCliff       bool    // Has cliff been reached
+	MonthHired     int     // Month when hired
+	AssignedMarket string  // Market assignment: "USA", "Europe", "Asia", "All", etc.
 }
 
 // CapTableEntry tracks individual equity ownership
@@ -1111,7 +1111,7 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 // HireEmployeeWithMarket adds a new team member assigned to a specific market
 func (fs *FounderState) HireEmployeeWithMarket(role EmployeeRole, market string) error {
 	avgSalary := int64(100000)
-	
+
 	employee := Employee{
 		Role:           role,
 		MonthlyCost:    avgSalary / 12,
@@ -3061,7 +3061,7 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 	if names, ok := regionalCompetitors[region]; ok && numCompetitors > 0 {
 		for i := 0; i < numCompetitors && i < len(names); i++ {
 			compName := names[rand.Intn(len(names))]
-			
+
 			// Check if competitor already exists
 			exists := false
 			for _, existing := range fs.Competitors {
@@ -3070,11 +3070,11 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 					break
 				}
 			}
-			
+
 			if !exists {
 				threatLevel := "medium"
 				marketShare := 0.05 + rand.Float64()*0.15 // 5-20% market share
-				
+
 				switch competition {
 				case "very_high":
 					threatLevel = "high"
@@ -3086,7 +3086,7 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 					threatLevel = "medium"
 					marketShare = 0.05 + rand.Float64()*0.10 // 5-15%
 				}
-				
+
 				competitor := Competitor{
 					Name:          compName + " (" + region + ")",
 					Threat:        threatLevel,
@@ -3123,7 +3123,7 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 				csAssignedToMarket++
 			}
 		}
-		
+
 		// COO also helps with churn across all markets
 		hasCOO := false
 		for _, exec := range fs.Team.Executives {
@@ -3233,14 +3233,14 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 				salesInMarket++
 			}
 		}
-		
+
 		marketingInMarket := 0
 		for _, marketing := range fs.Team.Marketing {
 			if marketing.AssignedMarket == m.Region || marketing.AssignedMarket == "All" {
 				marketingInMarket++
 			}
 		}
-		
+
 		csInMarket := 0
 		for _, cs := range fs.Team.CustomerSuccess {
 			if cs.AssignedMarket == m.Region || cs.AssignedMarket == "All" {
@@ -3250,7 +3250,7 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 
 		// Sales team impact (critical for growing in new markets)
 		salesImpact := float64(salesInMarket) * 0.05 // Each sales rep adds 5%
-		
+
 		// CGO amplifies sales impact (CGO works across all markets)
 		for _, exec := range fs.Team.Executives {
 			if exec.Role == RoleCGO {
@@ -3285,19 +3285,19 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 		// Calculate new customers
 		// Percentage growth based on current base (compounds over time)
 		percentageGrowth := int(float64(m.CustomerCount) * totalGrowthRate)
-		
+
 		// Plus absolute growth (helps new/small markets grow)
 		// Sales/marketing teams directly acquire customers even in new markets
 		// Only count employees assigned to this market or "All"
 		absoluteGrowth := (salesInMarket * 2) + (marketingInMarket * 1)
-		
+
 		// CGO contributes to absolute growth (works across all markets)
 		for _, exec := range fs.Team.Executives {
 			if exec.Role == RoleCGO {
 				absoluteGrowth += int(exec.Impact * 3) // CGO brings in customers directly
 			}
 		}
-		
+
 		newCustomers := percentageGrowth + absoluteGrowth
 
 		// But cap at remaining market opportunity
