@@ -609,17 +609,26 @@ func checkAchievement(id string, stats GameStats) bool {
 		return stats.InvestmentCount == 2 && won
 	case "tech_enthusiast":
 		// Check if all sectors are tech-related
+		// Must have at least one investment and won
+		if stats.InvestmentCount == 0 || !won {
+			return false
+		}
 		techSectors := map[string]bool{
 			"CloudTech": true, "SaaS": true, "DeepTech": true,
 			"FinTech": true, "HealthTech": true, "EdTech": true,
 			"LegalTech": true, "Gaming": true, "Security": true,
 		}
+		// Must have at least one sector
+		if len(stats.SectorsInvested) == 0 {
+			return false
+		}
+		// All sectors must be tech sectors
 		for _, sector := range stats.SectorsInvested {
 			if !techSectors[sector] {
-				return false
+				return false // Found non-tech sector
 			}
 		}
-		return len(stats.SectorsInvested) > 0 && won
+		return true
 	case "clean_investor":
 		// Check if only CleanTech/AgriTech
 		for _, sector := range stats.SectorsInvested {

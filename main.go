@@ -1301,22 +1301,39 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 			fmt.Printf("   +%d points\n", ach.Points)
 		}
 
-		// Calculate new career level
-		totalPoints := 0
+		// Calculate new career level and points
+		totalLifetimePoints := 0
 		allUnlocked, _ := db.GetPlayerAchievements(gs.PlayerName)
 		for _, id := range allUnlocked {
 			if ach, exists := achievements.AllAchievements[id]; exists {
-				totalPoints += ach.Points
+				totalLifetimePoints += ach.Points
 			}
 		}
 
-		level, title, _ := achievements.CalculateCareerLevel(totalPoints)
+		// Get owned upgrades to calculate available balance
+		ownedUpgrades, _ := db.GetPlayerUpgrades(gs.PlayerName)
+		availableBalance := totalLifetimePoints
+		spentOnUpgrades := 0
+		for _, upgradeID := range ownedUpgrades {
+			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+				availableBalance -= upgrade.Cost
+				spentOnUpgrades += upgrade.Cost
+			}
+		}
+
+		level, title, _ := achievements.CalculateCareerLevel(totalLifetimePoints)
+		green := color.New(color.FgGreen)
 
 		fmt.Println("\n" + strings.Repeat("=", 60))
 		fmt.Printf("Career Level: ")
 		yellow.Printf("%d - %s", level, title)
-		fmt.Printf(" | Total Points: ")
-		yellow.Printf("%d\n", totalPoints)
+		fmt.Printf("\nAvailable Balance: ")
+		green.Printf("%d pts", availableBalance)
+		fmt.Printf("\nTotal Lifetime Points: %d pts", totalLifetimePoints)
+		if spentOnUpgrades > 0 {
+			fmt.Printf(" (Spent: %d pts)", spentOnUpgrades)
+		}
+		fmt.Println()
 		fmt.Println(strings.Repeat("=", 60))
 	}
 }

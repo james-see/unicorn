@@ -1,5 +1,50 @@
 # Changelog
 
+## Version 3.18.4 - Tech Enthusiast Fix & Points Display at Game End (2025-11-03)
+
+### Bug Fixes
+
+#### 🐛 Tech Enthusiast Achievement Logic
+- **Issue**: Tech Enthusiast achievement was triggering incorrectly when non-tech sectors (like "Creative") were invested in
+- **Fix**: Improved validation logic to ensure ALL sectors must be tech-related
+- **Tech Sectors**: CloudTech, SaaS, DeepTech, FinTech, HealthTech, EdTech, LegalTech, Gaming, Security
+- **Non-Tech Examples**: Creative, CleanTech, AgriTech, Social Media, Advertising, etc.
+- **Result**: Achievement now correctly only triggers when exclusively investing in tech sectors
+
+#### 🐛 Points Display at Game End
+- **Issue**: Game end screen only showed total lifetime points, not available balance after new achievements
+- **Fix**: Updated both VC and Founder mode end screens to show complete point breakdown
+- **Display Now Shows**:
+  - Available Balance: Spendable points (total - spent on upgrades)
+  - Total Lifetime Points: All points ever earned
+  - Spent Points: Amount spent on upgrades (if > 0)
+- **Result**: Players can immediately see their new available balance after earning achievements
+
+### Technical Changes
+
+#### Modified Files
+- `achievements/achievements.go`:
+  - Improved `tech_enthusiast` achievement validation logic
+  - Added explicit checks for investment count and sector validation
+  - Ensures all sectors must be tech-related, not just some
+
+- `main.go`:
+  - Updated achievement display at VC mode game end
+  - Added available balance calculation after new achievements
+  - Shows complete point breakdown (available, total, spent)
+
+- `founder_ui.go`:
+  - Updated achievement display at Founder mode game end
+  - Added available balance calculation after new achievements
+  - Shows complete point breakdown (available, total, spent)
+
+### User Experience
+- **Accurate Achievements**: Tech Enthusiast now correctly validates investment portfolio
+- **Clear Point Tracking**: Players see their new available balance immediately after earning achievements
+- **Consistent Display**: Both VC and Founder modes show the same point breakdown format
+
+---
+
 ## Version 3.18.3 - Achievement Fixes & Points Display (2025-11-03)
 
 ### Bug Fixes

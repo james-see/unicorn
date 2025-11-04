@@ -2479,21 +2479,39 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 			fmt.Printf("   +%d points\n", ach.Points)
 		}
 		
-		// Calculate new career level
-		totalPoints := 0
+		// Calculate new career level and points
+		totalLifetimePoints := 0
 		allUnlocked, _ := db.GetPlayerAchievements(fs.FounderName)
 		for _, id := range allUnlocked {
 			if ach, exists := achievements.AllAchievements[id]; exists {
-				totalPoints += ach.Points
+				totalLifetimePoints += ach.Points
 			}
 		}
-		
-		level, title, nextLevel := achievements.CalculateCareerLevel(totalPoints)
+
+		// Get owned upgrades to calculate available balance
+		ownedUpgrades, _ := db.GetPlayerUpgrades(fs.FounderName)
+		availableBalance := totalLifetimePoints
+		spentOnUpgrades := 0
+		for _, upgradeID := range ownedUpgrades {
+			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+				availableBalance -= upgrade.Cost
+				spentOnUpgrades += upgrade.Cost
+			}
+		}
+
+		level, title, nextLevel := achievements.CalculateCareerLevel(totalLifetimePoints)
+		green := color.New(color.FgGreen)
 		
 		fmt.Println("\n" + strings.Repeat("=", 60))
 		fmt.Printf("Career Level: ")
 		yellow.Printf("%d - %s", level, title)
-		fmt.Printf("\nTotal Points: %d\n", totalPoints)
+		fmt.Printf("\nAvailable Balance: ")
+		green.Printf("%d pts", availableBalance)
+		fmt.Printf("\nTotal Lifetime Points: %d pts", totalLifetimePoints)
+		if spentOnUpgrades > 0 {
+			fmt.Printf(" (Spent: %d pts)", spentOnUpgrades)
+		}
+		fmt.Println()
 		if nextLevel < 2001 {
 			fmt.Printf("Next Level: %d points\n", nextLevel)
 		}
