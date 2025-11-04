@@ -2447,6 +2447,7 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 		ExitType:             fs.ExitType,
 		ExitValuation:        fs.ExitValuation,
 		MonthsToProfitability: fs.MonthReachedProfitability,
+		RanOutOfCash:         fs.Cash <= 0 && !fs.HasExited, // Ran out of cash and didn't exit = lost
 		TotalGames:           playerStats.TotalGames,
 		TotalWins:            int(playerStats.WinRate * float64(playerStats.TotalGames) / 100.0),
 		WinStreak:            winStreak,

@@ -57,6 +57,7 @@ type GameStats struct {
 	ExitType              string // "ipo", "acquisition", "secondary"
 	ExitValuation         int64
 	MonthsToProfitability int
+	RanOutOfCash          bool // True if founder ran out of cash (lost)
 	
 	// Career stats
 	TotalGames      int
@@ -531,7 +532,15 @@ func CheckAchievements(stats GameStats, previouslyUnlocked []string) []Achieveme
 }
 
 func checkAchievement(id string, stats GameStats) bool {
-	won := stats.ROI > 0
+	// Determine if player won
+	var won bool
+	if stats.GameMode == "founder" {
+		// For founder mode: won = exited successfully OR reached max turns without running out of cash
+		won = stats.HasExited || !stats.RanOutOfCash
+	} else {
+		// For VC mode: won = positive ROI
+		won = stats.ROI > 0
+	}
 	
 	switch id {
 	// Wealth

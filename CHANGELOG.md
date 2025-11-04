@@ -1,5 +1,38 @@
 # Changelog
 
+## Version 3.18.5 - Founder Mode Win Condition Fix (2025-11-03)
+
+### Bug Fixes
+
+#### 🐛 Win-Based Achievements Triggering on Losses
+- **Issue**: Achievements like "Speed Runner" (Win in under 60 turns) were triggering when founder ran out of cash
+- **Root Cause**: Win condition was based on ROI > 0, which could be true even when cash ran out (due to equity valuation)
+- **Fix**: Updated founder mode win condition to properly check for successful exit OR reaching max turns without running out of cash
+- **Win Conditions**:
+  - **Won**: Exited successfully (IPO/Acquisition/Secondary) OR reached max turns with cash remaining
+  - **Lost**: Ran out of cash before exiting or reaching max turns
+- **Result**: Win-based achievements now only trigger on actual wins, not losses
+
+### Technical Changes
+
+#### Modified Files
+- `achievements/achievements.go`:
+  - Added `RanOutOfCash bool` field to `GameStats` struct
+  - Updated `checkAchievement()` win logic to differentiate founder mode vs VC mode
+  - Founder mode: `won = HasExited || !RanOutOfCash`
+  - VC mode: `won = ROI > 0` (unchanged)
+
+- `founder_ui.go`:
+  - Set `RanOutOfCash` field when building `GameStats` for achievement checking
+  - `RanOutOfCash = fs.Cash <= 0 && !fs.HasExited`
+
+### User Experience
+- **Accurate Achievements**: Win-based achievements now correctly validate actual game outcomes
+- **Fair Progression**: Players can't earn win achievements by losing games
+- **Clear Logic**: Win conditions are now explicit and match game outcomes
+
+---
+
 ## Version 3.18.4 - Tech Enthusiast Fix & Points Display at Game End (2025-11-03)
 
 ### Bug Fixes
