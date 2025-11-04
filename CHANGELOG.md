@@ -1,5 +1,44 @@
 # Changelog
 
+## Version 3.18.3 - Achievement Fixes & Points Display (2025-11-03)
+
+### Bug Fixes
+
+#### 🐛 Achievement Logic Fixes
+- **Issue**: "Cautious Investor" and "Risk Taker" achievements were triggering incorrectly
+- **Fix**: Implemented proper risk score tracking and validation
+- **Cautious Investor**: Now only triggers when ALL investments have risk < 0.3 (LOW risk)
+- **Risk Taker**: Now only triggers when ALL investments have risk > 0.6 (High/VERY HIGH risk)
+- **Result**: Achievements now correctly validate actual risk levels instead of always triggering
+
+#### 🐛 Points Display Clarity
+- **Issue**: Upgrade store showed total lifetime points instead of available balance
+- **Fix**: Updated upgrade store to show both available balance and total lifetime points
+- **Available Balance**: Shows spendable points (total - spent on upgrades)
+- **Total Lifetime Points**: Shows all points ever earned (for career level calculation)
+- **Spent Points**: Shows how much was spent on upgrades (if > 0)
+- **Result**: Players can now clearly see how many points they have available vs total earned
+
+### Technical Changes
+
+#### Modified Files
+- `achievements/achievements.go`:
+  - Added `RiskScores []float64` field to `GameStats` struct
+  - Updated `risk_taker` achievement check to validate all investments have risk > 0.6
+  - Updated `cautious_investor` achievement check to validate all investments have risk < 0.3
+
+- `main.go`:
+  - Updated `displayUpgradeMenu()` to calculate and display available balance vs total lifetime points
+  - Updated achievement stats collection to track risk scores for all investments
+  - Updated `browseAllUpgrades()` to use available balance for affordability checks
+
+### User Experience
+- **Accurate Achievements**: Risk-based achievements now correctly reflect actual investment strategy
+- **Clear Point Tracking**: Easy to see available balance vs total earned vs spent
+- **Better Decisions**: Players can make informed upgrade purchase decisions
+
+---
+
 ## Version 3.18.2 - Super Pro-Rata Fix & Build Fixes (2025-11-03)
 
 ### Bug Fixes

@@ -38,6 +38,7 @@ type GameStats struct {
 	InvestmentCount int
 	SectorsInvested []string
 	TotalInvested   int64
+	RiskScores      []float64 // Risk scores of all investments (for achievement tracking)
 	
 	// Performance (VC mode)
 	PositiveInvestments int
@@ -628,9 +629,27 @@ func checkAchievement(id string, stats GameStats) bool {
 		}
 		return len(stats.SectorsInvested) > 0 && won
 	case "risk_taker":
-		return stats.InvestmentCount > 0 && won // Would need risk tracking
+		// Win with only high-risk companies (risk score > 0.6)
+		if stats.InvestmentCount == 0 || !won {
+			return false
+		}
+		for _, risk := range stats.RiskScores {
+			if risk <= 0.6 {
+				return false // Not all high-risk
+			}
+		}
+		return true
 	case "cautious_investor":
-		return stats.InvestmentCount > 0 && won // Would need risk tracking
+		// Win with only low-risk companies (risk score < 0.3)
+		if stats.InvestmentCount == 0 || !won {
+			return false
+		}
+		for _, risk := range stats.RiskScores {
+			if risk >= 0.3 {
+				return false // Not all low-risk
+			}
+		}
+		return true
 		
 	// Founder Mode Achievements
 	case "first_revenue":

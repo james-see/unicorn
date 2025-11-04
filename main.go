@@ -1228,6 +1228,7 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 	positiveCount := 0
 	negativeCount := 0
 	totalInvested := int64(0)
+	riskScores := []float64{}
 
 	for _, inv := range gs.Portfolio.Investments {
 		totalInvested += inv.AmountInvested
@@ -1238,10 +1239,11 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 			negativeCount++
 		}
 
-		// Find sector
+		// Find sector and risk score
 		for _, startup := range gs.AvailableStartups {
 			if startup.Name == inv.CompanyName {
 				sectors[startup.Category] = true
+				riskScores = append(riskScores, startup.RiskScore)
 				break
 			}
 		}
@@ -1264,6 +1266,7 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 		InvestmentCount:     len(gs.Portfolio.Investments),
 		SectorsInvested:     sectorsInvested,
 		TotalInvested:       totalInvested,
+		RiskScores:          riskScores,
 		PositiveInvestments: positiveCount,
 		NegativeInvestments: negativeCount,
 		TotalGames:          stats.TotalGames,
@@ -2131,10 +2134,10 @@ func displayUpgradeMenu() {
 		allUnlocked = []string{}
 	}
 
-	totalPoints := 0
+	totalLifetimePoints := 0
 	for _, id := range allUnlocked {
 		if ach, exists := achievements.AllAchievements[id]; exists {
-			totalPoints += ach.Points
+			totalLifetimePoints += ach.Points
 		}
 	}
 
@@ -2144,15 +2147,30 @@ func displayUpgradeMenu() {
 		ownedUpgrades = []string{}
 	}
 
+	// Calculate available balance (total points - spent on upgrades)
+	availableBalance := totalLifetimePoints
+	spentOnUpgrades := 0
+	for _, upgradeID := range ownedUpgrades {
+		if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+			availableBalance -= upgrade.Cost
+			spentOnUpgrades += upgrade.Cost
+		}
+	}
+
 	clear.ClearIt()
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Printf("     🎁 UPGRADE STORE 🎁\n")
 	cyan.Println(strings.Repeat("=", 70))
 
 	yellow.Printf("\nPlayer: %s\n", playerName)
-	yellow.Printf("Your Points: %d\n", totalPoints)
+	green.Printf("Available Balance: %d pts\n", availableBalance)
+	fmt.Printf("Total Lifetime Points: %d pts", totalLifetimePoints)
+	if spentOnUpgrades > 0 {
+		fmt.Printf(" (Spent: %d pts)", spentOnUpgrades)
+	}
+	fmt.Println()
 
-	level, title, _ := achievements.CalculateCareerLevel(totalPoints)
+	level, title, _ := achievements.CalculateCareerLevel(totalLifetimePoints)
 	fmt.Printf("Career Level: ")
 	green.Printf("%d - %s\n", level, title)
 
@@ -2169,11 +2187,11 @@ func displayUpgradeMenu() {
 
 	switch choice {
 	case "1":
-		browseAllUpgrades(playerName, totalPoints, ownedUpgrades)
+		browseAllUpgrades(playerName, availableBalance, ownedUpgrades)
 	case "2":
 		viewPlayerUpgrades(playerName, ownedUpgrades)
 	case "3":
-		purchaseUpgrades(playerName, totalPoints, ownedUpgrades)
+		purchaseUpgrades(playerName, availableBalance, ownedUpgrades)
 	case "4":
 		return
 	default:
@@ -2185,7 +2203,7 @@ func displayUpgradeMenu() {
 	displayUpgradeMenu()
 }
 
-func browseAllUpgrades(playerName string, totalPoints int, ownedUpgrades []string) {
+func browseAllUpgrades(playerName string, availableBalance int, ownedUpgrades []string) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
@@ -2201,7 +2219,7 @@ func browseAllUpgrades(playerName string, totalPoints int, ownedUpgrades []strin
 		categoryUpgrades := upgrades.GetUpgradesByCategory(category)
 		for i, upgrade := range categoryUpgrades {
 			owned := upgrades.IsOwned(upgrade.ID, ownedUpgrades)
-			canAfford := totalPoints >= upgrade.Cost
+			canAfford := availableBalance >= upgrade.Cost
 
 			status := ""
 			if owned {
@@ -2209,7 +2227,7 @@ func browseAllUpgrades(playerName string, totalPoints int, ownedUpgrades []strin
 			} else if canAfford {
 				status = yellow.Sprintf("[AVAILABLE]")
 			} else {
-				status = magenta.Sprintf("[Need %d more pts]", upgrade.Cost-totalPoints)
+				status = magenta.Sprintf("[Need %d more pts]", upgrade.Cost-availableBalance)
 			}
 
 			fmt.Printf("\n%d. %s %s\n", i+1, upgrade.Icon, upgrade.Name)
