@@ -1,5 +1,42 @@
 # Changelog
 
+## Version 3.18.6 - Founder Mode Menu Fixes (2025-11-03)
+
+### Bug Fixes
+
+#### 🐛 Menu Numbering Out of Order
+- **Issue**: Menu options were numbered incorrectly (17, 12, 16, 15 appearing out of sequence)
+- **Fix**: Implemented dynamic sequential numbering system
+- **Result**: All menu options now numbered sequentially based on availability
+
+#### 🐛 Invalid Choice Validation
+- **Issue**: Valid options (like option 13) were being rejected as invalid
+- **Fix**: Updated validation logic to properly calculate maxChoice and validate all options
+- **Result**: All valid menu choices now work correctly
+
+#### 🐛 Funding Round Numbering
+- **Issue**: When raising Series A or Series B, menu showed "2. Series A" but required input "1"
+- **Fix**: Implemented dynamic option numbering for funding rounds
+- **Result**: If only Series A is available, it shows "1. Series A" and accepts "1" as input
+
+### Technical Changes
+
+#### Modified Files
+- `founder_ui.go`:
+  - Refactored `handleFounderDecisions()` to use dynamic sequential numbering
+  - Added `nextOption` counter to track current option number
+  - View options, Strategic Opportunity, and Exit options now numbered dynamically
+  - Updated `handleFundraising()` to use `optionNum` counter instead of hardcoded 1, 2, 3
+  - Fixed validation to properly check against calculated `maxChoice`
+  - Improved option handling logic to support sequential numbering
+
+### User Experience
+- **Clear Menu**: Options are now numbered sequentially (1, 2, 3... instead of 1, 2, 3, 17, 12, 16, 15)
+- **Correct Validation**: All valid choices are now accepted
+- **Intuitive Funding**: Funding round selection matches displayed numbers
+
+---
+
 ## Version 3.18.5 - Founder Mode Win Condition Fix (2025-11-03)
 
 ### Bug Fixes

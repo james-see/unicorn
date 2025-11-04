@@ -727,8 +727,28 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		}
 		fmt.Println("10. Expand to New Market")
 		fmt.Println("11. Execute Pivot/Strategy Change")
+		
+		// Strategic opportunities (numbered sequentially)
+		nextOption := 12
+		if fs.PendingOpportunity != nil {
+			green := color.New(color.FgGreen, color.Bold)
+			green.Printf("%d. 💡 Respond to Strategic Opportunity\n", nextOption)
+			nextOption++
+		}
 
-		// Show exit option if any exits are available
+		cyan.Println("\n[VIEW DATA]")
+		fmt.Printf("%d. View Team Roster\n", nextOption)
+		nextOption++
+		fmt.Printf("%d. View Customer Deals\n", nextOption)
+		nextOption++
+		if fs.Customers > 0 {
+			fmt.Printf("%d. Solicit Customer Feedback\n", nextOption)
+			nextOption++
+		}
+		fmt.Printf("%d. View Financials & Cash Flow\n", nextOption)
+		nextOption++
+
+		// Exit option (always last)
 		exits := fs.GetAvailableExits()
 		hasAvailableExit := false
 		for _, exit := range exits {
@@ -739,90 +759,109 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		}
 		if hasAvailableExit {
 			green := color.New(color.FgGreen, color.Bold)
-			green.Println("17. 💰 Consider Exit Options (IPO/Acquisition/Secondary)")
-		}
-		if fs.PendingOpportunity != nil {
-			green := color.New(color.FgGreen, color.Bold)
-			green.Println("12. 💡 Respond to Strategic Opportunity")
-		}
-
-		cyan.Println("\n[VIEW DATA]")
-		fmt.Println("13. View Team Roster")
-		fmt.Println("14. View Customer Deals")
-		fmt.Println("16. View Financials & Cash Flow")
-		if fs.Customers > 0 {
-			fmt.Println("15. Solicit Customer Feedback")
+			green.Printf("%d. 💰 Consider Exit Options (IPO/Acquisition/Secondary)\n", nextOption)
 		}
 
 		fmt.Println("\n0. Skip (Do Nothing)")
 
-		maxChoice := "11"
-		if fs.AffiliateProgram == nil {
-			maxChoice = "13"
-		} else if len(fs.Competitors) > 0 {
-			maxChoice = "13"
-		} else {
-			maxChoice = "13"
+		maxChoice := nextOption - 1
+		if hasAvailableExit {
+			maxChoice = nextOption
 		}
-		fmt.Printf("\nWhat would you like to do? (0-%s): ", maxChoice)
+		fmt.Printf("\nWhat would you like to do? (0-%d): ", maxChoice)
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
 
-		// View options - don't advance turn, loop back to menu
-		if choice == "13" || choice == "14" || choice == "16" {
-			switch choice {
-			case "13":
+		// Parse choice and validate range
+		choiceNum, err := strconv.Atoi(choice)
+		if err != nil || choiceNum < 0 || choiceNum > maxChoice {
+			fmt.Println("\nInvalid choice, skipping...")
+			break
+		}
+
+		// Calculate view option start position
+		viewOptionStart := 12
+		if fs.PendingOpportunity != nil {
+			viewOptionStart = 13
+		}
+
+		// Handle view options first (they don't advance the turn)
+		if choiceNum >= viewOptionStart && choiceNum < nextOption {
+			viewIndex := choiceNum - viewOptionStart
+			if viewIndex == 0 {
 				handleViewTeamRoster(fs)
-			case "14":
+			} else if viewIndex == 1 {
 				handleViewCustomerDeals(fs)
-			case "16":
+			} else if viewIndex == 2 && fs.Customers > 0 {
+				// Solicit Feedback - this is an action that can cancel
+				shouldContinue := handleSolicitFeedback(fs)
+				if shouldContinue {
+					continue
+				}
+				break
+			} else if viewIndex == 2 && fs.Customers <= 0 {
 				handleViewFinancials(fs)
+			} else if viewIndex == 3 && fs.Customers > 0 {
+				handleViewFinancials(fs)
+			} else {
+				fmt.Println("\nInvalid choice, skipping...")
+				break
 			}
-			continue // Loop back to menu
+			continue // Loop back to menu for view options
+		}
+
+		// Handle exit option
+		if choiceNum == maxChoice && hasAvailableExit {
+			shouldContinue := handleExitOptions(fs)
+			if shouldContinue {
+				continue
+			}
+			break
 		}
 
 		// Action options - may return true to continue (cancelled) or false to process month
 		shouldContinue := false
-		switch choice {
-		case "1":
+		switch choiceNum {
+		case 1:
 			shouldContinue = handleHiring(fs)
-		case "2":
+		case 2:
 			shouldContinue = handleFiring(fs)
-		case "3":
+		case 3:
 			shouldContinue = handleMarketing(fs)
-		case "4":
+		case 4:
 			shouldContinue = handleFundraising(fs)
-		case "5":
+		case 5:
 			shouldContinue = handleBuyback(fs)
-		case "6":
+		case 6:
 			shouldContinue = handleBoardAndEquity(fs)
-		case "7":
+		case 7:
 			shouldContinue = handlePartnership(fs)
-		case "8":
+		case 8:
 			if fs.AffiliateProgram != nil {
 				handleViewAffiliateProgram(fs)
 				shouldContinue = true // Viewing doesn't advance
 			} else {
 				shouldContinue = handleAffiliateLaunch(fs)
 			}
-		case "9":
+		case 9:
 			shouldContinue = handleCompetitorManagement(fs)
-		case "10":
+		case 10:
 			shouldContinue = handleGlobalExpansion(fs)
-		case "11":
+		case 11:
 			shouldContinue = handlePivot(fs)
-		case "12":
-			shouldContinue = handleStrategicOpportunity(fs)
-		case "15":
-			shouldContinue = handleSolicitFeedback(fs)
-		case "17":
-			shouldContinue = handleExitOptions(fs)
-		case "0":
+		case 12:
+			if fs.PendingOpportunity != nil {
+				shouldContinue = handleStrategicOpportunity(fs)
+			} else {
+				fmt.Println("\nInvalid choice, skipping...")
+				break
+			}
+		case 0:
 			fmt.Println("\n✓ Focusing on operations this month...")
 			shouldContinue = false
 		default:
 			fmt.Println("\nInvalid choice, skipping...")
-			shouldContinue = false
+			break
 		}
 
 		// If cancelled, loop back to menu
@@ -1105,17 +1144,21 @@ func handleFundraising(fs *founder.FounderState) bool {
 
 	fmt.Println("\nAvailable Rounds:")
 	options := []string{}
+	optionNum := 1
 	if !hasSeed {
-		fmt.Println("1. Seed Round ($2-5M)")
+		fmt.Printf("%d. Seed Round ($2-5M)\n", optionNum)
 		options = append(options, "Seed")
+		optionNum++
 	}
 	if hasSeed && !hasSeriesA {
-		fmt.Println("2. Series A ($10-20M)")
+		fmt.Printf("%d. Series A ($10-20M)\n", optionNum)
 		options = append(options, "Series A")
+		optionNum++
 	}
 	if hasSeriesA && !hasSeriesB {
-		fmt.Println("3. Series B ($30-50M)")
+		fmt.Printf("%d. Series B ($30-50M)\n", optionNum)
 		options = append(options, "Series B")
+		optionNum++
 	}
 	fmt.Println("0. Cancel")
 
@@ -1124,7 +1167,7 @@ func handleFundraising(fs *founder.FounderState) bool {
 		return true
 	}
 
-	fmt.Print("\nWhich round? (0-3): ")
+	fmt.Printf("\nWhich round? (0-%d): ", len(options))
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
