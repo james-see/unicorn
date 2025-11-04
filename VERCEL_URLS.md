@@ -42,7 +42,7 @@
 
 ## Frontend Configuration
 
-**GitHub Pages:** `https://jamesacampbell.github.io/unicorn`
+**GitHub Pages:** `https://james-see.github.io/unicorn`
 
 **Frontend API URL (docs/index.html line 618):**
 ```javascript

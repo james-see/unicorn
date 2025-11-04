@@ -175,7 +175,7 @@ To activate the global leaderboard:
    ```
 
 6. **View**
-   - Visit GitHub Pages: `https://jamesacampbell.github.io/unicorn`
+   - Visit GitHub Pages: `https://james-see.github.io/unicorn`
 
 ## Security Considerations
 

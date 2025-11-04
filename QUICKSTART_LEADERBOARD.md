@@ -64,7 +64,7 @@ curl -X POST https://YOUR-VERCEL-URL/api/submit-score \
 ./unicorn
 
 # View the leaderboard
-# Open https://jamesacampbell.github.io/unicorn
+# Open https://james-see.github.io/unicorn
 ```
 
 ## GitHub Pages

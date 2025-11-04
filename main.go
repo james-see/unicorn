@@ -1588,7 +1588,7 @@ func askToSubmitToGlobalLeaderboard(score db.GameScore) {
 	color.Green(" ?")
 	cyan.Println("\n?? Success! Your score has been submitted to the global leaderboard!")
 	yellow.Println("\nView the global leaderboard at:")
-	yellow.Println("https://jamesacampbell.github.io/unicorn")
+	yellow.Println("https://james-see.github.io/unicorn")
 }
 
 func displayInvestingFAQ() {

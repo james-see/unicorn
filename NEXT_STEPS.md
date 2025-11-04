@@ -94,7 +94,7 @@ git push
 ```
 
 Your leaderboard will be live at:
-**https://jamesacampbell.github.io/unicorn**
+**https://james-see.github.io/unicorn**
 
 ## ?? Test Your Setup
 
@@ -180,7 +180,7 @@ Submitting your score... ?
 ?? Success! Your score has been submitted to the global leaderboard!
 
 View the global leaderboard at:
-https://jamesacampbell.github.io/unicorn
+https://james-see.github.io/unicorn
 ```
 
 ### On GitHub Pages
