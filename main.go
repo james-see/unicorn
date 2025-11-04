@@ -79,6 +79,19 @@ func initMenu() (username string) {
 			yellow.Printf("🏆 Achievements Unlocked: %d\n", achievementCount)
 		}
 		
+		// Get and display active upgrades
+		playerUpgrades, err := db.GetPlayerUpgrades(text)
+		if err == nil && len(playerUpgrades) > 0 {
+			green := color.New(color.FgGreen)
+			fmt.Println()
+			green.Println("✨ ACTIVE UPGRADES:")
+			for _, upgradeID := range playerUpgrades {
+				if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+					fmt.Printf("   %s %s - %s\n", upgrade.Icon, upgrade.Name, upgrade.Description)
+				}
+			}
+		}
+		
 		cyan.Println(strings.Repeat("=", 60))
 		fmt.Println()
 		
@@ -131,10 +144,11 @@ func askForAutomatedMode() bool {
 	return choice == "2"
 }
 
-func displayWelcome(username string, difficulty game.Difficulty) {
+func displayWelcome(username string, difficulty game.Difficulty, playerUpgrades []string) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	magenta := color.New(color.FgMagenta, color.Bold)
+	green := color.New(color.FgGreen)
 
 	cyan.Printf("\n%s, welcome to your investment journey!\n", username)
 	fmt.Printf("\nDifficulty: ")
@@ -143,6 +157,17 @@ func displayWelcome(username string, difficulty game.Difficulty) {
 	fmt.Printf("Follow-on Reserve: $%s ($100k base + $50k per round)\n", formatMoney(int64(1000000)))
 	fmt.Printf("Management Fee: 2%% annually ($%s/year)\n", formatMoney(int64(float64(difficulty.StartingCash)*0.02)))
 	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
+
+	// Display active upgrades
+	if len(playerUpgrades) > 0 {
+		fmt.Println()
+		green.Println("✨ ACTIVE UPGRADES:")
+		for _, upgradeID := range playerUpgrades {
+			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+				fmt.Printf("   %s %s - %s\n", upgrade.Icon, upgrade.Name, upgrade.Description)
+			}
+		}
+	}
 
 	fmt.Println("\nEach turn = 1 month. Choose your investments wisely!")
 	fmt.Println("Random events and funding rounds will affect valuations.")
@@ -159,10 +184,11 @@ func displayWelcome(username string, difficulty game.Difficulty) {
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
-func displayStartup(s game.Startup, index int, availableCash int64) {
+func displayStartup(s game.Startup, index int, availableCash int64, playerUpgrades []string) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
+	magenta := color.New(color.FgMagenta)
 
 	cyan.Printf("\n[%d] %s\n", index+1, s.Name)
 	fmt.Printf("    %s\n", s.Description)
@@ -184,7 +210,15 @@ func displayStartup(s game.Startup, index int, availableCash int64) {
 	fmt.Printf("    Margin: %d%%\n", s.PercentMargin)
 	fmt.Printf("    Website Visitors: %s/month\n", formatNumber(s.MonthlyWebsiteVisitors))
 
-	// Risk indicator
+	// Risk indicator - show numbers if Due Diligence upgrade is owned
+	hasDueDiligence := false
+	for _, upgradeID := range playerUpgrades {
+		if upgradeID == "due_diligence" {
+			hasDueDiligence = true
+			break
+		}
+	}
+	
 	riskColor := color.New(color.FgGreen)
 	riskLabel := "Low"
 	if s.RiskScore > 0.85 {
@@ -201,6 +235,35 @@ func displayStartup(s game.Startup, index int, availableCash int64) {
 		riskLabel = "LOW"
 	}
 	riskColor.Printf("    Risk: %s", riskLabel)
+	if hasDueDiligence {
+		// Show exact risk score number
+		magenta.Printf(" (%.2f)", s.RiskScore)
+	}
+	fmt.Println()
+
+	// Revenue Tracker - show revenue trends if upgrade is owned
+	hasRevenueTracker := false
+	for _, upgradeID := range playerUpgrades {
+		if upgradeID == "revenue_tracker" {
+			hasRevenueTracker = true
+			break
+		}
+	}
+	
+	if hasRevenueTracker && len(s.RevenueHistory) > 1 {
+		// Show revenue trend
+		fmt.Printf("    Revenue Trend: ")
+		trend := s.RevenueHistory[len(s.RevenueHistory)-1] - s.RevenueHistory[0]
+		if trend > 0 {
+			green.Printf("↑ +%.1f%%", float64(trend)/float64(s.RevenueHistory[0])*100)
+		} else if trend < 0 {
+			red := color.New(color.FgRed)
+			red.Printf("↓ %.1f%%", float64(trend)/float64(s.RevenueHistory[0])*100)
+		} else {
+			fmt.Printf("→ Stable")
+		}
+		fmt.Printf(" over %d months\n", len(s.RevenueHistory))
+	}
 
 	// Growth indicator
 	growthColor := color.New(color.FgGreen)
@@ -215,7 +278,7 @@ func displayStartup(s game.Startup, index int, availableCash int64) {
 		growthColor = color.New(color.FgYellow)
 		growthLabel = "Medium"
 	}
-	growthColor.Printf(" | Growth Potential: %s\n", growthLabel)
+	growthColor.Printf("    Growth Potential: %s\n", growthLabel)
 }
 
 func handleFollowOnOpportunities(gs *game.GameState, opportunities []game.FollowOnOpportunity) {
@@ -338,6 +401,25 @@ func handleBoardVotes(gs *game.GameState, votes []game.BoardVote) {
 		
 		fmt.Println("\n" + strings.Repeat("-", 70))
 		cyan.Println("\nYour vote as a board member:")
+		
+		// Check for double board seat upgrade
+		voteWeight := 1
+		for _, inv := range gs.Portfolio.Investments {
+			if inv.CompanyName == vote.CompanyName && inv.Terms.HasBoardSeat {
+				voteWeight = inv.Terms.BoardSeatMultiplier
+				if voteWeight == 0 {
+					voteWeight = 1
+				}
+				break
+			}
+		}
+		
+		if voteWeight > 1 {
+			magenta.Printf("Voting Power: %d votes (Double Board Seat upgrade active!)\n", voteWeight)
+		} else {
+			fmt.Println("Voting Power: 1 vote")
+		}
+		
 		fmt.Print("Vote (A/1 for Accept/Approve, B/2 for Reject/Disapprove): ")
 		
 		reader := bufio.NewReader(os.Stdin)
@@ -418,7 +500,8 @@ func selectInvestmentTerms(gs *game.GameState, startup *game.Startup, amount int
 		}
 	}
 	
-	fmt.Print("\nSelect terms (1-3, or Enter for Preferred): ")
+	maxOption := len(options)
+	fmt.Printf("\nSelect terms (1-%d, or Enter for Preferred): ", maxOption)
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
@@ -459,8 +542,37 @@ func investmentPhase(gs *game.GameState) {
 	// Show available startups
 	fmt.Println("\n" + strings.Repeat("=", 50))
 	fmt.Println("AVAILABLE STARTUPS:")
+	
+	// Get player upgrades for display
+	playerUpgrades, err := db.GetPlayerUpgrades(gs.PlayerName)
+	if err != nil {
+		playerUpgrades = []string{}
+	}
+	
+	// Market Intelligence: Show sector trends
+	hasMarketIntelligence := false
+	for _, upgradeID := range playerUpgrades {
+		if upgradeID == "market_intelligence" {
+			hasMarketIntelligence = true
+			break
+		}
+	}
+	if hasMarketIntelligence {
+		sectorTrends := gs.GetSectorTrends()
+		if len(sectorTrends) > 0 {
+			fmt.Println()
+			magenta := color.New(color.FgMagenta, color.Bold)
+			magenta.Println("📈 MARKET INTELLIGENCE - Category Trends:")
+			fmt.Println("   (Trends based on average valuations across available startups)")
+			for sector, trend := range sectorTrends {
+				fmt.Printf("   %s: %s\n", sector, trend)
+			}
+			fmt.Println()
+		}
+	}
+	
 	for i, startup := range gs.AvailableStartups {
-		displayStartup(startup, i, gs.Portfolio.Cash)
+		displayStartup(startup, i, gs.Portfolio.Cash, playerUpgrades)
 	}
 	fmt.Println(strings.Repeat("=", 50))
 
@@ -548,12 +660,13 @@ func investmentPhase(gs *game.GameState) {
 		} else {
 			// Default terms for smaller investments
 			selectedTerms = game.InvestmentTerms{
-				Type:             "Common Stock",
-				HasProRataRights: false,
-				HasInfoRights:    false,
-				HasBoardSeat:     false,
-				LiquidationPref:  0.0,
-				HasAntiDilution:  false,
+				Type:               "Common Stock",
+				HasProRataRights:   false,
+				HasInfoRights:      false,
+				HasBoardSeat:       false,
+				BoardSeatMultiplier: 1,
+				LiquidationPref:    0.0,
+				HasAntiDilution:    false,
 			}
 		}
 		
@@ -583,6 +696,26 @@ func playTurn(gs *game.GameState, autoMode bool) {
 	// Print separator line instead of clearing screen
 	fmt.Println(strings.Repeat("=", 70))
 	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
+
+	// Strategic Advisor: Show preview of next board vote
+	playerUpgrades, _ := db.GetPlayerUpgrades(gs.PlayerName)
+	hasStrategicAdvisor := false
+	for _, upgradeID := range playerUpgrades {
+		if upgradeID == "strategic_advisor" {
+			hasStrategicAdvisor = true
+			break
+		}
+	}
+	if hasStrategicAdvisor {
+		nextVote := gs.GetNextBoardVotePreview()
+		if nextVote != "" {
+			magenta := color.New(color.FgMagenta, color.Bold)
+			fmt.Println()
+			magenta.Println("🔮 STRATEGIC ADVISOR PREVIEW:")
+			fmt.Println(nextVote)
+			fmt.Println()
+		}
+	}
 
 	messages := gs.ProcessTurn()
 	
@@ -995,14 +1128,14 @@ func playVCMode(username string) {
 	autoMode := askForAutomatedMode()
 	clear.ClearIt()
 
-	// Display welcome and rules
-	displayWelcome(username, difficulty)
-
 	// Get player upgrades
 	playerUpgrades, err := db.GetPlayerUpgrades(username)
 	if err != nil {
 		playerUpgrades = []string{}
 	}
+
+	// Display welcome and rules (with upgrades)
+	displayWelcome(username, difficulty, playerUpgrades)
 
 	// Initialize game
 	gs := game.NewGame(username, difficulty, playerUpgrades)
@@ -1337,27 +1470,101 @@ func displayPlayerStats() {
 	cyan.Println(strings.Repeat("=", 50))
 
 	green := color.New(color.FgGreen, color.Bold)
+	yellow := color.New(color.FgYellow)
 
-	fmt.Printf("\n%s Total Games Played: ", ascii.Chart)
-	green.Printf("%d\n", stats.TotalGames)
+	// Get stats for VC mode
+	vcStats, err := db.GetPlayerStatsByMode(playerName, "vc")
+	if err != nil {
+		color.Red("Error loading VC stats: %v", err)
+		time.Sleep(2 * time.Second)
+		return
+	}
 
-	fmt.Printf("%s Best Net Worth: ", ascii.Money)
-	green.Printf("$%s\n", formatMoney(stats.BestNetWorth))
+	// Get stats for Founder mode
+	founderStats, err := db.GetPlayerStatsByMode(playerName, "founder")
+	if err != nil {
+		color.Red("Error loading Founder stats: %v", err)
+		time.Sleep(2 * time.Second)
+		return
+	}
 
-	fmt.Printf("%s Best ROI: ", ascii.Chart)
-	green.Printf("%.2f%%\n", stats.BestROI)
+	if vcStats.TotalGames == 0 && founderStats.TotalGames == 0 {
+		color.Yellow("\nNo games found for player: %s", playerName)
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return
+	}
 
-	fmt.Printf("%s Total Successful Exits: ", ascii.Rocket)
-	green.Printf("%d\n", stats.TotalExits)
+	// Display VC Mode Stats
+	if vcStats.TotalGames > 0 {
+		cyan.Println("\n🎩 VC INVESTOR MODE STATS:")
+		cyan.Println(strings.Repeat("─", 50))
+		
+		fmt.Printf("\n%s Total Games Played: ", ascii.Chart)
+		green.Printf("%d\n", vcStats.TotalGames)
 
-	fmt.Printf("%s Average Net Worth: ", ascii.Coin)
-	green.Printf("$%.0f\n", stats.AverageNetWorth)
+		fmt.Printf("%s Best Net Worth: ", ascii.Money)
+		green.Printf("$%s\n", formatMoney(vcStats.BestNetWorth))
 
-	fmt.Printf("%s Win Rate (Positive ROI): ", ascii.Trophy)
-	if stats.WinRate >= 50 {
-		green.Printf("%.1f%%\n", stats.WinRate)
-	} else {
-		color.New(color.FgYellow).Printf("%.1f%%\n", stats.WinRate)
+		fmt.Printf("%s Best ROI: ", ascii.Chart)
+		green.Printf("%.2f%%\n", vcStats.BestROI)
+
+		fmt.Printf("%s Total Successful Exits: ", ascii.Rocket)
+		green.Printf("%d\n", vcStats.TotalExits)
+
+		fmt.Printf("%s Average Net Worth: ", ascii.Coin)
+		green.Printf("$%.0f\n", vcStats.AverageNetWorth)
+
+		fmt.Printf("%s Win Rate (Positive ROI): ", ascii.Trophy)
+		if vcStats.WinRate >= 50 {
+			green.Printf("%.1f%%\n", vcStats.WinRate)
+		} else {
+			color.New(color.FgYellow).Printf("%.1f%%\n", vcStats.WinRate)
+		}
+	}
+
+	// Display Founder Mode Stats
+	if founderStats.TotalGames > 0 {
+		cyan.Println("\n🚀 FOUNDER MODE STATS:")
+		cyan.Println(strings.Repeat("─", 50))
+		
+		fmt.Printf("\n%s Total Games Played: ", ascii.Chart)
+		green.Printf("%d\n", founderStats.TotalGames)
+
+		fmt.Printf("%s Best Net Worth: ", ascii.Money)
+		green.Printf("$%s\n", formatMoney(founderStats.BestNetWorth))
+
+		fmt.Printf("%s Best ROI: ", ascii.Chart)
+		green.Printf("%.2f%%\n", founderStats.BestROI)
+
+		fmt.Printf("%s Total Successful Exits: ", ascii.Rocket)
+		green.Printf("%d\n", founderStats.TotalExits)
+
+		fmt.Printf("%s Average Net Worth: ", ascii.Coin)
+		green.Printf("$%.0f\n", founderStats.AverageNetWorth)
+
+		fmt.Printf("%s Win Rate (Positive ROI): ", ascii.Trophy)
+		if founderStats.WinRate >= 50 {
+			green.Printf("%.1f%%\n", founderStats.WinRate)
+		} else {
+			color.New(color.FgYellow).Printf("%.1f%%\n", founderStats.WinRate)
+		}
+	}
+
+	// Get and display active upgrades
+	playerUpgrades, err := db.GetPlayerUpgrades(playerName)
+	if err == nil && len(playerUpgrades) > 0 {
+		fmt.Println()
+		green.Println("✨ ACTIVE UPGRADES:")
+		for _, upgradeID := range playerUpgrades {
+			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+				fmt.Printf("   %s %s - %s\n", upgrade.Icon, upgrade.Name, upgrade.Description)
+			}
+		}
+	} else if err == nil && len(playerUpgrades) == 0 {
+		fmt.Println()
+		yellow.Printf("%s No upgrades purchased yet\n", ascii.Star)
+		fmt.Println("   Purchase upgrades in the Upgrades menu to gain permanent advantages!")
 	}
 
 	fmt.Print("\nPress 'Enter' to continue...")
@@ -2014,6 +2221,36 @@ func purchaseUpgrades(playerName string, totalPoints int, ownedUpgrades []string
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
 	
+	// Refresh points and owned upgrades from database
+	allUnlocked, err := db.GetPlayerAchievements(playerName)
+	if err != nil {
+		allUnlocked = []string{}
+	}
+	
+	currentPoints := 0
+	for _, id := range allUnlocked {
+		if ach, exists := achievements.AllAchievements[id]; exists {
+			currentPoints += ach.Points
+		}
+	}
+	
+	// Deduct cost of owned upgrades
+	currentOwnedUpgrades, err := db.GetPlayerUpgrades(playerName)
+	if err != nil {
+		currentOwnedUpgrades = []string{}
+	}
+	
+	// Recalculate points after subtracting purchased upgrade costs
+	for _, upgradeID := range currentOwnedUpgrades {
+		if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+			currentPoints -= upgrade.Cost
+		}
+	}
+	
+	// Use refreshed values
+	totalPoints = currentPoints
+	ownedUpgrades = currentOwnedUpgrades
+	
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	cyan.Printf("     PURCHASE UPGRADES\n")
 	cyan.Println(strings.Repeat("=", 70))
@@ -2070,5 +2307,37 @@ func purchaseUpgrades(playerName string, totalPoints int, ownedUpgrades []string
 	}
 	
 	green.Printf("\n✓ Successfully purchased: %s %s!\n", upgrade.Icon, upgrade.Name)
-	green.Printf("Points remaining: %d\n", totalPoints-upgrade.Cost)
+	
+	// Refresh points and owned upgrades from database
+	allUnlockedRefresh, errRefresh := db.GetPlayerAchievements(playerName)
+	if errRefresh != nil {
+		allUnlockedRefresh = []string{}
+	}
+	
+	newTotalPoints := 0
+	for _, id := range allUnlockedRefresh {
+		if ach, exists := achievements.AllAchievements[id]; exists {
+			newTotalPoints += ach.Points
+		}
+	}
+	
+	newOwnedUpgrades, errUpgrades := db.GetPlayerUpgrades(playerName)
+	if errUpgrades != nil {
+		newOwnedUpgrades = []string{}
+	}
+	
+	// Deduct cost of all owned upgrades
+	for _, upgradeID := range newOwnedUpgrades {
+		if up, exists := upgrades.AllUpgrades[upgradeID]; exists {
+			newTotalPoints -= up.Cost
+		}
+	}
+	
+	green.Printf("Points remaining: %d\n", newTotalPoints)
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	
+	// Return to purchase menu with refreshed values
+	purchaseUpgrades(playerName, newTotalPoints, newOwnedUpgrades)
 }

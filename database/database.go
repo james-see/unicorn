@@ -260,6 +260,56 @@ func GetPlayerStats(playerName string) (*PlayerStats, error) {
 	return &stats, nil
 }
 
+// GetPlayerStatsByMode returns aggregate statistics for a player filtered by game mode
+// gameMode: "vc" for VC mode (Easy/Medium/Hard/Expert) or "founder" for Founder mode
+func GetPlayerStatsByMode(playerName string, gameMode string) (*PlayerStats, error) {
+	var difficultyFilter string
+	if gameMode == "vc" {
+		// VC modes: Easy, Medium, Hard, Expert
+		difficultyFilter = "difficulty IN ('Easy', 'Medium', 'Hard', 'Expert')"
+	} else if gameMode == "founder" {
+		// Founder mode
+		difficultyFilter = "difficulty = 'Founder'"
+	} else {
+		return nil, fmt.Errorf("invalid game mode: %s", gameMode)
+	}
+	
+	query := fmt.Sprintf(`
+		SELECT 
+			COUNT(*) as total_games,
+			MAX(final_net_worth) as best_net_worth,
+			MAX(roi) as best_roi,
+			SUM(successful_exits) as total_exits,
+			AVG(final_net_worth) as avg_net_worth,
+			SUM(CASE WHEN roi > 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as win_rate
+		FROM game_scores
+		WHERE player_name = ? AND %s
+	`, difficultyFilter)
+
+	var stats PlayerStats
+	stats.PlayerName = playerName
+
+	err := db.QueryRow(query, playerName).Scan(
+		&stats.TotalGames,
+		&stats.BestNetWorth,
+		&stats.BestROI,
+		&stats.TotalExits,
+		&stats.AverageNetWorth,
+		&stats.WinRate,
+	)
+
+	if err == sql.ErrNoRows {
+		// No games played yet for this mode
+		return &stats, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get player stats: %v", err)
+	}
+
+	return &stats, nil
+}
+
 // GetRecentGames returns the most recent N games
 func GetRecentGames(limit int) ([]GameScore, error) {
 	query := `

@@ -1,5 +1,42 @@
 # Changelog
 
+## Version 3.18.1 - Bug Fixes (2025-11-03)
+
+### Bug Fixes
+
+#### 🐛 Stats Display Separation
+- **Issue**: Player stats were blended between VC and Founder modes
+- **Fix**: Stats now display separately for each game mode
+- **VC Mode Stats**: Shows stats for Easy/Medium/Hard/Expert difficulty games
+- **Founder Mode Stats**: Shows stats for Founder difficulty games
+- **Result**: Players can now see their performance in each game mode independently
+
+#### 🐛 Upgrade Purchase Flow
+- **Issue**: After purchasing an upgrade, system asked for player name again and showed stale point values
+- **Fix**: Purchase flow now refreshes points and owned upgrades from database after each purchase
+- **Result**: Points update immediately after purchase, allowing continuous purchases without re-entering name
+
+### Technical Changes
+
+#### Modified Files
+- `database/database.go`:
+  - Added `GetPlayerStatsByMode()` function to filter stats by game mode ("vc" or "founder")
+  - VC mode filters by difficulty IN ('Easy', 'Medium', 'Hard', 'Expert')
+  - Founder mode filters by difficulty = 'Founder'
+
+- `main.go`:
+  - Updated `displayPlayerStats()` to call `GetPlayerStatsByMode()` for both VC and Founder modes
+  - Displays separate stat sections for each game mode
+  - Modified `purchaseUpgrades()` to refresh points and owned upgrades from database after purchase
+  - Purchase flow now loops back to purchase menu with updated values
+
+### User Experience
+- **Clearer Stats**: Players can now see how they perform in VC mode vs Founder mode separately
+- **Smoother Purchases**: Upgrade purchases flow seamlessly without re-entering information
+- **Real-time Updates**: Points update immediately after purchase
+
+---
+
 ## Version 3.18.0 - Founder Mode Achievements & Upgrades (2025-11-03)
 
 ### Major Features Added
