@@ -1,5 +1,22 @@
 # Changelog
 
+## Version 3.18.7 - Copyright Year Update (2025-11-03)
+
+### Maintenance
+
+#### 📝 Copyright Update
+- Updated copyright year from 2019 to 2025
+- Updated in README.md and logo/logo.go
+- Game logo and documentation now display correct copyright year
+
+### Technical Changes
+
+#### Modified Files
+- `README.md`: Updated copyright notice in ASCII art header
+- `logo/logo.go`: Updated copyright displayed in game welcome screen
+
+---
+
 ## Version 3.18.6 - Founder Mode Menu Fixes (2025-11-03)
 
 ### Bug Fixes
