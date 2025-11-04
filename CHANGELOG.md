@@ -1,5 +1,58 @@
 # Changelog
 
+## Version 3.14.0 - Board Voting Mechanism & Equity Fixes (2025-11-02)
+
+### Major Features Added
+
+#### 🏛️ Board Voting System
+- **Board Seat Participation**: Players with board seats ($100k+ Preferred Stock investments) now vote on critical company decisions
+- **Voting Scenarios**:
+  - **Acquisition Offers**: Vote to accept or reject acquisition offers
+  - **Down Rounds**: Vote to approve or reject down rounds (valuations below current)
+- **Voting Mechanics**:
+  - Player vote counts as 1 vote
+  - AI board members (2-3 simulated) vote based on strategy
+  - Majority wins; outcomes are executed based on vote results
+- **Interactive UI**: Clear voting interface with options, consequences, and results displayed
+
+#### 🤖 AI Player Enhancements
+- **Board Seats for AI**: AI players now get board seats when investing $100k+ (same as players)
+- **Preferred Stock Terms**: AI investments now use Preferred Stock terms with all protections
+- **Equal Starting Capital**: AI players start with same capital as player ($1M on Easy difficulty)
+
+### Bug Fixes
+
+#### 🐛 Equity Calculation Fixes
+- **Fixed Equity Over 100% Bug**: Follow-on investments now correctly recalculate total equity instead of adding
+- **SAFE Conversion Discount**: SAFE conversion discounts now properly apply during follow-on investments
+- **Double Dilution Prevention**: Added flag to prevent double dilution when making follow-on investments
+- **Equity Safety Cap**: Added 100% cap as safety check (should never be needed)
+
+#### 📊 Investment Terms Improvements
+- **SAFE Terms Execution**: Confirmed SAFE conversion discounts are correctly applied in math
+- **Equity Recalculation**: Total equity now recalculated as `(totalAmountInvested / postMoneyValuation) * 100`
+- **Follow-on Investment Accuracy**: Follow-on investments now use correct post-money valuation for equity calculation
+
+### Technical Changes
+
+#### Modified Files
+- `game/game.go`:
+  - Added `BoardVote` struct and `PendingBoardVotes` queue
+  - Added `HasBoardSeat()`, `HasAnyBoardSeat()`, `GetPendingBoardVotes()` functions
+  - Added `ProcessBoardVote()` and `ExecuteBoardVoteOutcome()` functions
+  - Updated `MakeFollowOnInvestment()` to recalculate equity correctly and apply SAFE discounts
+  - Updated `ProcessFundingRounds()` to create board votes for down rounds
+  - Updated `ProcessAcquisitions()` to create board votes for acquisitions
+  - Updated `AIPlayerMakeInvestments()` to include Preferred Stock terms
+  - Added `FollowOnThisTurn` flag to prevent double dilution
+  - Fixed equity calculation to use total invested amount
+
+- `main.go`:
+  - Added `handleBoardVotes()` function for interactive voting UI
+  - Integrated board vote handling into turn processing flow
+
+---
+
 ## Version 3.13.0 - 16 New Startup Options (2025-11-02)
 
 ### Major Features Added

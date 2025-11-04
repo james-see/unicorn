@@ -278,6 +278,92 @@ func handleFollowOnOpportunities(gs *game.GameState, opportunities []game.Follow
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
+func handleBoardVotes(gs *game.GameState, votes []game.BoardVote) {
+	green := color.New(color.FgGreen, color.Bold)
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow, color.Bold)
+	magenta := color.New(color.FgMagenta, color.Bold)
+	red := color.New(color.FgRed, color.Bold)
+	
+	for _, vote := range votes {
+		// Find the vote index in the full pending votes list
+		voteIndex := -1
+		for i, v := range gs.GetPendingBoardVotes() {
+			if v.CompanyName == vote.CompanyName && v.VoteType == vote.VoteType && v.Turn == vote.Turn {
+				voteIndex = i
+				break
+			}
+		}
+		
+		if voteIndex == -1 {
+			continue // Vote already processed
+		}
+		
+		fmt.Println("\n\n")
+		fmt.Println(strings.Repeat("=", 70))
+		magenta.Println("            🏛️  BOARD VOTE REQUIRED!")
+		fmt.Println(strings.Repeat("=", 70))
+		
+		cyan.Printf("\nCompany: %s\n", vote.CompanyName)
+		yellow.Printf("\n%s\n", vote.Title)
+		fmt.Println("\n" + strings.Repeat("-", 70))
+		fmt.Printf("\n%s\n", vote.Description)
+		fmt.Println("\n" + strings.Repeat("-", 70))
+		
+		green.Printf("\nOption A: %s\n", vote.OptionA)
+		fmt.Printf("   → %s\n", vote.ConsequenceA)
+		
+		red.Printf("\nOption B: %s\n", vote.OptionB)
+		fmt.Printf("   → %s\n", vote.ConsequenceB)
+		
+		fmt.Println("\n" + strings.Repeat("-", 70))
+		cyan.Println("\nYour vote as a board member:")
+		fmt.Print("Vote (A/1 for Accept/Approve, B/2 for Reject/Disapprove): ")
+		
+		reader := bufio.NewReader(os.Stdin)
+		voteChoice, _ := reader.ReadString('\n')
+		voteChoice = strings.TrimSpace(voteChoice)
+		
+		// Re-find vote index since list may have changed
+		voteIndex = -1
+		for i, v := range gs.GetPendingBoardVotes() {
+			if v.CompanyName == vote.CompanyName && v.VoteType == vote.VoteType && v.Turn == vote.Turn {
+				voteIndex = i
+				break
+			}
+		}
+		
+		if voteIndex == -1 {
+			color.Yellow("Vote already processed.")
+			continue
+		}
+		
+		result, passed, err := gs.ProcessBoardVote(voteIndex, voteChoice)
+		if err != nil {
+			color.Red("Error: %v", err)
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+			continue
+		}
+		
+		fmt.Println("\n" + strings.Repeat("-", 70))
+		if passed {
+			green.Printf("\n✅ %s\n", result)
+		} else {
+			yellow.Printf("\n❌ %s\n", result)
+		}
+		
+		// Execute vote outcome
+		outcomeMessages := gs.ExecuteBoardVoteOutcome(vote, passed)
+		for _, msg := range outcomeMessages {
+			fmt.Println(msg)
+		}
+		
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+	}
+}
+
 func selectInvestmentTerms(gs *game.GameState, startup *game.Startup, amount int64) game.InvestmentTerms {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
@@ -451,6 +537,15 @@ func playTurn(gs *game.GameState, autoMode bool) {
 	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
 
 	messages := gs.ProcessTurn()
+	
+	// Check for pending board votes AFTER processing turn
+	// Board votes are created during ProcessTurn for acquisitions/down rounds
+	pendingVotes := gs.GetPendingBoardVotes()
+	if len(pendingVotes) > 0 {
+		handleBoardVotes(gs, pendingVotes)
+		// Re-execute vote outcomes (votes are already processed, just need to show outcomes)
+		// Note: Vote outcomes are executed in handleBoardVotes, so we don't need to ProcessTurn again
+	}
 
 	// Separate critical messages (that need pause) from informational messages
 	criticalMessages := []string{}
