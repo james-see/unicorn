@@ -563,7 +563,7 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 		return fmt.Errorf("company %s not found", companyName)
 	}
 
-	// Maximum follow-on investment is 20% of pre-money valuation
+	// Maximum follow-on investment is 20% of current pre-money valuation for THIS round
 	maxInvestment := int64(float64(preMoneyVal) * 0.20)
 
 	// Find the investment
@@ -571,11 +571,10 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 		if gs.Portfolio.Investments[i].CompanyName == companyName {
 			inv := &gs.Portfolio.Investments[i]
 
-			// Check if this follow-on investment would exceed 20% limit
-			// We need to check total investment (existing + new) against 20% of valuation
-			totalInvestmentAfterFollowOn := inv.AmountInvested + amount
-			if totalInvestmentAfterFollowOn > maxInvestment {
-				return fmt.Errorf("total investment would exceed maximum of $%d (20%% of company valuation: $%d)", maxInvestment, preMoneyVal)
+			// Check if this follow-on investment exceeds 20% limit for THIS round
+			// The 20% limit applies to each round separately, not cumulatively
+			if amount > maxInvestment {
+				return fmt.Errorf("follow-on investment of $%d exceeds maximum of $%d (20%% of current pre-money valuation: $%d)", amount, maxInvestment, preMoneyVal)
 			}
 
 			// Update total amount invested

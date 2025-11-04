@@ -1,5 +1,26 @@
 # Changelog
 
+## Version 3.16.1 - Follow-On Investment Validation Fix (2025-11-03)
+
+### Bug Fixes
+
+#### 🐛 Fixed Follow-On Investment Validation Logic
+- **Issue**: Follow-on investment validation incorrectly checked cumulative total investment instead of per-round limit
+- **Problem**: When investing $100k in a follow-on round with $118k max, it rejected because it checked `($80k existing + $100k new) > $118k`
+- **Fix**: 20% investment limit now applies per round separately, not cumulatively
+- **Result**: Users can invest up to 20% of current pre-money valuation in each round, regardless of previous investments
+- **Example**: Company valued at $592k pre-money → can invest up to $118k in THIS round, even if you invested $80k previously
+
+### Technical Changes
+
+#### Modified Files
+- `game/game.go`:
+  - Updated `MakeFollowOnInvestment()` validation to check only the new investment amount against 20% limit
+  - Changed error message to clarify it's checking the follow-on amount, not cumulative total
+  - The 20% limit now correctly applies to each funding round independently
+
+---
+
 ## Version 3.16.0 - Investment Limit Enforcement & UI Improvements (2025-11-03)
 
 ### Major Features Added
