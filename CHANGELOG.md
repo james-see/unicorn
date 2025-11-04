@@ -1,5 +1,53 @@
 # Changelog
 
+## Version 3.16.0 - Investment Limit Enforcement & UI Improvements (2025-11-03)
+
+### Major Features Added
+
+#### 💰 20% Investment Limit Per Company
+- **Standard VC Practice**: Maximum investment per company is now 20% of valuation (not 100%)
+- **Realistic Investment Model**: Only 20% of company equity is available for investment in each round
+- **Applies to All Investments**: Both initial and follow-on investments respect the 20% limit
+- **Total Investment Cap**: Follow-on investments are capped so total investment doesn't exceed 20% of valuation
+- **Example**: Company valued at $500k → Max investment is $100k (20% of $500k)
+
+#### 🎯 Investment Validation
+- **Minimum Investment**: $10,000 minimum for all investments (initial and follow-on)
+- **Maximum Investment**: 20% of company valuation (enforced backend and UI)
+- **Clear Error Messages**: Shows exact limits when validation fails
+- **AI Players**: AI investments also respect the 20% limit
+
+#### 📊 Enhanced UI Display
+- **Company List Shows Max Investment**: Each startup displays "Max Investment: $X" in the list
+- **Cash-Aware Display**: Shows if max is limited by available cash vs. valuation limit
+- **Investment Selection Screen**: Shows company name, valuation, and max investment available when selecting
+- **Clear Investment Range**: Prompt shows "$10,000 - $X" with clear max limit
+- **No More Guessing**: Users can see investment limits before selecting companies
+
+### Technical Changes
+
+#### Modified Files
+- `game/game.go`:
+  - Added $10,000 minimum investment validation in `MakeInvestmentWithTerms()`
+  - Added 20% maximum investment validation (20% of valuation)
+  - Updated `MakeFollowOnInvestment()` to validate total investment doesn't exceed 20%
+  - Updated `GetFollowOnOpportunities()` to calculate max as 20% of pre-money valuation
+  - Updated AI investment logic to respect 20% limit
+  - Equity calculation now assumes only 20% of company is available for investment
+
+- `main.go`:
+  - Updated `displayStartup()` to show max investment amount (considering cash limits)
+  - Enhanced investment selection UI with company details and max investment display
+  - Added pre-validation in UI before calling backend (better UX)
+  - Shows cash-limited vs. valuation-limited max investment clearly
+
+### Bug Fixes
+- **Fixed Equity Calculation**: Equity now correctly calculated based on 20% available pool
+- **SAFE Discount Limits**: SAFE discounts capped at 24% (20% × 1.2) maximum equity
+- **Investment Validation**: Both UI and backend validate investment amounts
+
+---
+
 ## Version 3.15.0 - Difficulty Balance & Risk Adjustments (2025-11-02)
 
 ### Major Features Added

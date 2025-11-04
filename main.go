@@ -158,14 +158,27 @@ func displayWelcome(username string, difficulty game.Difficulty) {
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
-func displayStartup(s game.Startup, index int) {
+func displayStartup(s game.Startup, index int, availableCash int64) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
 
 	cyan.Printf("\n[%d] %s\n", index+1, s.Name)
 	fmt.Printf("    %s\n", s.Description)
 	yellow.Printf("    Category: %s\n", s.Category)
 	fmt.Printf("    Valuation: $%s\n", formatMoney(s.Valuation))
+	maxInvestment := int64(float64(s.Valuation) * 0.20)
+	maxAvailable := maxInvestment
+	if maxAvailable > availableCash {
+		maxAvailable = availableCash
+	}
+	green.Printf("    Max Investment: $%s", formatMoney(maxAvailable))
+	if maxAvailable < maxInvestment {
+		fmt.Printf(" (limited by available cash, max would be $%s)", formatMoney(maxInvestment))
+	} else {
+		fmt.Printf(" (20%% of valuation)")
+	}
+	fmt.Println()
 	fmt.Printf("    Monthly Sales: %d units\n", s.MonthlySales)
 	fmt.Printf("    Margin: %d%%\n", s.PercentMargin)
 	fmt.Printf("    Website Visitors: %s/month\n", formatNumber(s.MonthlyWebsiteVisitors))
@@ -446,7 +459,7 @@ func investmentPhase(gs *game.GameState) {
 	fmt.Println("\n" + strings.Repeat("=", 50))
 	fmt.Println("AVAILABLE STARTUPS:")
 	for i, startup := range gs.AvailableStartups {
-		displayStartup(startup, i)
+		displayStartup(startup, i, gs.Portfolio.Cash)
 	}
 	fmt.Println(strings.Repeat("=", 50))
 
@@ -478,7 +491,25 @@ func investmentPhase(gs *game.GameState) {
 			continue
 		}
 
-		fmt.Printf("Enter investment amount ($ or 0 to skip): ")
+		startup := gs.AvailableStartups[companyNum-1]
+		maxInvestment := int64(float64(startup.Valuation) * 0.20)
+		maxInvestmentDisplay := maxInvestment
+		if maxInvestmentDisplay > gs.Portfolio.Cash {
+			maxInvestmentDisplay = gs.Portfolio.Cash
+		}
+		
+		cyan := color.New(color.FgCyan, color.Bold)
+		yellow := color.New(color.FgYellow)
+		cyan.Printf("\n💵 INVESTING IN: %s\n", startup.Name)
+		fmt.Printf("   Valuation: $%s\n", formatMoney(startup.Valuation))
+		yellow.Printf("   Max Investment Available: $%s", formatMoney(maxInvestmentDisplay))
+		if maxInvestmentDisplay < maxInvestment {
+			fmt.Printf(" (limited by cash, max would be $%s)", formatMoney(maxInvestment))
+		} else {
+			fmt.Printf(" (20%% of valuation)")
+		}
+		fmt.Println()
+		fmt.Printf("\nEnter investment amount ($10,000 - $%s, or 0 to skip): $", formatMoney(maxInvestmentDisplay))
 		amountStr, _ := reader.ReadString('\n')
 		amountStr = strings.TrimSpace(amountStr)
 		
@@ -496,6 +527,16 @@ func investmentPhase(gs *game.GameState) {
 		
 		if amount == 0 {
 			color.Yellow("Skipped investment in this company.")
+			continue
+		}
+
+		// Validate amount before proceeding
+		if amount < 10000 {
+			color.Red("Minimum investment is $10,000")
+			continue
+		}
+		if amount > maxInvestmentDisplay {
+			color.Red("Maximum investment is $%s (20%% of company valuation: $%s)", formatMoney(maxInvestmentDisplay), formatMoney(startup.Valuation))
 			continue
 		}
 

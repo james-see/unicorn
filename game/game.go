@@ -400,12 +400,39 @@ func (gs *GameState) MakeInvestmentWithTerms(startupIndex int, amount int64, ter
 		}
 	}
 
-	// Calculate equity percentage
+	// Minimum investment is $10,000 (standard VC practice)
+	minInvestment := int64(10000)
+	if amount < minInvestment {
+		return fmt.Errorf("minimum investment is $%d", minInvestment)
+	}
+
+	// Maximum investment is 20% of company valuation (standard VC practice)
+	maxInvestment := int64(float64(startup.Valuation) * 0.20)
+	if amount > maxInvestment {
+		return fmt.Errorf("maximum investment is $%d (20%% of company valuation: $%d)", maxInvestment, startup.Valuation)
+	}
+
+	// Calculate equity percentage based on investment amount and company valuation
+	// Only 20% of company is available for investment in this round
 	equityPercent := (float64(amount) / float64(startup.Valuation)) * 100.0
 
 	// Apply SAFE discount if applicable
 	if terms.Type == "SAFE" && terms.ConversionDiscount > 0 {
 		equityPercent = equityPercent * (1 + terms.ConversionDiscount)
+		// Cap at 20% even with discount (since only 20% is available)
+		maxEquityPercent := 20.0 * (1 + terms.ConversionDiscount)
+		if equityPercent > maxEquityPercent {
+			equityPercent = maxEquityPercent
+		}
+	}
+
+	// Safety cap: equity cannot exceed 20% (or 24% with SAFE discount)
+	maxEquityPercent := 20.0
+	if terms.Type == "SAFE" && terms.ConversionDiscount > 0 {
+		maxEquityPercent = 20.0 * (1 + terms.ConversionDiscount)
+	}
+	if equityPercent > maxEquityPercent {
+		equityPercent = maxEquityPercent
 	}
 
 	investment := Investment{
@@ -447,9 +474,15 @@ func (gs *GameState) GetFollowOnOpportunities() []FollowOnOpportunity {
 
 							// Calculate min/max investment amounts
 							minInvestment := int64(10000) // $10k minimum
+							// Maximum investment is 20% of pre-money valuation (standard VC practice)
+							maxInvestmentByValuation := int64(float64(preMoneyVal) * 0.20)
 							// Use available cash (uninvested money from beginning) + follow-on reserve
 							availableCash := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
-							maxInvestment := availableCash
+							// Maximum is the lower of: 20% of valuation, available cash, or 50% of raise amount
+							maxInvestment := maxInvestmentByValuation
+							if maxInvestment > availableCash {
+								maxInvestment = availableCash
+							}
 							if maxInvestment > event.RaiseAmount/2 {
 								maxInvestment = event.RaiseAmount / 2 // Can't invest more than half the round
 							}
@@ -515,10 +548,35 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 		return fmt.Errorf("no funding round happening for %s this turn", companyName)
 	}
 
+	// Find the company and calculate max investment (20% of pre-money valuation)
+	var preMoneyVal int64
+	var foundCompany bool
+	for _, startup := range gs.AvailableStartups {
+		if startup.Name == companyName {
+			preMoneyVal = startup.Valuation
+			foundCompany = true
+			break
+		}
+	}
+
+	if !foundCompany {
+		return fmt.Errorf("company %s not found", companyName)
+	}
+
+	// Maximum follow-on investment is 20% of pre-money valuation
+	maxInvestment := int64(float64(preMoneyVal) * 0.20)
+
 	// Find the investment
 	for i := range gs.Portfolio.Investments {
 		if gs.Portfolio.Investments[i].CompanyName == companyName {
 			inv := &gs.Portfolio.Investments[i]
+
+			// Check if this follow-on investment would exceed 20% limit
+			// We need to check total investment (existing + new) against 20% of valuation
+			totalInvestmentAfterFollowOn := inv.AmountInvested + amount
+			if totalInvestmentAfterFollowOn > maxInvestment {
+				return fmt.Errorf("total investment would exceed maximum of $%d (20%% of company valuation: $%d)", maxInvestment, preMoneyVal)
+			}
 
 			// Update total amount invested
 			inv.AmountInvested += amount
@@ -1603,8 +1661,20 @@ func (gs *GameState) AIPlayerMakeInvestments() {
 					investmentAmount = availableCash
 				}
 
+				// Maximum investment is 20% of company valuation (standard VC practice)
+				maxInvestment := int64(float64(startup.Valuation) * 0.20)
+				if investmentAmount > maxInvestment {
+					investmentAmount = maxInvestment
+				}
+
 				if investmentAmount > 10000 { // Minimum investment
+					// Calculate equity percentage (only 20% of company is available)
 					equityPercent := (float64(investmentAmount) / float64(startup.Valuation)) * 100.0
+
+					// Safety cap at 20%
+					if equityPercent > 20.0 {
+						equityPercent = 20.0
+					}
 
 					// AI players get Preferred Stock terms (like the player)
 					terms := InvestmentTerms{
