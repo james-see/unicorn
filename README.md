@@ -18,7 +18,7 @@ text based startup adventure - play as vc and make bets on startups **OR** build
      ~`-----------------------------------------`~
        ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
                   WELCOME TO UNICORN
-       │            COPYRIGHT 2019             │
+       │            COPYRIGHT 2025             │
         ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
 </pre>
 
