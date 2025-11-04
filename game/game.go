@@ -193,29 +193,29 @@ var (
 
 	MediumDifficulty = Difficulty{
 		Name:           "Medium",
-		StartingCash:   750000, // $750k fund
-		EventFrequency: 0.30,   // 30% chance
-		Volatility:     0.05,   // 5% volatility
-		MaxTurns:       60,     // 5 years
-		Description:    "$750k fund - balanced challenge, 5 years",
+		StartingCash:   1500000, // $1.5M fund
+		EventFrequency: 0.30,    // 30% chance
+		Volatility:     0.05,    // 5% volatility
+		MaxTurns:       60,      // 5 years
+		Description:    "$1.5M fund - balanced challenge, 5 years",
 	}
 
 	HardDifficulty = Difficulty{
 		Name:           "Hard",
-		StartingCash:   500000, // $500k fund
-		EventFrequency: 0.40,   // 40% chance
-		Volatility:     0.07,   // 7% volatility
-		MaxTurns:       60,     // 5 years
-		Description:    "$500k fund, higher volatility, 5 years",
+		StartingCash:   2000000, // $2M fund
+		EventFrequency: 0.40,    // 40% chance
+		Volatility:     0.07,    // 7% volatility
+		MaxTurns:       60,      // 5 years
+		Description:    "$2M fund, higher volatility, 5 years",
 	}
 
 	ExpertDifficulty = Difficulty{
 		Name:           "Expert",
-		StartingCash:   500000, // $500k fund
-		EventFrequency: 0.50,   // 50% chance
-		Volatility:     0.10,   // 10% volatility
-		MaxTurns:       60,     // 5 years
-		Description:    "$500k fund, extreme volatility, 5 years",
+		StartingCash:   2500000, // $2.5M fund
+		EventFrequency: 0.50,    // 50% chance
+		Volatility:     0.10,    // 10% volatility
+		MaxTurns:       60,      // 5 years
+		Description:    "$2.5M fund, extreme volatility, 5 years",
 	}
 )
 
@@ -447,7 +447,9 @@ func (gs *GameState) GetFollowOnOpportunities() []FollowOnOpportunity {
 
 							// Calculate min/max investment amounts
 							minInvestment := int64(10000) // $10k minimum
-							maxInvestment := gs.Portfolio.FollowOnReserve
+							// Use available cash (uninvested money from beginning) + follow-on reserve
+							availableCash := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
+							maxInvestment := availableCash
 							if maxInvestment > event.RaiseAmount/2 {
 								maxInvestment = event.RaiseAmount / 2 // Can't invest more than half the round
 							}
@@ -479,9 +481,16 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 		return fmt.Errorf("investment amount must be positive")
 	}
 
-	if amount > gs.Portfolio.FollowOnReserve {
-		return fmt.Errorf("insufficient follow-on funds (have $%d, need $%d)", gs.Portfolio.FollowOnReserve, amount)
+	if amount > gs.Portfolio.Cash+gs.Portfolio.FollowOnReserve {
+		return fmt.Errorf("insufficient follow-on funds (have $%d, need $%d)", gs.Portfolio.Cash+gs.Portfolio.FollowOnReserve, amount)
 	}
+
+	// Use cash first, then follow-on reserve
+	drawnFromCash := amount
+	if drawnFromCash > gs.Portfolio.Cash {
+		drawnFromCash = gs.Portfolio.Cash
+	}
+	drawnFromReserve := amount - drawnFromCash
 
 	// Find the funding round event for this turn to get the post-money valuation
 	var postMoneyVal int64
@@ -532,7 +541,10 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 
 			inv.EquityPercent = newEquityPercent
 			inv.FollowOnThisTurn = true // Mark that follow-on was made this turn
-			gs.Portfolio.FollowOnReserve -= amount
+
+			// Deduct from cash first, then follow-on reserve
+			gs.Portfolio.Cash -= drawnFromCash
+			gs.Portfolio.FollowOnReserve -= drawnFromReserve
 			gs.updateNetWorth()
 
 			return nil
@@ -1735,7 +1747,7 @@ func (gs *GameState) GetLeaderboard() []PlayerScore {
 
 // Helper functions
 func (gs *GameState) calculateRiskScore(s *Startup) float64 {
-	risk := 0.5
+	risk := 0.5 // Start at medium risk (minimum is medium)
 
 	// Very high burn rate = VERY HIGH risk
 	if s.GrossBurnRate > 40 {
@@ -1745,8 +1757,8 @@ func (gs *GameState) calculateRiskScore(s *Startup) float64 {
 	} else if s.GrossBurnRate > 10 {
 		risk += 0.2
 	} else if s.GrossBurnRate <= 3 {
-		// Low burn rate = lower risk
-		risk -= 0.2
+		// Low burn rate = slightly lower risk (but still medium minimum)
+		risk -= 0.1
 	}
 
 	// Very low sales = VERY HIGH risk
@@ -1757,16 +1769,16 @@ func (gs *GameState) calculateRiskScore(s *Startup) float64 {
 	} else if s.MonthlySales < 50 {
 		risk += 0.2
 	} else if s.MonthlySales > 300 {
-		// High sales = lower risk
-		risk -= 0.2
+		// High sales = slightly lower risk (but still medium minimum)
+		risk -= 0.1
 	}
 
-	// Ensure 0-1 range
+	// Ensure 0.5-1.0 range (minimum risk is medium/0.5)
 	if risk > 1.0 {
 		risk = 1.0
 	}
-	if risk < 0.0 {
-		risk = 0.0
+	if risk < 0.5 {
+		risk = 0.5
 	}
 
 	return risk

@@ -1,5 +1,48 @@
 # Changelog
 
+## Version 3.15.0 - Difficulty Balance & Risk Adjustments (2025-11-02)
+
+### Major Features Added
+
+#### 💰 Difficulty Level Balance Updates
+- **More Capital for Harder Difficulties**: Harder difficulties now provide MORE capital (not less):
+  - **Easy**: $1M fund (unchanged)
+  - **Medium**: $750k → **$1.5M** (+$750k)
+  - **Hard**: $500k → **$2M** (+$1.5M)
+  - **Expert**: $500k → **$2.5M** (+$2M)
+- **Rationale**: Higher difficulty = more capital to deploy, but increased risk events and volatility
+- **Risk vs. Reward**: More money available means more opportunities, but adverse events increase
+
+#### 🎯 Risk Score Minimum Adjustment
+- **Minimum Risk is Medium**: All startups now have minimum risk score of 0.5 (medium)
+- **Risk Range**: Changed from 0.0-1.0 to **0.5-1.0**
+- **No Low-Risk Companies**: Even "safer" companies start at medium risk level
+- **Difficulty Impact**: Higher difficulty = more adverse events occur, making risk management critical
+
+#### 💵 Uninvested Cash Available for Follow-On Investments
+- **Cash Available for Later Rounds**: Uninvested cash from initial fund is now available for follow-on investments
+- **Combined Funds**: Follow-on investments can use `Cash + FollowOnReserve` (not just reserve)
+- **Example**: Invest $600k initially, keep $400k cash → Available for follow-on = $400k + $1M reserve
+- **Smart Deduction**: Uses cash first, then follow-on reserve
+- **UI Updates**: Shows "Available Funds: $X (Cash: $Y + Reserve: $Z)" for clarity
+
+### Technical Changes
+
+#### Modified Files
+- `game/game.go`:
+  - Updated difficulty levels: Medium=$1.5M, Hard=$2M, Expert=$2.5M
+  - Modified `calculateRiskScore()` to enforce minimum 0.5 (medium) risk
+  - Updated `GetFollowOnOpportunities()` to use `Cash + FollowOnReserve` for max investment
+  - Updated `MakeFollowOnInvestment()` to deduct from cash first, then reserve
+  - Changed risk calculation range from 0.0-1.0 to 0.5-1.0
+
+- `main.go`:
+  - Updated follow-on investment UI to show combined available funds
+  - Updated difficulty display messages to clarify cash availability
+  - Updated FAQ to mention cash availability for follow-on investments
+
+---
+
 ## Version 3.14.0 - Board Voting Mechanism & Equity Fixes (2025-11-02)
 
 ### Major Features Added

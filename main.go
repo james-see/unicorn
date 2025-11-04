@@ -146,7 +146,8 @@ func displayWelcome(username string, difficulty game.Difficulty) {
 	fmt.Println("\nEach turn = 1 month. Choose your investments wisely!")
 	fmt.Println("Random events and funding rounds will affect valuations.")
 	fmt.Println("Watch out for dilution when companies raise new rounds!")
-	fmt.Println("You can invest more from your follow-on reserve when companies raise Series rounds!")
+	fmt.Println("Note: Uninvested cash from your initial fund is also available for follow-on investments!")
+	fmt.Println("You can invest more from your available cash + follow-on reserve when companies raise Series rounds!")
 	
 	magenta.Println("\n?? COMPETING AGAINST:")
 	fmt.Println("   ? CARL (Sterling & Cooper) - Conservative")
@@ -224,7 +225,11 @@ func handleFollowOnOpportunities(gs *game.GameState, opportunities []game.Follow
 		fmt.Printf("   Pre-money Valuation: $%s\n", formatMoney(opp.PreMoneyVal))
 		fmt.Printf("   Post-money Valuation: $%s\n", formatMoney(opp.PostMoneyVal))
 		yellow.Printf("   Your Current Equity: %.2f%%\n", opp.CurrentEquity)
-		green.Printf("   Follow-on Reserve Available: $%s\n", formatMoney(gs.Portfolio.FollowOnReserve))
+		availableFunds := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
+		green.Printf("   Available Funds: $%s (Cash: $%s + Reserve: $%s)\n", 
+			formatMoney(availableFunds), 
+			formatMoney(gs.Portfolio.Cash), 
+			formatMoney(gs.Portfolio.FollowOnReserve))
 		
 		fmt.Println("\n" + strings.Repeat("-", 70))
 		cyan.Println("\n?? INVEST MORE TO AVOID DILUTION!")
@@ -271,6 +276,7 @@ func handleFollowOnOpportunities(gs *game.GameState, opportunities []game.Follow
 			green.Printf("\n%s Follow-on investment successful! Invested $%s in %s\n", 
 				ascii.Check, formatMoney(amount), opp.CompanyName)
 			fmt.Printf("Follow-on Reserve Remaining: $%s\n", formatMoney(gs.Portfolio.FollowOnReserve))
+		fmt.Printf("Cash Remaining: $%s\n", formatMoney(gs.Portfolio.Cash))
 		}
 	}
 	
@@ -1623,7 +1629,7 @@ func displayInvestingFAQ() {
 	green.Println("A: The right to maintain your ownership % in future rounds:")
 	fmt.Println("   • When a company raises Series A, you can invest more")
 	fmt.Println("   • Prevents dilution of your stake")
-	fmt.Println("   • Requires additional capital from follow-on reserve")
+	fmt.Println("   • Requires additional capital from available cash or follow-on reserve")
 	fmt.Println("   • Essential for successful investments")
 	
 	yellow.Println("\n📊 VALUATION & EQUITY")
