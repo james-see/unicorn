@@ -1,5 +1,31 @@
 # Changelog
 
+## Version 3.18.8 - Negative Equity Pool Bug Fix (2025-11-04)
+
+### Bug Fixes
+
+#### 🐛 Negative Equity Available Display
+- **Issue**: After hiring executives, the equity pool display showed negative available equity (e.g., "9.1% used, -2.5% available")
+- **Root Cause**: When executives were hired, the code reduced `EquityPool` directly but never incremented `EquityAllocated`, causing the calculation `EquityPool - EquityAllocated` to show negative values
+- **Fix**: Updated executive hiring logic to increment `EquityAllocated` instead of reducing `EquityPool`, and changed the availability check to use `EquityPool - EquityAllocated`
+- **Result**: Equity pool tracking now correctly shows available equity, matching the same logic used for advisors
+
+### Technical Changes
+
+#### Modified Files
+- `founder/founder.go`:
+  - Updated `HireEmployee()` function for executive roles
+  - Changed availability check from `executiveEquity > fs.EquityPool` to `executiveEquity > availableEquity` where `availableEquity = fs.EquityPool - fs.EquityAllocated`
+  - Changed from `fs.EquityPool -= executiveEquity` to `fs.EquityAllocated += executiveEquity`
+  - Now consistent with advisor hiring logic which properly tracks allocated equity
+
+### User Experience
+- **Accurate Display**: Equity pool now always shows correct available percentage
+- **Consistent Logic**: Executive and advisor equity tracking uses the same method
+- **Better UX**: Users can now properly see how much equity remains available for hiring
+
+---
+
 ## Version 3.18.7 - Copyright Year Update (2025-11-03)
 
 ### Maintenance

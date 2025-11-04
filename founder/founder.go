@@ -1091,12 +1091,13 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 		// C-suite executives get 3-10% equity from the pool
 		executiveEquity := 3.0 + rand.Float64()*7.0 // 3-10% equity
 
-		// Check if we have enough equity pool
-		if executiveEquity > fs.EquityPool {
-			return fmt.Errorf("insufficient equity pool (need %.1f%%, have %.1f%%)", executiveEquity, fs.EquityPool)
+		// Check if we have enough equity pool available
+		availableEquity := fs.EquityPool - fs.EquityAllocated
+		if executiveEquity > availableEquity {
+			return fmt.Errorf("insufficient equity pool (need %.1f%%, have %.1f%% available)", executiveEquity, availableEquity)
 		}
 
-		fs.EquityPool -= executiveEquity
+		fs.EquityAllocated += executiveEquity
 
 		// Famous C-suite names from Silicon Valley (show & real life)
 		execNames := map[EmployeeRole][]string{
