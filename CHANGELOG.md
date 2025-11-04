@@ -1,5 +1,86 @@
 # Changelog
 
+## Version 3.18.0 - Founder Mode Achievements & Upgrades (2025-11-03)
+
+### Major Features Added
+
+#### 🎯 Founder Mode Achievements & Points System
+- **10 New Founder Achievements**: First Revenue, Profitable, $100K MRR Club, Unicorn MRR, Seed Raiser, Series A Graduate, IPO Exit, Acquired, 10K Customers, Bootstrapped
+- **Point Accrual**: Founder mode now earns achievement points (10-100 points per achievement)
+- **Career Progression**: Founder mode games contribute to career level progression
+- **Score Saving**: Founder mode scores now saved to local database with ROI calculation
+- **Profitability Tracking**: Automatically tracks when company reaches profitability for achievements
+
+#### 🚀 Founder Mode Upgrades (8 New Upgrades!)
+- **Fast Track** (200 pts): Start with 10% more product maturity
+- **Sales Boost** (250 pts): +15% to initial MRR
+- **Lower Burn** (300 pts): -10% monthly team costs permanently
+- **Better Terms** (350 pts): Raise funding with 5% less equity given away
+- **Quick Hire** (200 pts): First 3 hires cost 50% less
+- **Market Insight** (250 pts): See competitor threat levels in competitor management
+- **Churn Shield** (300 pts): Reduce churn by 10% permanently
+- **Cloud Free First Year** (300 pts): No cloud compute costs for first 12 months
+
+#### 💰 VC Mode Upgrades (2 New Upgrades!)
+- **Seed Accelerator** (400 pts): First investment gets 25% equity bonus
+- **Portfolio Insurance** (500 pts): Protect one investment from down round dilution per game
+
+### Technical Changes
+
+#### New Files
+- None (upgrades added to existing `upgrades/upgrades.go`)
+
+#### Database Changes
+- Founder mode scores now saved to `game_scores` table with difficulty "Founder"
+- Founder mode achievements tracked in `player_achievements` table
+
+#### Modified Files
+- `achievements/achievements.go`:
+  - Extended `GameStats` struct with founder mode fields (FinalMRR, FinalValuation, Customers, FundingRoundsRaised, etc.)
+  - Added 10 founder mode achievements
+  - Updated achievement checking logic to support both VC and founder modes
+
+- `founder/founder.go`:
+  - Added `PlayerUpgrades []string` and `HiresCount int` fields to `FounderState`
+  - Modified `NewFounderGame()` to accept `playerUpgrades` parameter
+  - Added `MonthReachedProfitability` tracking
+  - Implemented upgrade effects: Fast Track, Sales Boost, Lower Burn, Better Terms, Quick Hire, Churn Shield, Cloud Free First Year
+  - Updated `CalculateTeamCost()` to apply Lower Burn upgrade
+  - Updated `CalculateInfrastructureCosts()` to apply Cloud Free First Year upgrade
+  - Updated `RaiseFundingWithTerms()` to apply Better Terms upgrade
+  - Updated `HireEmployee()` to apply Quick Hire upgrade
+
+- `founder_ui.go`:
+  - Added `saveFounderScoreAndCheckAchievements()` function
+  - Integrated achievement checking after founder mode games
+  - Added upgrade display in welcome screen
+  - Modified `playFounderMode()` to load and pass player upgrades
+
+- `game/game.go`:
+  - Added `InsuranceUsed` and `ProtectedCompany` fields to `GameState`
+  - Implemented Seed Accelerator upgrade (25% equity bonus on first investment)
+  - Implemented Portfolio Insurance upgrade (protect first investment from down rounds)
+  - Updated `ProcessFundingRounds()` to check for Portfolio Insurance
+
+- `upgrades/upgrades.go`:
+  - Added new category: `CategoryFounderPerks`
+  - Added 8 founder mode upgrades
+  - Added 2 VC mode upgrades
+
+### User Experience
+- **Founder Mode Achievements**: Earn points and unlock achievements just like VC mode
+- **Upgrade Visibility**: Active upgrades displayed when starting founder mode games
+- **Portfolio Insurance Feedback**: Clear message when investment is protected from down round
+- **Seed Accelerator Bonus**: First investment shows 25% equity bonus in investment summary
+
+### Game Balance
+- Founder mode upgrades priced competitively (200-350 pts)
+- Seed Accelerator provides strong early game advantage (400 pts)
+- Portfolio Insurance offers strategic protection (500 pts)
+- All upgrades maintain game balance while providing meaningful progression
+
+---
+
 ## Version 3.17.0 - Upgrade System & Meta-Progression (2025-11-03)
 
 ### Major Features Added

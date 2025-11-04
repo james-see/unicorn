@@ -38,7 +38,7 @@ You manage a realistic VC fund ($500K-$1M) competing against AI investors like C
 
 ## Features
 
-## 🚀 Founder Mode Features (v3.8.0)
+## 🚀 Founder Mode Features (v3.18.0)
 
 ### 🎯 Build Your Startup
 - **10 Startup Templates:** SaaS, DeepTech, GovTech, Hardware - each with unique metrics
@@ -88,6 +88,22 @@ Three ways to exit and cash out:
 - **Cancel-Friendly Menus:** View data and explore options without wasting a month
 - **60 Month Journey:** Build over 5 years or exit early once requirements are met
 
+### 🎁 Founder Mode Upgrades (NEW!)
+Earn achievement points and unlock permanent upgrades:
+- **Fast Track** (200 pts): Start with 10% more product maturity
+- **Sales Boost** (250 pts): +15% to initial MRR
+- **Lower Burn** (300 pts): -10% monthly team costs
+- **Better Terms** (350 pts): Raise funding with 5% less equity given away
+- **Quick Hire** (200 pts): First 3 hires cost 50% less
+- **Market Insight** (250 pts): See competitor threat levels
+- **Churn Shield** (300 pts): Reduce churn by 10% permanently
+- **Cloud Free First Year** (300 pts): No cloud compute costs for first 12 months
+
+### 🏆 Founder Mode Achievements (NEW!)
+- **10 Founder Achievements:** Earn points for milestones like reaching $100K MRR, going profitable, raising Series A, IPO exits, and more
+- **Point System:** Founder mode games contribute to your career level progression
+- **Score Tracking:** All founder mode scores saved to leaderboard with ROI calculation
+
 ## 🎩 VC Investor Mode Features
 
 ### 🎮 Core Gameplay
@@ -97,6 +113,19 @@ Three ways to exit and cash out:
 - **Random Events:** 60+ events that impact company valuations (NEW!)
 - **Performance Ratings:** From "Unicorn Hunter" (1000%+ ROI) to "Lost Money"
 - **Advanced Analytics:** Sector breakdown, best/worst performers (NEW!)
+
+### 🎁 VC Mode Upgrades (NEW!)
+Earn achievement points and unlock permanent upgrades:
+- **Fund Booster** (100 pts): +10% starting cash
+- **Management Fee Reduction** (150 pts): Fees reduced from 2% → 1.5%
+- **Enhanced SAFE Discount** (150 pts): SAFE discount increases from 20% → 25%
+- **Super Pro-Rata** (200 pts): Can invest up to 50% of round (vs 20% max)
+- **Seed Accelerator** (400 pts): First investment gets 25% equity bonus
+- **Portfolio Insurance** (500 pts): Protect one investment from down round dilution per game
+- **Strategic Advisor** (300 pts): See next board vote preview
+- **Market Intelligence** (250 pts): See category trends before investing
+- **Speed Mode** (200 pts): 30 turns instead of 60
+- **Endurance Mode** (250 pts): 120 turns instead of 60
 
 ### 💰 Realistic VC Mechanics (NEW!)
 - **Management Fees:** 2% annual fee charged monthly (just like real VC funds!)
@@ -157,7 +186,7 @@ Choose from companies across 12+ sectors:
 - Career statistics
 
 ### 🏆 Achievements & Progression (NEW!)
-- **35+ Achievements** across 6 categories
+- **45+ Achievements** across 6 categories (35 VC + 10 Founder)
 - **Career Levels:** 11 levels from Intern to Legendary Investor
 - **Point System:** Earn 5-100 points per achievement
 - **Rarity Tiers:** Common, Rare, Epic, Legendary
@@ -165,6 +194,7 @@ Choose from companies across 12+ sectors:
 - **Auto-Unlock:** Achievements awarded automatically after each game
 - **Persistent Progress:** Never lose your achievements
 - **Special Achievements:** Hidden achievements to discover
+- **Cross-Mode Progression:** Points from both VC and Founder mode contribute to career level
 
 ## How to Play
 
