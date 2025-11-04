@@ -165,6 +165,9 @@ type FounderState struct {
 	ExitType      string // "ipo", "acquisition", "secondary", "time_limit"
 	ExitValuation int64
 	ExitMonth     int
+	MonthReachedProfitability int // -1 if never profitable, otherwise the month when profitability was reached
+	PlayerUpgrades []string // Player's purchased upgrades
+	HiresCount int // Track number of hires for Quick Hire upgrade
 }
 
 // Customer represents an individual customer deal
@@ -538,7 +541,7 @@ func (fs *FounderState) updateDealSizeRange(newDealSize int64) {
 }
 
 // NewFounderGame initializes a new founder mode game
-func NewFounderGame(founderName string, template StartupTemplate) *FounderState {
+func NewFounderGame(founderName string, template StartupTemplate, playerUpgrades []string) *FounderState {
 	fs := &FounderState{
 		FounderName:        founderName,
 		CompanyName:        template.Name,
@@ -603,6 +606,10 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 		ExitType:      "",
 		ExitValuation: 0,
 		ExitMonth:     0,
+
+		MonthReachedProfitability: -1, // -1 means not yet profitable
+		PlayerUpgrades: playerUpgrades,
+		HiresCount: 0,
 	}
 
 	// Add randomness to initial cash (±20%) - only if not already randomized
@@ -631,6 +638,35 @@ func NewFounderGame(founderName string, template StartupTemplate) *FounderState 
 	churnVariation := -0.10 + rand.Float64()*0.20 // -10% to +10%
 	fs.CustomerChurnRate = baseChurnFromMaturity * (1.0 + churnVariation)
 	fs.ChurnRate = fs.CustomerChurnRate
+
+	// Apply upgrades
+	for _, upgradeID := range playerUpgrades {
+		switch upgradeID {
+		case "fast_track":
+			// Start with 10% more product maturity
+			fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity + 0.1)
+			// Recalculate churn after maturity boost
+			baseChurnFromMaturity = (1.0-fs.ProductMaturity)*0.65 + 0.05
+			fs.CustomerChurnRate = baseChurnFromMaturity * (1.0 + churnVariation)
+		case "sales_boost":
+			// +15% to initial MRR
+			fs.MRR = int64(float64(fs.MRR) * 1.15)
+			fs.DirectMRR = fs.MRR
+		case "churn_shield":
+			// Reduce churn by 10% permanently
+			fs.ChurnRate *= 0.9
+			fs.CustomerChurnRate = fs.ChurnRate
+		}
+	}
+
+	// Apply Churn Shield if active (after all maturity calculations)
+	for _, upgradeID := range playerUpgrades {
+		if upgradeID == "churn_shield" {
+			fs.CustomerChurnRate *= 0.9
+			fs.ChurnRate = fs.CustomerChurnRate
+			break
+		}
+	}
 
 	// Calculate initial effective CAC
 	fs.UpdateCAC()
@@ -795,6 +831,20 @@ func (fs *FounderState) CalculateTeamCost() {
 
 	fs.Team.TotalMonthlyCost = total
 	fs.Team.TotalEmployees = count
+	
+	// Apply Lower Burn upgrade (-10% team costs)
+	hasLowerBurn := false
+	for _, upgradeID := range fs.PlayerUpgrades {
+		if upgradeID == "lower_burn" {
+			hasLowerBurn = true
+			break
+		}
+	}
+	if hasLowerBurn {
+		total = int64(float64(total) * 0.9)
+		fs.Team.TotalMonthlyCost = total
+	}
+	
 	fs.MonthlyTeamCost = total
 }
 
@@ -807,6 +857,10 @@ func (fs *FounderState) CalculateRunway() {
 	if netBurn <= 0 {
 		// Cash positive! Runway is infinite
 		fs.CashRunwayMonths = -1
+		// Track when profitability was first reached
+		if fs.MonthReachedProfitability == -1 {
+			fs.MonthReachedProfitability = fs.Turn
+		}
 	} else {
 		fs.CashRunwayMonths = int(fs.Cash / netBurn)
 	}
@@ -1075,9 +1129,24 @@ func (fs *FounderState) HireEmployee(role EmployeeRole) error {
 			MonthGranted: fs.Turn,
 		})
 	} else {
+		monthlyCost := avgSalary / 12
+		
+		// Apply Quick Hire upgrade (first 3 hires cost 50% less)
+		hasQuickHire := false
+		for _, upgradeID := range fs.PlayerUpgrades {
+			if upgradeID == "quick_hire" {
+				hasQuickHire = true
+				break
+			}
+		}
+		if hasQuickHire && fs.HiresCount < 3 {
+			monthlyCost = monthlyCost / 2 // 50% discount
+		}
+		fs.HiresCount++
+		
 		employee = Employee{
 			Role:           role,
-			MonthlyCost:    avgSalary / 12,
+			MonthlyCost:    monthlyCost,
 			Impact:         0.8 + rand.Float64()*0.4,
 			IsExecutive:    false,
 			AssignedMarket: "USA", // Default to USA market
@@ -1377,8 +1446,21 @@ func GenerateInvestorNames(roundName string, amount int64) []string {
 
 // RaiseFunding attempts to raise a funding round with a chosen term sheet
 func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheetOption) (success bool) {
+	// Apply Better Terms upgrade (-5% equity given away)
+	equityToGive := option.Equity
+	hasBetterTerms := false
+	for _, upgradeID := range fs.PlayerUpgrades {
+		if upgradeID == "better_terms" {
+			hasBetterTerms = true
+			break
+		}
+	}
+	if hasBetterTerms {
+		equityToGive = option.Equity * 0.95 // 5% reduction
+	}
+	
 	fs.Cash += option.Amount
-	fs.EquityGivenAway += option.Equity
+	fs.EquityGivenAway += equityToGive
 
 	// Generate investor names for this round
 	investors := GenerateInvestorNames(roundName, option.Amount)
@@ -1387,7 +1469,7 @@ func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheet
 		RoundName:   roundName,
 		Amount:      option.Amount,
 		Valuation:   option.PreValuation,
-		EquityGiven: option.Equity,
+		EquityGiven: equityToGive, // Use reduced equity if Better Terms upgrade is active
 		Month:       fs.Turn,
 		Terms:       option.Terms,
 		Investors:   investors,
@@ -1395,7 +1477,7 @@ func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheet
 	fs.FundingRounds = append(fs.FundingRounds, round)
 
 	// Add investors to cap table (split equity among them)
-	equityPerInvestor := option.Equity / float64(len(investors))
+	equityPerInvestor := equityToGive / float64(len(investors))
 	for _, investor := range investors {
 		fs.CapTable = append(fs.CapTable, CapTableEntry{
 			Name:         investor,
@@ -1629,6 +1711,18 @@ func (fs *FounderState) CalculateInfrastructureCosts() {
 
 	fs.MonthlyComputeCost = totalComputeCost
 	fs.MonthlyODCCost = totalODCCost
+	
+	// Apply Cloud Free First Year upgrade (no compute costs for first 12 months)
+	hasCloudFree := false
+	for _, upgradeID := range fs.PlayerUpgrades {
+		if upgradeID == "cloud_free_first_year" {
+			hasCloudFree = true
+			break
+		}
+	}
+	if hasCloudFree && fs.Turn <= 12 {
+		fs.MonthlyComputeCost = 0 // Free compute for first 12 months
+	}
 }
 
 // SolicitCustomerFeedback gathers feedback from customers to improve product maturity

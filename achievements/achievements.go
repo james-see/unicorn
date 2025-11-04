@@ -24,6 +24,9 @@ type PlayerAchievement struct {
 
 // GameStats contains all stats needed for achievement checking
 type GameStats struct {
+	// Game mode
+	GameMode string // "vc" or "founder"
+	
 	// Game results
 	FinalNetWorth   int64
 	ROI             float64
@@ -31,16 +34,28 @@ type GameStats struct {
 	TurnsPlayed     int
 	Difficulty      string
 	
-	// Portfolio details
+	// Portfolio details (VC mode)
 	InvestmentCount int
 	SectorsInvested []string
 	TotalInvested   int64
 	
-	// Performance
+	// Performance (VC mode)
 	PositiveInvestments int
 	NegativeInvestments int
 	BestROI             float64
 	WorstROI            float64
+	
+	// Founder mode stats
+	FinalMRR              int64
+	FinalValuation        int64
+	FinalEquity           float64
+	Customers             int
+	FundingRoundsRaised   int
+	TotalFundingRaised    int64
+	HasExited             bool
+	ExitType              string // "ipo", "acquisition", "secondary"
+	ExitValuation         int64
+	MonthsToProfitability int
 	
 	// Career stats
 	TotalGames      int
@@ -397,6 +412,99 @@ var AllAchievements = map[string]Achievement{
 		Points:      25,
 		Rarity:      RarityRare,
 	},
+	
+	// Founder Mode Achievements
+	"first_revenue": {
+		ID:          "first_revenue",
+		Name:        "First Revenue",
+		Description: "Generate your first $1,000 MRR",
+		Icon:        "💵",
+		Category:    CategoryWealth,
+		Points:      10,
+		Rarity:      RarityCommon,
+	},
+	"profitable": {
+		ID:          "profitable",
+		Name:        "Profitable",
+		Description: "Reach profitability (positive cash flow)",
+		Icon:        "📈",
+		Category:    CategoryPerformance,
+		Points:      25,
+		Rarity:      RarityRare,
+	},
+	"100k_mrr": {
+		ID:          "100k_mrr",
+		Name:        "$100K MRR Club",
+		Description: "Reach $100,000 monthly recurring revenue",
+		Icon:        "🎯",
+		Category:    CategoryWealth,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"1m_mrr": {
+		ID:          "1m_mrr",
+		Name:        "Unicorn MRR",
+		Description: "Reach $1,000,000 monthly recurring revenue",
+		Icon:        "🦄",
+		Category:    CategoryWealth,
+		Points:      100,
+		Rarity:      RarityLegendary,
+	},
+	"seed_raised": {
+		ID:          "seed_raised",
+		Name:        "Seed Raiser",
+		Description: "Raise your first funding round",
+		Icon:        "🌱",
+		Category:    CategoryStrategy,
+		Points:      15,
+		Rarity:      RarityCommon,
+	},
+	"series_a": {
+		ID:          "series_a",
+		Name:        "Series A Graduate",
+		Description: "Raise Series A funding",
+		Icon:        "🚀",
+		Category:    CategoryStrategy,
+		Points:      30,
+		Rarity:      RarityRare,
+	},
+	"ipo_exit": {
+		ID:          "ipo_exit",
+		Name:        "Public Debut",
+		Description: "Take your company public via IPO",
+		Icon:        "🏛️",
+		Category:    CategorySpecial,
+		Points:      75,
+		Rarity:      RarityLegendary,
+	},
+	"acquired": {
+		ID:          "acquired",
+		Name:        "Acquired",
+		Description: "Get acquired by another company",
+		Icon:        "🤝",
+		Category:    CategorySpecial,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"10000_customers": {
+		ID:          "10000_customers",
+		Name:        "10K Customers",
+		Description: "Reach 10,000 customers",
+		Icon:        "👥",
+		Category:    CategoryPerformance,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+	"bootstrapped": {
+		ID:          "bootstrapped",
+		Name:        "Bootstrapped",
+		Description: "Reach $100K MRR without raising funding",
+		Icon:        "💪",
+		Category:    CategoryChallenge,
+		Points:      60,
+		Rarity:      RarityLegendary,
+		Hidden:      true,
+	},
 }
 
 // CheckAchievements checks which achievements were earned this game
@@ -498,6 +606,53 @@ func checkAchievement(id string, stats GameStats) bool {
 		return stats.InvestmentCount == 7 && won
 	case "minimalist":
 		return stats.InvestmentCount == 2 && won
+	case "tech_enthusiast":
+		// Check if all sectors are tech-related
+		techSectors := map[string]bool{
+			"CloudTech": true, "SaaS": true, "DeepTech": true,
+			"FinTech": true, "HealthTech": true, "EdTech": true,
+			"LegalTech": true, "Gaming": true, "Security": true,
+		}
+		for _, sector := range stats.SectorsInvested {
+			if !techSectors[sector] {
+				return false
+			}
+		}
+		return len(stats.SectorsInvested) > 0 && won
+	case "clean_investor":
+		// Check if only CleanTech/AgriTech
+		for _, sector := range stats.SectorsInvested {
+			if sector != "CleanTech" && sector != "AgriTech" {
+				return false
+			}
+		}
+		return len(stats.SectorsInvested) > 0 && won
+	case "risk_taker":
+		return stats.InvestmentCount > 0 && won // Would need risk tracking
+	case "cautious_investor":
+		return stats.InvestmentCount > 0 && won // Would need risk tracking
+		
+	// Founder Mode Achievements
+	case "first_revenue":
+		return stats.GameMode == "founder" && stats.FinalMRR >= 1000
+	case "profitable":
+		return stats.GameMode == "founder" && stats.MonthsToProfitability > 0
+	case "100k_mrr":
+		return stats.GameMode == "founder" && stats.FinalMRR >= 100000
+	case "1m_mrr":
+		return stats.GameMode == "founder" && stats.FinalMRR >= 1000000
+	case "seed_raised":
+		return stats.GameMode == "founder" && stats.FundingRoundsRaised >= 1
+	case "series_a":
+		return stats.GameMode == "founder" && stats.FundingRoundsRaised >= 2 // Assuming Seed + Series A
+	case "ipo_exit":
+		return stats.GameMode == "founder" && stats.HasExited && stats.ExitType == "ipo"
+	case "acquired":
+		return stats.GameMode == "founder" && stats.HasExited && stats.ExitType == "acquisition"
+	case "10000_customers":
+		return stats.GameMode == "founder" && stats.Customers >= 10000
+	case "bootstrapped":
+		return stats.GameMode == "founder" && stats.FinalMRR >= 100000 && stats.FundingRoundsRaised == 0
 	}
 	
 	return false

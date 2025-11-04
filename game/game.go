@@ -21,13 +21,14 @@ type FundingRound struct {
 
 // InvestmentTerms represents the terms of an investment deal
 type InvestmentTerms struct {
-	Type               string  // "Common", "Preferred", "SAFE", "Convertible"
-	HasProRataRights   bool    // Right to participate in future rounds
-	HasInfoRights      bool    // Right to company information
-	HasBoardSeat       bool    // Board seat (for larger investments)
-	LiquidationPref    float64 // Liquidation preference (1x, 2x, etc.)
-	HasAntiDilution    bool    // Anti-dilution protection
-	ConversionDiscount float64 // Discount on conversion (for SAFE/Convertible)
+	Type                string  // "Common", "Preferred", "SAFE", "Convertible"
+	HasProRataRights    bool    // Right to participate in future rounds
+	HasInfoRights       bool    // Right to company information
+	HasBoardSeat        bool    // Board seat (for larger investments)
+	BoardSeatMultiplier int     // Number of votes per board seat (1 = normal, 2 = double)
+	LiquidationPref     float64 // Liquidation preference (1x, 2x, etc.)
+	HasAntiDilution     bool    // Anti-dilution protection
+	ConversionDiscount  float64 // Discount on conversion (for SAFE/Convertible)
 }
 
 // Investment represents a player's investment in a startup
@@ -86,6 +87,7 @@ type Startup struct {
 	RevenueGrowthRate       float64 // Month-over-month growth
 	CustomerCount           int     // Current customers
 	MonthlyRecurringRevenue int64   // MRR for SaaS companies
+	RevenueHistory          []int64 // Track last 6 months of revenue for trends
 }
 
 // GameEvent represents something that happens to a startup
@@ -127,6 +129,8 @@ type GameState struct {
 	DramaticEventQueue []DramaticEvent     // Scheduled dramatic events (scandals, splits, etc.)
 	PendingBoardVotes  []BoardVote         // Board votes requiring player input
 	PlayerUpgrades     []string            // Player's purchased upgrades
+	InsuranceUsed      bool                // Track if Portfolio Insurance has been used this game
+	ProtectedCompany   string              // Company protected by Portfolio Insurance
 }
 
 // FundingRoundEvent represents a scheduled funding round
@@ -247,6 +251,8 @@ func NewGame(playerName string, difficulty Difficulty, playerUpgrades []string) 
 			maxTurns = 30 // 30 turns instead of 60
 		case "endurance_mode":
 			maxTurns = 120 // 120 turns instead of 60
+		case "angel_investor":
+			startingCash += 100000 // +$100k bonus cash (stacks with Fund Booster)
 		}
 	}
 
@@ -311,6 +317,7 @@ func (gs *GameState) LoadStartups(playerUpgrades []string) {
 		startup.RevenueGrowthRate = 0.05 // Default 5% growth
 		startup.Last409AValuation = startup.Valuation
 		startup.Last409AMonth = 0
+		startup.RevenueHistory = []int64{startup.MonthlyRevenue} // Initialize with first month
 
 		allStartups = append(allStartups, startup)
 	}
@@ -321,8 +328,10 @@ func (gs *GameState) LoadStartups(playerUpgrades []string) {
 		extraStartups := 0
 		for _, upgradeID := range playerUpgrades {
 			if upgradeID == "early_access" {
-				extraStartups = 2
-				break
+				extraStartups += 2
+			}
+			if upgradeID == "founder_network" {
+				extraStartups += 1 // Add one more startup
 			}
 		}
 
@@ -363,14 +372,25 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 
 	// Option 1: Preferred Stock (VC standard)
 	hasBoardSeat := amount >= 100000 // Board seat for $100k+ investments
+
+	// Check for double_board_seat upgrade - grants 2x voting power
+	boardSeatMultiplier := 1
+	for _, upgradeID := range gs.PlayerUpgrades {
+		if upgradeID == "double_board_seat" {
+			boardSeatMultiplier = 2 // Double voting power with upgrade
+			break
+		}
+	}
+
 	options = append(options, InvestmentTerms{
-		Type:               "Preferred Stock",
-		HasProRataRights:   true,
-		HasInfoRights:      true,
-		HasBoardSeat:       hasBoardSeat,
-		LiquidationPref:    1.0,
-		HasAntiDilution:    true,
-		ConversionDiscount: 0.0,
+		Type:                "Preferred Stock",
+		HasProRataRights:    true,
+		HasInfoRights:       true,
+		HasBoardSeat:        hasBoardSeat,
+		BoardSeatMultiplier: boardSeatMultiplier,
+		LiquidationPref:     1.0,
+		HasAntiDilution:     true,
+		ConversionDiscount:  0.0,
 	})
 
 	// Option 2: SAFE (Simple Agreement for Future Equity)
@@ -383,25 +403,49 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 	}
 
 	options = append(options, InvestmentTerms{
-		Type:               "SAFE",
-		HasProRataRights:   true,
-		HasInfoRights:      false,
-		HasBoardSeat:       false,
-		LiquidationPref:    0.0, // No liquidation preference with SAFE
-		HasAntiDilution:    false,
-		ConversionDiscount: safeDiscount,
+		Type:                "SAFE",
+		HasProRataRights:    true,
+		HasInfoRights:       false,
+		HasBoardSeat:        false,
+		BoardSeatMultiplier: 1,
+		LiquidationPref:     0.0, // No liquidation preference with SAFE
+		HasAntiDilution:     false,
+		ConversionDiscount:  safeDiscount,
 	})
 
 	// Option 3: Common Stock (founder-friendly)
 	options = append(options, InvestmentTerms{
-		Type:               "Common Stock",
-		HasProRataRights:   false,
-		HasInfoRights:      false,
-		HasBoardSeat:       false,
-		LiquidationPref:    0.0,
-		HasAntiDilution:    false,
-		ConversionDiscount: 0.0,
+		Type:                "Common Stock",
+		HasProRataRights:    false,
+		HasInfoRights:       false,
+		HasBoardSeat:        false,
+		BoardSeatMultiplier: 1,
+		LiquidationPref:     0.0,
+		HasAntiDilution:     false,
+		ConversionDiscount:  0.0,
 	})
+
+	// Option 4: Preferred Stock with 2x Liquidation Preference (if upgrade unlocked)
+	has2xLiquidationPref := false
+	for _, upgradeID := range gs.PlayerUpgrades {
+		if upgradeID == "liquidation_preference_2x" {
+			has2xLiquidationPref = true
+			break
+		}
+	}
+
+	if has2xLiquidationPref {
+		options = append(options, InvestmentTerms{
+			Type:                "Preferred Stock (2x Liquidation)",
+			HasProRataRights:    true,
+			HasInfoRights:       true,
+			HasBoardSeat:        hasBoardSeat,
+			BoardSeatMultiplier: boardSeatMultiplier,
+			LiquidationPref:     2.0, // 2x liquidation preference
+			HasAntiDilution:     true,
+			ConversionDiscount:  0.0,
+		})
+	}
 
 	return options
 }
@@ -409,12 +453,13 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 // MakeInvestment allows player to invest in a startup
 func (gs *GameState) MakeInvestment(startupIndex int, amount int64) error {
 	return gs.MakeInvestmentWithTerms(startupIndex, amount, InvestmentTerms{
-		Type:             "Preferred Stock",
-		HasProRataRights: true,
-		HasInfoRights:    true,
-		HasBoardSeat:     amount >= 100000,
-		LiquidationPref:  1.0,
-		HasAntiDilution:  true,
+		Type:                "Preferred Stock",
+		HasProRataRights:    true,
+		HasInfoRights:       true,
+		HasBoardSeat:        amount >= 100000,
+		BoardSeatMultiplier: 1, // Default multiplier
+		LiquidationPref:     1.0,
+		HasAntiDilution:     true,
 	})
 }
 
@@ -465,6 +510,19 @@ func (gs *GameState) MakeInvestmentWithTerms(startupIndex int, amount int64, ter
 	// Only 20% of company is available for investment in this round
 	equityPercent := (float64(amount) / float64(startup.Valuation)) * 100.0
 
+	// Apply Seed Accelerator upgrade - first investment gets 25% equity bonus
+	isFirstInvestment := len(gs.Portfolio.Investments) == 0
+	hasSeedAccelerator := false
+	for _, upgradeID := range gs.PlayerUpgrades {
+		if upgradeID == "seed_accelerator" {
+			hasSeedAccelerator = true
+			break
+		}
+	}
+	if hasSeedAccelerator && isFirstInvestment {
+		equityPercent *= 1.25 // 25% bonus
+	}
+
 	// Apply SAFE discount if applicable
 	if terms.Type == "SAFE" && terms.ConversionDiscount > 0 {
 		equityPercent = equityPercent * (1 + terms.ConversionDiscount)
@@ -475,10 +533,17 @@ func (gs *GameState) MakeInvestmentWithTerms(startupIndex int, amount int64, ter
 		}
 	}
 
-	// Safety cap: equity cannot exceed 20% (or 24% with SAFE discount)
+	// Safety cap: equity cannot exceed 20% (or 24% with SAFE discount, or 25% with Seed Accelerator)
 	maxEquityPercent := 20.0
 	if terms.Type == "SAFE" && terms.ConversionDiscount > 0 {
 		maxEquityPercent = 20.0 * (1 + terms.ConversionDiscount)
+	}
+	// Seed Accelerator can push above 20% (25% bonus on first investment)
+	if hasSeedAccelerator && isFirstInvestment {
+		maxEquityPercent = 25.0 // Allow up to 25% for first investment with Seed Accelerator
+		if terms.Type == "SAFE" && terms.ConversionDiscount > 0 {
+			maxEquityPercent = 25.0 * (1 + terms.ConversionDiscount) // SAFE + Seed Accelerator
+		}
 	}
 	if equityPercent > maxEquityPercent {
 		equityPercent = maxEquityPercent
@@ -674,6 +739,12 @@ func (gs *GameState) UpdateCompanyFinancials(startup *Startup) {
 
 	// Update revenue based on growth
 	startup.MonthlyRevenue = int64(float64(startup.MonthlyRevenue) * (1 + actualGrowth))
+
+	// Track revenue history (keep last 6 months for trends)
+	startup.RevenueHistory = append(startup.RevenueHistory, startup.MonthlyRevenue)
+	if len(startup.RevenueHistory) > 6 {
+		startup.RevenueHistory = startup.RevenueHistory[len(startup.RevenueHistory)-6:]
+	}
 
 	// Costs grow slower than revenue (economies of scale)
 	costGrowth := actualGrowth * 0.6 // Costs grow at 60% of revenue growth rate
@@ -1391,17 +1462,44 @@ func (gs *GameState) ProcessFundingRounds() []string {
 						dilutionFactor = float64(preMoneyVal) / float64(postMoneyVal)
 					}
 
+					// Check for Portfolio Insurance upgrade
+					hasPortfolioInsurance := false
+					for _, upgradeID := range gs.PlayerUpgrades {
+						if upgradeID == "portfolio_insurance" {
+							hasPortfolioInsurance = true
+							break
+						}
+					}
+
 					// Update player's investment if they invested in this company
 					for j := range gs.Portfolio.Investments {
 						if gs.Portfolio.Investments[j].CompanyName == event.CompanyName {
 							inv := &gs.Portfolio.Investments[j]
 
+							// Check if Portfolio Insurance protects this investment from down rounds
+							shouldProtect := false
+							if event.IsDownRound && hasPortfolioInsurance && !gs.InsuranceUsed {
+								// First down round hit by Portfolio Insurance is protected
+								shouldProtect = true
+								gs.InsuranceUsed = true
+								gs.ProtectedCompany = event.CompanyName
+							}
+
 							// If follow-on investment was made this turn, equity was already recalculated
 							// in MakeFollowOnInvestment based on post-money valuation, so we don't dilute again
 							if !inv.FollowOnThisTurn {
-								// Normal case: dilute existing equity
+								// Normal case: dilute existing equity (unless protected by Portfolio Insurance)
 								oldEquity := inv.EquityPercent
-								inv.EquityPercent *= dilutionFactor
+								if !shouldProtect {
+									inv.EquityPercent *= dilutionFactor
+								} else {
+									// Portfolio Insurance protects this investment - no dilution
+									messages = append(messages, fmt.Sprintf(
+										"🛡️  PORTFOLIO INSURANCE: %s protected from down round dilution! Equity remains at %.2f%%",
+										event.CompanyName,
+										oldEquity,
+									))
+								}
 
 								// Record the round
 								inv.Rounds = append(inv.Rounds, FundingRound{
@@ -1412,24 +1510,27 @@ func (gs *GameState) ProcessFundingRounds() []string {
 									Month:            gs.Portfolio.Turn,
 								})
 
-								if event.IsDownRound {
-									messages = append(messages, fmt.Sprintf(
-										"⚠️  %s raised $%s in DOWN ROUND (%s)! Valuation dropped. Equity: %.2f%% → %.2f%%",
-										event.CompanyName,
-										formatCurrency(event.RaiseAmount),
-										event.RoundName,
-										oldEquity,
-										inv.EquityPercent,
-									))
-								} else {
-									messages = append(messages, fmt.Sprintf(
-										"🚀 %s raised $%s in %s round! Your equity diluted from %.2f%% to %.2f%%",
-										event.CompanyName,
-										formatCurrency(event.RaiseAmount),
-										event.RoundName,
-										oldEquity,
-										inv.EquityPercent,
-									))
+								// Only show dilution messages if not protected by Portfolio Insurance
+								if !shouldProtect {
+									if event.IsDownRound {
+										messages = append(messages, fmt.Sprintf(
+											"⚠️  %s raised $%s in DOWN ROUND (%s)! Valuation dropped. Equity: %.2f%% → %.2f%%",
+											event.CompanyName,
+											formatCurrency(event.RaiseAmount),
+											event.RoundName,
+											oldEquity,
+											inv.EquityPercent,
+										))
+									} else {
+										messages = append(messages, fmt.Sprintf(
+											"🚀 %s raised $%s in %s round! Your equity diluted from %.2f%% to %.2f%%",
+											event.CompanyName,
+											formatCurrency(event.RaiseAmount),
+											event.RoundName,
+											oldEquity,
+											inv.EquityPercent,
+										))
+									}
 								}
 							} else {
 								// Follow-on investment case: equity already calculated correctly, just record the round
@@ -1635,6 +1736,20 @@ func (gs *GameState) ProcessAcquisitions() []string {
 func (gs *GameState) ProcessManagementFees() []string {
 	messages := []string{}
 
+	// Check for fee_waiver upgrade - skip fees for first 12 months
+	hasFeeWaiver := false
+	for _, upgradeID := range gs.PlayerUpgrades {
+		if upgradeID == "fee_waiver" {
+			hasFeeWaiver = true
+			break
+		}
+	}
+
+	// Skip fees if Fee Waiver is active and we're in first 12 months
+	if hasFeeWaiver && gs.Portfolio.Turn <= 12 {
+		return messages // No fees charged
+	}
+
 	// Charge management fee monthly (annual rate / 12)
 	monthlyFeeRate := gs.Portfolio.AnnualManagementFee / 12.0
 	fee := int64(float64(gs.Portfolio.InitialFundSize) * monthlyFeeRate)
@@ -1726,13 +1841,14 @@ func (gs *GameState) AIPlayerMakeInvestments() {
 
 					// AI players get Preferred Stock terms (like the player)
 					terms := InvestmentTerms{
-						Type:               "Preferred Stock",
-						HasProRataRights:   true,
-						HasInfoRights:      true,
-						HasBoardSeat:       investmentAmount >= 100000, // Board seat for $100k+ investments
-						LiquidationPref:    1.0,
-						HasAntiDilution:    true,
-						ConversionDiscount: 0.0,
+						Type:                "Preferred Stock",
+						HasProRataRights:    true,
+						HasInfoRights:       true,
+						HasBoardSeat:        investmentAmount >= 100000, // Board seat for $100k+ investments
+						BoardSeatMultiplier: 1,                          // AI players don't get upgrades
+						LiquidationPref:     1.0,
+						HasAntiDilution:     true,
+						ConversionDiscount:  0.0,
 					}
 
 					investment := Investment{
@@ -2110,6 +2226,103 @@ func (gs *GameState) GetPendingBoardVotes() []BoardVote {
 	return pending
 }
 
+// GetNextBoardVotePreview returns a preview of the next board vote (for Strategic Advisor upgrade)
+func (gs *GameState) GetNextBoardVotePreview() string {
+	nextTurn := gs.Portfolio.Turn + 1
+
+	// Check for upcoming acquisitions
+	for _, event := range gs.AcquisitionQueue {
+		if event.ScheduledTurn == nextTurn {
+			// Check if player has board seat
+			for _, inv := range gs.Portfolio.Investments {
+				if inv.CompanyName == event.CompanyName && inv.Terms.HasBoardSeat {
+					// Find startup to get current valuation
+					for _, startup := range gs.AvailableStartups {
+						if startup.Name == event.CompanyName {
+							annualEBITDA := startup.NetIncome * 12
+							offerMultiple := event.OfferMultiple
+							if annualEBITDA < 0 {
+								annualEBITDA = startup.MonthlyRevenue * 12
+								offerMultiple *= 0.3
+							}
+							offerValue := int64(float64(annualEBITDA) * offerMultiple)
+							if offerValue < startup.Valuation/2 {
+								offerValue = startup.Valuation / 2
+							}
+							return fmt.Sprintf("⚠️  Next turn: %s will receive an acquisition offer (~$%s). Board vote required!",
+								event.CompanyName, formatCurrency(offerValue))
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Check for upcoming down rounds
+	for _, event := range gs.FundingRoundQueue {
+		if event.ScheduledTurn == nextTurn && event.IsDownRound {
+			for _, inv := range gs.Portfolio.Investments {
+				if inv.CompanyName == event.CompanyName && inv.Terms.HasBoardSeat {
+					return fmt.Sprintf("⚠️  Next turn: %s proposes a DOWN ROUND. Board vote required!",
+						event.CompanyName)
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// GetSectorTrends calculates and returns sector performance trends (for Market Intelligence upgrade)
+func (gs *GameState) GetSectorTrends() map[string]string {
+	sectorValuations := make(map[string][]int64)
+
+	// Group startups by sector
+	for _, startup := range gs.AvailableStartups {
+		sectorValuations[startup.Category] = append(sectorValuations[startup.Category], startup.Valuation)
+	}
+
+	trends := make(map[string]string)
+
+	// Calculate average valuation per sector
+	sectorAverages := make(map[string]float64)
+	for sector, valuations := range sectorValuations {
+		if len(valuations) > 0 {
+			sum := int64(0)
+			for _, val := range valuations {
+				sum += val
+			}
+			sectorAverages[sector] = float64(sum) / float64(len(valuations))
+		}
+	}
+
+	// Find overall average
+	overallSum := 0.0
+	count := 0
+	for _, avg := range sectorAverages {
+		overallSum += avg
+		count++
+	}
+	overallAvg := overallSum / float64(count)
+
+	// Categorize sectors
+	for sector, avg := range sectorAverages {
+		if avg > overallAvg*1.15 {
+			trends[sector] = "📈 Hot"
+		} else if avg > overallAvg*1.05 {
+			trends[sector] = "📊 Strong"
+		} else if avg < overallAvg*0.85 {
+			trends[sector] = "📉 Cold"
+		} else if avg < overallAvg*0.95 {
+			trends[sector] = "📊 Weak"
+		} else {
+			trends[sector] = "➡️ Stable"
+		}
+	}
+
+	return trends
+}
+
 // ProcessBoardVote processes a player's vote and determines outcome
 func (gs *GameState) ProcessBoardVote(voteIndex int, playerVote string) (string, bool, error) {
 	if voteIndex < 0 || voteIndex >= len(gs.PendingBoardVotes) {
@@ -2133,8 +2346,18 @@ func (gs *GameState) ProcessBoardVote(voteIndex int, playerVote string) (string,
 	}
 
 	// Simulate board vote: player vote + AI board members vote
-	// Player vote counts as 1, AI votes randomly based on their strategy
-	playerVotes := 1
+	// Player vote counts based on board seat multiplier
+	playerVoteWeight := 1
+	for _, inv := range gs.Portfolio.Investments {
+		if inv.CompanyName == vote.CompanyName && inv.Terms.HasBoardSeat {
+			playerVoteWeight = inv.Terms.BoardSeatMultiplier
+			if playerVoteWeight == 0 {
+				playerVoteWeight = 1 // Default to 1 if not set
+			}
+			break
+		}
+	}
+
 	aiVotesA := 0
 	aiVotesB := 0
 
@@ -2169,9 +2392,9 @@ func (gs *GameState) ProcessBoardVote(voteIndex int, playerVote string) (string,
 	totalVotesA := aiVotesA
 	totalVotesB := aiVotesB
 	if votedForA {
-		totalVotesA += playerVotes
+		totalVotesA += playerVoteWeight
 	} else {
-		totalVotesB += playerVotes
+		totalVotesB += playerVoteWeight
 	}
 
 	// Determine outcome

@@ -1,5 +1,32 @@
 # Changelog
 
+## Version 3.18.2 - Super Pro-Rata Fix & Build Fixes (2025-11-03)
+
+### Bug Fixes
+
+#### 🐛 Super Pro-Rata Upgrade Not Working
+- **Issue**: Super Pro-Rata upgrade was active but UI still showed 20% max investment limit
+- **Fix**: Updated startup display and investment prompt to check for Super Pro-Rata upgrade
+- **Result**: Upgrade now correctly shows 50% max investment (instead of 20%) when active
+
+#### 🐛 Build Compilation Errors
+- **Issue**: Version 3.18.1 failed GitHub Actions builds due to missing method implementations
+- **Fix**: Committed missing methods (`GetNextBoardVotePreview`, `GetSectorTrends`) and all related code
+- **Result**: All builds now compile successfully across all platforms
+
+### Technical Changes
+
+#### Modified Files
+- `main.go`:
+  - Updated `displayStartup()` to check for Super Pro-Rata and show 50% limit when active
+  - Updated `investmentPhase()` to validate against 50% limit when Super Pro-Rata is active
+  - Fixed error messages to show correct percentage (50% vs 20%)
+
+- `game/game.go`:
+  - Verified `GetNextBoardVotePreview()` and `GetSectorTrends()` methods are properly committed
+
+---
+
 ## Version 3.18.1 - Bug Fixes (2025-11-03)
 
 ### Bug Fixes

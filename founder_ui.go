@@ -14,6 +14,9 @@ import (
 	clear "github.com/jamesacampbell/unicorn/clear"
 	founder "github.com/jamesacampbell/unicorn/founder"
 	leaderboard "github.com/jamesacampbell/unicorn/leaderboard"
+	achievements "github.com/jamesacampbell/unicorn/achievements"
+	db "github.com/jamesacampbell/unicorn/database"
+	upgrades "github.com/jamesacampbell/unicorn/upgrades"
 )
 
 func playFounderMode(username string) {
@@ -132,8 +135,14 @@ func playFounderMode(username string) {
 	selectedStartup := filteredStartups[choiceNum-1]
 	clear.ClearIt()
 
+	// Get player upgrades
+	playerUpgrades, err := db.GetPlayerUpgrades(username)
+	if err != nil {
+		playerUpgrades = []string{}
+	}
+
 	// Initialize founder game
-	fs := founder.NewFounderGame(username, selectedStartup)
+	fs := founder.NewFounderGame(username, selectedStartup, playerUpgrades)
 
 	// Welcome message
 	displayFounderWelcome(fs)
@@ -145,6 +154,9 @@ func playFounderMode(username string) {
 
 	// Show final score
 	displayFounderFinalScore(fs)
+
+	// Save score to database and check achievements
+	saveFounderScoreAndCheckAchievements(fs)
 
 	// Submit to global leaderboard
 	askToSubmitFounderToGlobalLeaderboard(fs)
@@ -169,6 +181,19 @@ func displayFounderWelcome(fs *founder.FounderState) {
 		fmt.Printf("⏱️  Runway: %d months\n", fs.CashRunwayMonths)
 	}
 	fmt.Printf("📈 Product Maturity: %.0f%%\n", fs.ProductMaturity*100)
+	
+	// Display active upgrades
+	if len(fs.PlayerUpgrades) > 0 {
+		green := color.New(color.FgGreen)
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		green.Println("✨ ACTIVE UPGRADES:")
+		fmt.Println(strings.Repeat("─", 70))
+		for _, upgradeID := range fs.PlayerUpgrades {
+			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+				fmt.Printf("  %s %s\n", upgrade.Icon, upgrade.Name)
+			}
+		}
+	}
 
 	yellow.Println("\n\n🎯 YOUR GOAL:")
 	fmt.Println("Build a successful company over 60 months (5 years)")
@@ -2321,6 +2346,159 @@ func handleExitOptions(fs *founder.FounderState) bool {
 	fmt.Printf("   Your Payout: $%s\n\n", formatFounderCurrency(selectedExit.FounderPayout))
 
 	return false // Game ends, process final month
+}
+
+func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
+	// Calculate final metrics
+	_, valuation, founderEquity := fs.GetFinalScore()
+	
+	// Calculate founder payout (net worth)
+	var founderPayout int64
+	if fs.HasExited {
+		switch fs.ExitType {
+		case "ipo":
+			founderPayout = int64(float64(fs.ExitValuation) * founderEquity * 0.20 / 100.0) // 20% immediate
+		case "acquisition":
+			founderPayout = int64(float64(fs.ExitValuation) * founderEquity / 100.0)
+		case "secondary":
+			founderPayout = int64(float64(fs.ExitValuation) * founderEquity * 0.5 / 100.0)
+		default:
+			founderPayout = fs.Cash + int64(float64(valuation)*founderEquity/100.0)
+		}
+	} else {
+		founderPayout = fs.Cash + int64(float64(valuation)*founderEquity/100.0)
+	}
+	
+	// Calculate initial investment (starting cash)
+	// Use the starting cash amount from the game state
+	initialCash := int64(500000) // Default estimate - founder mode starts with varying amounts
+	if fs.Turn > 0 {
+		// Estimate based on first funding round or use a reasonable default
+		if len(fs.FundingRounds) > 0 {
+			// Starting cash is roughly 2x first funding round
+			initialCash = fs.FundingRounds[0].Amount * 2
+		} else {
+			// No funding rounds, use template default
+			initialCash = 500000
+		}
+	}
+	
+	// Calculate ROI
+	roi := 0.0
+	if initialCash > 0 {
+		roi = (float64(founderPayout-initialCash) / float64(initialCash)) * 100.0
+	}
+	
+	// Calculate total funding raised
+	totalFundingRaised := int64(0)
+	for _, round := range fs.FundingRounds {
+		totalFundingRaised += round.Amount
+	}
+	
+	// Calculate successful exits
+	successfulExits := 0
+	if fs.HasExited {
+		successfulExits = 1
+	}
+	
+	// Save score to database (using GameScore table - founder mode counts as "Founder" difficulty)
+	score := db.GameScore{
+		PlayerName:      fs.FounderName,
+		FinalNetWorth:   founderPayout,
+		ROI:             roi,
+		SuccessfulExits: successfulExits,
+		TurnsPlayed:     fs.Turn,
+		Difficulty:      "Founder",
+		PlayedAt:        time.Now(),
+	}
+	
+	err := db.SaveGameScore(score)
+	if err != nil {
+		color.Yellow("\nWarning: Could not save score: %v", err)
+	} else {
+		color.Green("\n%s Score saved to local leaderboard!", ascii.Check)
+	}
+	
+	// Check for achievements
+	previouslyUnlocked, err := db.GetPlayerAchievements(fs.FounderName)
+	if err != nil {
+		previouslyUnlocked = []string{}
+	}
+	
+	// Get player stats
+	playerStats, _ := db.GetPlayerStats(fs.FounderName)
+	winStreak, _ := db.GetWinStreak(fs.FounderName)
+	
+	// Build game stats for achievement checking
+	gameStats := achievements.GameStats{
+		GameMode:             "founder",
+		FinalNetWorth:        founderPayout,
+		ROI:                  roi,
+		SuccessfulExits:      successfulExits,
+		TurnsPlayed:          fs.Turn,
+		Difficulty:           "Founder",
+		FinalMRR:             fs.MRR,
+		FinalValuation:       valuation,
+		FinalEquity:          founderEquity,
+		Customers:            fs.Customers,
+		FundingRoundsRaised:  len(fs.FundingRounds),
+		TotalFundingRaised:   totalFundingRaised,
+		HasExited:            fs.HasExited,
+		ExitType:             fs.ExitType,
+		ExitValuation:        fs.ExitValuation,
+		MonthsToProfitability: fs.MonthReachedProfitability,
+		TotalGames:           playerStats.TotalGames,
+		TotalWins:            int(playerStats.WinRate * float64(playerStats.TotalGames) / 100.0),
+		WinStreak:            winStreak,
+		BestNetWorth:         playerStats.BestNetWorth,
+		TotalExits:           playerStats.TotalExits,
+	}
+	
+	// Check for new achievements
+	newAchievements := achievements.CheckAchievements(gameStats, previouslyUnlocked)
+	
+	// Save and display new achievements
+	if len(newAchievements) > 0 {
+		cyan := color.New(color.FgCyan, color.Bold)
+		yellow := color.New(color.FgYellow)
+		
+		fmt.Println("\n" + strings.Repeat("?", 60))
+		cyan.Printf("     %s NEW ACHIEVEMENTS UNLOCKED! %s\n", ascii.Star, ascii.Star)
+		fmt.Println(strings.Repeat("?", 60))
+		
+		for _, ach := range newAchievements {
+			// Save to database
+			db.UnlockAchievement(fs.FounderName, ach.ID)
+			
+			// Display
+			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
+			fmt.Printf("\n%s  ", ach.Icon)
+			rarityColor.Printf("%s", ach.Name)
+			fmt.Printf(" [%s]\n", ach.Rarity)
+			yellow.Printf("   %s\n", ach.Description)
+			fmt.Printf("   +%d points\n", ach.Points)
+		}
+		
+		// Calculate new career level
+		totalPoints := 0
+		allUnlocked, _ := db.GetPlayerAchievements(fs.FounderName)
+		for _, id := range allUnlocked {
+			if ach, exists := achievements.AllAchievements[id]; exists {
+				totalPoints += ach.Points
+			}
+		}
+		
+		level, title, nextLevel := achievements.CalculateCareerLevel(totalPoints)
+		
+		fmt.Println("\n" + strings.Repeat("=", 60))
+		fmt.Printf("Career Level: ")
+		yellow.Printf("%d - %s", level, title)
+		fmt.Printf("\nTotal Points: %d\n", totalPoints)
+		if nextLevel < 2001 {
+			fmt.Printf("Next Level: %d points\n", nextLevel)
+		}
+		fmt.Println(strings.Repeat("=", 60))
+	}
 }
 
 func formatFounderCurrency(amount int64) string {
