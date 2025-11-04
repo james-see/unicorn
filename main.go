@@ -19,6 +19,7 @@ import (
 	game "github.com/jamesacampbell/unicorn/game"
 	leaderboard "github.com/jamesacampbell/unicorn/leaderboard"
 	logo "github.com/jamesacampbell/unicorn/logo"
+	upgrades "github.com/jamesacampbell/unicorn/upgrades"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -855,8 +856,10 @@ func main() {
 		case "4":
 			displayAchievementsMenu()
 		case "5":
-			displayHelpGuide()
+			displayUpgradeMenu()
 		case "6":
+			displayHelpGuide()
+		case "7":
 			fmt.Println("\nThanks for playing! " + ascii.Star2)
 			return
 		default:
@@ -883,8 +886,9 @@ func displayMainMenu() string {
 	yellow.Println("2. Leaderboards")
 	yellow.Println("3. Player Statistics")
 	yellow.Println("4. Achievements")
-	yellow.Println("5. Help & Info")
-	yellow.Println("6. Quit")
+	yellow.Println("5. Upgrades")
+	yellow.Println("6. Help & Info")
+	yellow.Println("7. Quit")
 
 	fmt.Print("\nEnter your choice: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -994,8 +998,14 @@ func playVCMode(username string) {
 	// Display welcome and rules
 	displayWelcome(username, difficulty)
 
+	// Get player upgrades
+	playerUpgrades, err := db.GetPlayerUpgrades(username)
+	if err != nil {
+		playerUpgrades = []string{}
+	}
+
 	// Initialize game
-	gs := game.NewGame(username, difficulty)
+	gs := game.NewGame(username, difficulty, playerUpgrades)
 
 	// Investment phase at start
 	investmentPhase(gs)
@@ -1020,7 +1030,7 @@ func playVCMode(username string) {
 		PlayedAt:        time.Now(),
 	}
 
-	err := db.SaveGameScore(score)
+	err = db.SaveGameScore(score)
 	if err != nil {
 		color.Yellow("\nWarning: Could not save score: %v", err)
 	} else {
@@ -1858,4 +1868,207 @@ func displayHelpGuide() {
 	cyan.Println("\n" + strings.Repeat("=", 70))
 	fmt.Print("\nPress 'Enter' to return to menu...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func displayUpgradeMenu() {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	
+	fmt.Print("\nEnter player name: ")
+	reader := bufio.NewReader(os.Stdin)
+	playerName, _ := reader.ReadString('\n')
+	playerName = strings.TrimSpace(playerName)
+	
+	if playerName == "" {
+		color.Red("Invalid player name!")
+		return
+	}
+	
+	// Get player's points
+	allUnlocked, err := db.GetPlayerAchievements(playerName)
+	if err != nil {
+		allUnlocked = []string{}
+	}
+	
+	totalPoints := 0
+	for _, id := range allUnlocked {
+		if ach, exists := achievements.AllAchievements[id]; exists {
+			totalPoints += ach.Points
+		}
+	}
+	
+	// Get owned upgrades
+	ownedUpgrades, err := db.GetPlayerUpgrades(playerName)
+	if err != nil {
+		ownedUpgrades = []string{}
+	}
+	
+	clear.ClearIt()
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Printf("     🎁 UPGRADE STORE 🎁\n")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	yellow.Printf("\nPlayer: %s\n", playerName)
+	yellow.Printf("Your Points: %d\n", totalPoints)
+	
+	level, title, _ := achievements.CalculateCareerLevel(totalPoints)
+	fmt.Printf("Career Level: ")
+	green.Printf("%d - %s\n", level, title)
+	
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	fmt.Println("1. Browse All Upgrades")
+	fmt.Println("2. View My Upgrades")
+	fmt.Println("3. Purchase Upgrades")
+	fmt.Println("4. Back to Main Menu")
+	fmt.Print("\nEnter your choice: ")
+	
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	clear.ClearIt()
+	
+	switch choice {
+	case "1":
+		browseAllUpgrades(playerName, totalPoints, ownedUpgrades)
+	case "2":
+		viewPlayerUpgrades(playerName, ownedUpgrades)
+	case "3":
+		purchaseUpgrades(playerName, totalPoints, ownedUpgrades)
+	case "4":
+		return
+	default:
+		color.Red("Invalid choice!")
+	}
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	displayUpgradeMenu()
+}
+
+func browseAllUpgrades(playerName string, totalPoints int, ownedUpgrades []string) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	magenta := color.New(color.FgMagenta)
+	
+	categories := upgrades.GetAllCategories()
+	
+	for _, category := range categories {
+		cyan.Printf("\n╔══════════════════════════════════════════════════════════════╗\n")
+		cyan.Printf("║  %s\n", category)
+		cyan.Printf("╚══════════════════════════════════════════════════════════════╝\n")
+		
+		categoryUpgrades := upgrades.GetUpgradesByCategory(category)
+		for i, upgrade := range categoryUpgrades {
+			owned := upgrades.IsOwned(upgrade.ID, ownedUpgrades)
+			canAfford := totalPoints >= upgrade.Cost
+			
+			status := ""
+			if owned {
+				status = green.Sprintf("[✓ OWNED]")
+			} else if canAfford {
+				status = yellow.Sprintf("[AVAILABLE]")
+			} else {
+				status = magenta.Sprintf("[Need %d more pts]", upgrade.Cost-totalPoints)
+			}
+			
+			fmt.Printf("\n%d. %s %s\n", i+1, upgrade.Icon, upgrade.Name)
+			fmt.Printf("   %s\n", upgrade.Description)
+			fmt.Printf("   Cost: %d points %s\n", upgrade.Cost, status)
+		}
+	}
+}
+
+func viewPlayerUpgrades(playerName string, ownedUpgrades []string) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen)
+	
+	if len(ownedUpgrades) == 0 {
+		color.Yellow("\nYou haven't purchased any upgrades yet!")
+		return
+	}
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Printf("     YOUR UPGRADES\n")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	categories := upgrades.GetAllCategories()
+	for _, category := range categories {
+		categoryUpgrades := upgrades.GetUpgradesByCategory(category)
+		hasOwned := false
+		for _, upgrade := range categoryUpgrades {
+			if upgrades.IsOwned(upgrade.ID, ownedUpgrades) {
+				if !hasOwned {
+					fmt.Printf("\n%s:\n", category)
+					hasOwned = true
+				}
+				green.Printf("  ✓ %s %s - %s\n", upgrade.Icon, upgrade.Name, upgrade.Description)
+			}
+		}
+	}
+}
+
+func purchaseUpgrades(playerName string, totalPoints int, ownedUpgrades []string) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Printf("     PURCHASE UPGRADES\n")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	yellow.Printf("\nYour Points: %d\n\n", totalPoints)
+	
+	// Show available upgrades
+	availableUpgrades := []upgrades.Upgrade{}
+	for _, upgrade := range upgrades.AllUpgrades {
+		if !upgrades.IsOwned(upgrade.ID, ownedUpgrades) && totalPoints >= upgrade.Cost {
+			availableUpgrades = append(availableUpgrades, upgrade)
+		}
+	}
+	
+	if len(availableUpgrades) == 0 {
+		color.Yellow("\nNo upgrades available for purchase!")
+		color.Yellow("Earn more achievement points to unlock upgrades.")
+		return
+	}
+	
+	fmt.Println("Available Upgrades:")
+	for i, upgrade := range availableUpgrades {
+		fmt.Printf("%d. %s %s - %d pts\n", i+1, upgrade.Icon, upgrade.Name, upgrade.Cost)
+		fmt.Printf("   %s\n", upgrade.Description)
+	}
+	
+	fmt.Print("\nEnter upgrade number to purchase (or 0 to cancel): ")
+	reader := bufio.NewReader(os.Stdin)
+	choiceStr, _ := reader.ReadString('\n')
+	choiceStr = strings.TrimSpace(choiceStr)
+	
+	choice, err := strconv.Atoi(choiceStr)
+	if err != nil || choice < 0 || choice > len(availableUpgrades) {
+		color.Red("Invalid choice!")
+		return
+	}
+	
+	if choice == 0 {
+		return
+	}
+	
+	upgrade := availableUpgrades[choice-1]
+	
+	if totalPoints < upgrade.Cost {
+		color.Red("Insufficient points! Need %d, have %d", upgrade.Cost, totalPoints)
+		return
+	}
+	
+	// Purchase upgrade
+	err = db.PurchaseUpgrade(playerName, upgrade.ID)
+	if err != nil {
+		color.Red("Error purchasing upgrade: %v", err)
+		return
+	}
+	
+	green.Printf("\n✓ Successfully purchased: %s %s!\n", upgrade.Icon, upgrade.Name)
+	green.Printf("Points remaining: %d\n", totalPoints-upgrade.Cost)
 }

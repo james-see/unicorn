@@ -126,6 +126,7 @@ type GameState struct {
 	AcquisitionQueue   []AcquisitionEvent  // Scheduled acquisition offers
 	DramaticEventQueue []DramaticEvent     // Scheduled dramatic events (scandals, splits, etc.)
 	PendingBoardVotes  []BoardVote         // Board votes requiring player input
+	PlayerUpgrades     []string            // Player's purchased upgrades
 }
 
 // FundingRoundEvent represents a scheduled funding round
@@ -219,8 +220,8 @@ var (
 	}
 )
 
-// NewGame initializes a new game with specified difficulty
-func NewGame(playerName string, difficulty Difficulty) *GameState {
+// NewGame initializes a new game with specified difficulty and player upgrades
+func NewGame(playerName string, difficulty Difficulty, playerUpgrades []string) *GameState {
 	rand.Seed(time.Now().UnixNano())
 
 	// Calculate follow-on reserve: $100k base + $50k per potential funding round
@@ -228,21 +229,43 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 	expectedRounds := int64(15 * 0.6 * 2) // 15 companies, 60% raise, avg 2 rounds
 	followOnReserve := int64(100000) + (expectedRounds * 50000)
 
+	// Apply upgrades
+	startingCash := difficulty.StartingCash
+	managementFee := 0.02
+	maxTurns := difficulty.MaxTurns
+
+	// Check for upgrades
+	for _, upgradeID := range playerUpgrades {
+		switch upgradeID {
+		case "fund_booster":
+			startingCash = int64(float64(startingCash) * 1.1) // +10% cash
+		case "management_fee_reduction":
+			managementFee = 0.015 // 1.5% instead of 2%
+		case "follow_on_reserve_boost":
+			followOnReserve += 200000 // +$200k
+		case "speed_mode":
+			maxTurns = 30 // 30 turns instead of 60
+		case "endurance_mode":
+			maxTurns = 120 // 120 turns instead of 60
+		}
+	}
+
 	gs := &GameState{
-		PlayerName: playerName,
-		Difficulty: difficulty,
+		PlayerName:     playerName,
+		Difficulty:     difficulty,
+		PlayerUpgrades: playerUpgrades,
 		Portfolio: Portfolio{
-			Cash:                difficulty.StartingCash,
-			NetWorth:            difficulty.StartingCash,
+			Cash:                startingCash,
+			NetWorth:            startingCash,
 			Turn:                1,
-			MaxTurns:            difficulty.MaxTurns,
-			InitialFundSize:     difficulty.StartingCash,
-			AnnualManagementFee: 0.02,            // 2% annual management fee
-			FollowOnReserve:     followOnReserve, // Dynamic based on expected rounds
+			MaxTurns:            maxTurns,
+			InitialFundSize:     startingCash,
+			AnnualManagementFee: managementFee,
+			FollowOnReserve:     followOnReserve,
 		},
 	}
 
-	gs.LoadStartups()
+	gs.LoadStartups(playerUpgrades)
 	gs.LoadEvents()
 	gs.InitializeAIPlayers()
 	gs.ScheduleFundingRounds()
@@ -253,7 +276,7 @@ func NewGame(playerName string, difficulty Difficulty) *GameState {
 }
 
 // LoadStartups loads 15 randomly selected startup companies from 30 available JSON files
-func (gs *GameState) LoadStartups() {
+func (gs *GameState) LoadStartups(playerUpgrades []string) {
 	gs.AvailableStartups = []Startup{}
 	allStartups := []Startup{}
 
@@ -294,11 +317,20 @@ func (gs *GameState) LoadStartups() {
 
 	// Randomly select 15 from the 30 startups
 	if len(allStartups) > 15 {
-		// Shuffle and take first 15
+		// Apply early_access upgrade - show extra startups
+		extraStartups := 0
+		for _, upgradeID := range playerUpgrades {
+			if upgradeID == "early_access" {
+				extraStartups = 2
+				break
+			}
+		}
+
+		// Shuffle and take first 15+extra
 		rand.Shuffle(len(allStartups), func(i, j int) {
 			allStartups[i], allStartups[j] = allStartups[j], allStartups[i]
 		})
-		gs.AvailableStartups = allStartups[:15]
+		gs.AvailableStartups = allStartups[:15+extraStartups]
 	} else {
 		gs.AvailableStartups = allStartups
 	}
@@ -330,17 +362,26 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 	options := []InvestmentTerms{}
 
 	// Option 1: Preferred Stock (VC standard)
+	hasBoardSeat := amount >= 100000 // Board seat for $100k+ investments
 	options = append(options, InvestmentTerms{
 		Type:               "Preferred Stock",
 		HasProRataRights:   true,
 		HasInfoRights:      true,
-		HasBoardSeat:       amount >= 100000, // Board seat for $100k+ investments
+		HasBoardSeat:       hasBoardSeat,
 		LiquidationPref:    1.0,
 		HasAntiDilution:    true,
 		ConversionDiscount: 0.0,
 	})
 
 	// Option 2: SAFE (Simple Agreement for Future Equity)
+	safeDiscount := 0.20 // Default 20%
+	for _, upgradeID := range gs.PlayerUpgrades {
+		if upgradeID == "enhanced_safe_discount" {
+			safeDiscount = 0.25 // 25% discount
+			break
+		}
+	}
+
 	options = append(options, InvestmentTerms{
 		Type:               "SAFE",
 		HasProRataRights:   true,
@@ -348,7 +389,7 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 		HasBoardSeat:       false,
 		LiquidationPref:    0.0, // No liquidation preference with SAFE
 		HasAntiDilution:    false,
-		ConversionDiscount: 0.20, // 20% discount on conversion
+		ConversionDiscount: safeDiscount,
 	})
 
 	// Option 3: Common Stock (founder-friendly)
@@ -407,9 +448,17 @@ func (gs *GameState) MakeInvestmentWithTerms(startupIndex int, amount int64, ter
 	}
 
 	// Maximum investment is 20% of company valuation (standard VC practice)
-	maxInvestment := int64(float64(startup.Valuation) * 0.20)
+	// Can be increased to 50% with super_pro_rata upgrade
+	maxInvestmentPercent := 0.20
+	for _, upgradeID := range gs.PlayerUpgrades {
+		if upgradeID == "super_pro_rata" {
+			maxInvestmentPercent = 0.50 // 50% max with upgrade
+			break
+		}
+	}
+	maxInvestment := int64(float64(startup.Valuation) * maxInvestmentPercent)
 	if amount > maxInvestment {
-		return fmt.Errorf("maximum investment is $%d (20%% of company valuation: $%d)", maxInvestment, startup.Valuation)
+		return fmt.Errorf("maximum investment is $%d (%.0f%% of company valuation: $%d)", maxInvestment, maxInvestmentPercent*100, startup.Valuation)
 	}
 
 	// Calculate equity percentage based on investment amount and company valuation

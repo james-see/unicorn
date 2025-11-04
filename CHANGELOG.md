@@ -1,5 +1,74 @@
 # Changelog
 
+## Version 3.17.0 - Upgrade System & Meta-Progression (2025-11-03)
+
+### Major Features Added
+
+#### 🎁 Upgrade Store System
+- **Meta-Progression**: Players can now spend achievement points to unlock permanent upgrades
+- **Upgrade Menu**: New "5. Upgrades" option in main menu to browse, view, and purchase upgrades
+- **Point-Based Economy**: Earn points from achievements (5-100 points per achievement), spend to unlock upgrades
+- **Persistent Upgrades**: Purchased upgrades apply automatically to all future games
+
+#### 💰 Financial Perks Upgrades
+- **Fund Booster** (100 pts): +10% starting cash on all difficulties
+- **Management Fee Reduction** (150 pts): Management fees reduced from 2% → 1.5%
+- **Follow-On Reserve Boost** (200 pts): +$200k to follow-on reserve
+
+#### 📈 Investment Terms Upgrades
+- **Enhanced SAFE Discount** (150 pts): SAFE discount increases from 20% → 25%
+- **Super Pro-Rata** (200 pts): Can invest up to 50% of round (vs 20% max)
+
+#### 🎯 Information & Intel Upgrades
+- **Early Access** (100 pts): See 2 extra startups before investment phase starts
+
+#### ⚡ Game Mode Upgrades
+- **Speed Mode** (200 pts): 30 turns instead of 60 (faster games)
+- **Endurance Mode** (250 pts): 120 turns instead of 60 (longer games)
+
+### Technical Changes
+
+#### New Files
+- `upgrades/upgrades.go`: Upgrade definitions, categories, and helper functions
+- `UPGRADE_SYSTEM_PROPOSAL.md`: Comprehensive upgrade system design document
+
+#### Database Changes
+- Added `player_upgrades` table to track purchased upgrades
+- Added `PurchaseUpgrade()`, `GetPlayerUpgrades()`, `HasUpgrade()` functions
+
+#### Modified Files
+- `game/game.go`:
+  - Added `PlayerUpgrades []string` field to `GameState`
+  - Modified `NewGame()` to accept and apply player upgrades
+  - Updated `LoadStartups()` to show extra startups with Early Access upgrade
+  - Updated `GenerateTermOptions()` to apply Enhanced SAFE Discount
+  - Updated `MakeInvestmentWithTerms()` to apply Super Pro-Rata (50% max investment)
+  - Applied upgrades for: fund booster, management fees, follow-on reserve, speed/endurance modes
+
+- `main.go`:
+  - Added upgrade menu to main menu (option 5)
+  - Added `displayUpgradeMenu()` function with browse, view, and purchase options
+  - Added `browseAllUpgrades()`, `viewPlayerUpgrades()`, `purchaseUpgrades()` functions
+  - Modified `playNewGame()` to load and pass player upgrades to game initialization
+
+- `database/database.go`:
+  - Added `player_upgrades` table creation
+  - Added upgrade-related database functions
+
+### User Experience
+- **Upgrade Store UI**: Clean, categorized display of all upgrades with ownership status
+- **Point Tracking**: Shows current points, career level, and points needed for next level
+- **Smart Filtering**: Only shows available upgrades you can afford
+- **Visual Feedback**: Clear indicators for owned vs. available vs. locked upgrades
+
+### Game Balance
+- Upgrades are priced to provide meaningful progression without breaking game balance
+- Early upgrades (100-150 pts) provide immediate value
+- Advanced upgrades (200+ pts) unlock new strategies and game modes
+- Meta-progression encourages replayability and long-term engagement
+
+---
+
 ## Version 3.16.1 - Follow-On Investment Validation Fix (2025-11-03)
 
 ### Bug Fixes

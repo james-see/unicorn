@@ -62,11 +62,20 @@ func InitDB(dbPath string) error {
 		UNIQUE(player_name, achievement_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS player_upgrades (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		player_name TEXT NOT NULL,
+		upgrade_id TEXT NOT NULL,
+		purchased_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(player_name, upgrade_id)
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_net_worth ON game_scores(final_net_worth DESC);
 	CREATE INDEX IF NOT EXISTS idx_roi ON game_scores(roi DESC);
 	CREATE INDEX IF NOT EXISTS idx_player ON game_scores(player_name);
 	CREATE INDEX IF NOT EXISTS idx_difficulty ON game_scores(difficulty);
 	CREATE INDEX IF NOT EXISTS idx_player_achievements ON player_achievements(player_name);
+	CREATE INDEX IF NOT EXISTS idx_player_upgrades ON player_upgrades(player_name);
 	`
 
 	_, err = db.Exec(createTablesSQL)
@@ -366,9 +375,71 @@ func GetPlayerAchievementPoints(playerName string) (int, error) {
 		return 0, err
 	}
 	
-	// Note: Points would need to be calculated by looking up achievement definitions
-	// For now, return count * 10 as placeholder
+	// Calculate actual points from achievement definitions
+	// Note: This requires importing achievements package, but we'll do it differently
+	// For now, return count * 10 as placeholder - will be fixed when we integrate
 	return len(achievements) * 10, nil
+}
+
+// Upgrade functions
+
+// PurchaseUpgrade saves a purchased upgrade for a player
+func PurchaseUpgrade(playerName, upgradeID string) error {
+	query := `
+		INSERT OR IGNORE INTO player_upgrades (player_name, upgrade_id, purchased_at)
+		VALUES (?, ?, ?)
+	`
+	
+	_, err := db.Exec(query, playerName, upgradeID, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to purchase upgrade: %v", err)
+	}
+	
+	return nil
+}
+
+// GetPlayerUpgrades returns all purchased upgrades for a player
+func GetPlayerUpgrades(playerName string) ([]string, error) {
+	query := `
+		SELECT upgrade_id
+		FROM player_upgrades
+		WHERE player_name = ?
+		ORDER BY purchased_at ASC
+	`
+	
+	rows, err := db.Query(query, playerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query upgrades: %v", err)
+	}
+	defer rows.Close()
+	
+	var upgrades []string
+	for rows.Next() {
+		var upgradeID string
+		if err := rows.Scan(&upgradeID); err != nil {
+			return nil, fmt.Errorf("failed to scan upgrade: %v", err)
+		}
+		upgrades = append(upgrades, upgradeID)
+	}
+	
+	return upgrades, nil
+}
+
+// HasUpgrade checks if a player has a specific upgrade
+func HasUpgrade(playerName, upgradeID string) (bool, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM player_upgrades
+		WHERE player_name = ? AND upgrade_id = ?
+	`
+	
+	var count int
+	err := db.QueryRow(query, playerName, upgradeID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check upgrade: %v", err)
+	}
+	
+	return count > 0, nil
 }
 
 // GetWinStreak calculates current win streak for a player
