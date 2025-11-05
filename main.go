@@ -870,13 +870,17 @@ func playTurn(gs *game.GameState, autoMode bool) {
 }
 
 func displayFinalScore(gs *game.GameState) {
-	clear.ClearIt()
-
-	// Show animated game over screen
+	// Show animated game over screen FIRST (before clearing)
 	netWorth, roi, successfulExits := gs.GetFinalScore()
 	won := netWorth >= gs.Difficulty.StartingCash*2 // Won if doubled starting cash
 	animations.ShowGameOverAnimation(won, netWorth)
-
+	
+	// Pause to let user see the animation
+	fmt.Print("\nPress 'Enter' to see detailed results...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	
+	clear.ClearIt()
+	
 	cyan := color.New(color.FgCyan, color.Bold)
 	magenta := color.New(color.FgMagenta, color.Bold)
 
@@ -1010,7 +1014,10 @@ func findPlayerRank(leaderboard []game.PlayerScore) int {
 func main() {
 	// Show animated splash screen on first launch
 	animations.ShowGameStartAnimation()
-	time.Sleep(500 * time.Millisecond)
+	
+	// Pause to let user enjoy the splash screen
+	fmt.Print("\nPress 'Enter' to continue to main menu...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 
 	// Initialize database
 	err := db.InitDB("unicorn_scores.db")
@@ -1294,11 +1301,16 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 	// Check for new achievements
 	newAchievements := achievements.CheckAchievements(gameStats, previouslyUnlocked)
 
+	// Always show achievement section
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	cyan.Printf("                    ACHIEVEMENT CHECK\n")
+	fmt.Println(strings.Repeat("=", 70))
+
 	// Save and display new achievements
 	if len(newAchievements) > 0 {
-		cyan := color.New(color.FgCyan, color.Bold)
-		yellow := color.New(color.FgYellow)
-
 		fmt.Println("\n" + strings.Repeat("?", 60))
 		cyan.Printf("     %s NEW ACHIEVEMENTS UNLOCKED! %s\n", ascii.Star, ascii.Star)
 		fmt.Println(strings.Repeat("?", 60))
@@ -1311,42 +1323,50 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 			achievementText := fmt.Sprintf("%s %s [%s]\n+%d points", ach.Icon, ach.Name, ach.Rarity, ach.Points)
 			animations.ShowAchievementUnlock(achievementText, ach.Description)
 		}
-
-		// Calculate new career level and points
-		totalLifetimePoints := 0
-		allUnlocked, _ := db.GetPlayerAchievements(gs.PlayerName)
-		for _, id := range allUnlocked {
-			if ach, exists := achievements.AllAchievements[id]; exists {
-				totalLifetimePoints += ach.Points
-			}
-		}
-
-		// Get owned upgrades to calculate available balance
-		ownedUpgrades, _ := db.GetPlayerUpgrades(gs.PlayerName)
-		availableBalance := totalLifetimePoints
-		spentOnUpgrades := 0
-		for _, upgradeID := range ownedUpgrades {
-			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
-				availableBalance -= upgrade.Cost
-				spentOnUpgrades += upgrade.Cost
-			}
-		}
-
-		level, title, _ := achievements.CalculateCareerLevel(totalLifetimePoints)
-		green := color.New(color.FgGreen)
-
-		fmt.Println("\n" + strings.Repeat("=", 60))
-		fmt.Printf("Career Level: ")
-		yellow.Printf("%d - %s", level, title)
-		fmt.Printf("\nAvailable Balance: ")
-		green.Printf("%d pts", availableBalance)
-		fmt.Printf("\nTotal Lifetime Points: %d pts", totalLifetimePoints)
-		if spentOnUpgrades > 0 {
-			fmt.Printf(" (Spent: %d pts)", spentOnUpgrades)
-		}
-		fmt.Println()
-		fmt.Println(strings.Repeat("=", 60))
+	} else {
+		yellow.Println("\nNo new achievements unlocked this game.")
+		yellow.Println("Keep playing to unlock more achievements!")
+		fmt.Println("\nTips to unlock achievements:")
+		fmt.Println("  • Wealth: Reach net worth milestones ($1M, $5M, $10M, $50M)")
+		fmt.Println("  • Performance: Achieve positive ROI (break even, 2x, 5x, 10x returns)")
+		fmt.Println("  • Strategy: Diversify investments, master sectors, get successful exits")
+		fmt.Println("  • Career: Play more games, build win streaks")
 	}
+
+	// Calculate and display career level and points (always show)
+	totalLifetimePoints := 0
+	allUnlocked, _ := db.GetPlayerAchievements(gs.PlayerName)
+	for _, id := range allUnlocked {
+		if ach, exists := achievements.AllAchievements[id]; exists {
+			totalLifetimePoints += ach.Points
+		}
+	}
+
+	// Get owned upgrades to calculate available balance
+	ownedUpgrades, _ := db.GetPlayerUpgrades(gs.PlayerName)
+	availableBalance := totalLifetimePoints
+	spentOnUpgrades := 0
+	for _, upgradeID := range ownedUpgrades {
+		if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+			availableBalance -= upgrade.Cost
+			spentOnUpgrades += upgrade.Cost
+		}
+	}
+
+	level, title, _ := achievements.CalculateCareerLevel(totalLifetimePoints)
+	green := color.New(color.FgGreen)
+
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Printf("Career Level: ")
+	yellow.Printf("%d - %s", level, title)
+	fmt.Printf("\nAvailable Balance: ")
+	green.Printf("%d pts", availableBalance)
+	fmt.Printf("\nTotal Lifetime Points: %d pts", totalLifetimePoints)
+	if spentOnUpgrades > 0 {
+		fmt.Printf(" (Spent: %d pts)", spentOnUpgrades)
+	}
+	fmt.Println()
+	fmt.Println(strings.Repeat("=", 60))
 }
 
 func displayLeaderboards() {
