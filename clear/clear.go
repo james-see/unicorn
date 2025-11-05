@@ -9,14 +9,14 @@ import (
 
 // ClearIt clears the screen with a loading spinner
 func ClearIt() {
-	// Show spinner - make it visible
+	// Show spinner before clearing
 	spinner, _ := pterm.DefaultSpinner.
 		WithSequence("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏").
-		WithRemoveWhenDone(false).
+		WithRemoveWhenDone(true).
 		Start("Refreshing screen...")
 	
 	// Let spinner animate visibly - longer duration so user can see it
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(800 * time.Millisecond)
 	
 	// Stop spinner
 	spinner.Stop()
@@ -27,6 +27,12 @@ func ClearIt() {
 	tm.Println("Current Time:", time.Now().Format(time.RFC1123))
 	tm.Flush()
 	
-	// Small delay after clearing
-	time.Sleep(100 * time.Millisecond)
+	// Show spinner again after clearing (on the "right side")
+	spinner2, _ := pterm.DefaultSpinner.
+		WithSequence("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏").
+		WithRemoveWhenDone(true).
+		Start("Loading...")
+	
+	time.Sleep(800 * time.Millisecond)
+	spinner2.Stop()
 }

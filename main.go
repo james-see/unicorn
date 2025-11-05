@@ -56,8 +56,10 @@ func initMenu() (username string) {
 	text, _ := reader.ReadString('\n')
 	text = strings.TrimSpace(text)
 
-	// Check if this player has played before
+	// Show spinner while checking player stats
+	spinner, _ := animations.StartSpinner("Loading player data...")
 	stats, err := db.GetPlayerStats(text)
+	spinner.Stop()
 	if err == nil && stats.TotalGames > 0 {
 		// Returning player - show welcome back message with stats
 		fmt.Println()
@@ -75,13 +77,17 @@ func initMenu() (username string) {
 		yellow.Printf("🎯 Win Rate: %.1f%%\n", stats.WinRate)
 
 		// Get achievement count
+		spinner2, _ := animations.StartSpinner("Loading achievements...")
 		achievementCount, _ := db.GetPlayerAchievementCount(text)
+		spinner2.Stop()
 		if achievementCount > 0 {
 			yellow.Printf("🏆 Achievements Unlocked: %d\n", achievementCount)
 		}
 
 		// Get and display active upgrades
+		spinner3, _ := animations.StartSpinner("Loading upgrades...")
 		playerUpgrades, err := db.GetPlayerUpgrades(text)
+		spinner3.Stop()
 		if err == nil && len(playerUpgrades) > 0 {
 			green := color.New(color.FgGreen)
 			fmt.Println()
@@ -141,6 +147,11 @@ func askForAutomatedMode() bool {
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
+
+	// Show spinner after input
+	spinner, _ := animations.StartSpinner("Processing...")
+	time.Sleep(800 * time.Millisecond)
+	spinner.Stop()
 
 	return choice == "2"
 }
@@ -1080,7 +1091,14 @@ func displayMainMenu() string {
 	fmt.Print("\nEnter your choice: ")
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
-	return strings.TrimSpace(choice)
+	choice = strings.TrimSpace(choice)
+
+	// Show spinner after input
+	spinner, _ := animations.StartSpinner("Processing...")
+	time.Sleep(800 * time.Millisecond)
+	spinner.Stop()
+
+	return choice
 }
 
 func selectDifficulty() game.Difficulty {
@@ -1119,6 +1137,11 @@ func selectDifficulty() game.Difficulty {
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
+
+	// Show spinner after input
+	spinner, _ := animations.StartSpinner("Loading difficulty...")
+	time.Sleep(800 * time.Millisecond)
+	spinner.Stop()
 
 	switch choice {
 	case "1":
@@ -1166,6 +1189,11 @@ func askForGameMode() string {
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
+
+	// Show spinner after input
+	spinner, _ := animations.StartSpinner("Loading game mode...")
+	time.Sleep(800 * time.Millisecond)
+	spinner.Stop()
 
 	if choice == "2" {
 		return "founder"
