@@ -1,5 +1,67 @@
 # Changelog
 
+## Version 3.19.1 - Animation Visibility & Achievement Display Fixes (2025-11-05)
+
+### Bug Fixes
+
+#### 🐛 Animations Not Visible to Users
+- **Issue**: Animations were displaying but getting cleared or overwritten too quickly, making them invisible to players
+- **Root Cause**: Screen clear operations and lack of pauses caused animations to flash by before users could see them
+- **Fixes**:
+  - Moved game over animation to display BEFORE screen clear (was clearing then showing)
+  - Added manual pause with "Press Enter to see detailed results..." after game over animation
+  - Added pause with "Press Enter to continue to main menu..." after splash screen animation
+  - Users now have time to enjoy the animations before they're replaced
+
+#### 🐛 Achievement Section Missing at Game End
+- **Issue**: Players reported "no rewards at game end" - achievement section only showed when new achievements were unlocked
+- **Root Cause**: Achievement check section was conditional and only displayed if `len(newAchievements) > 0`
+- **Fix**: 
+  - Always show "ACHIEVEMENT CHECK" section at game end
+  - When no new achievements: Display helpful tips on how to unlock them
+  - When achievements unlocked: Show animated celebration
+  - Provides clear feedback either way
+
+#### 🐛 Career Level Not Displaying
+- **Issue**: Career level, lifetime points, and available balance weren't showing after games
+- **Root Cause**: Career level display code was incorrectly nested inside the achievement unlock block
+- **Fix**: Moved career level display outside the conditional to always show after every game
+
+### Technical Changes
+
+#### Modified Files
+- `main.go`:
+  - Reordered `displayFinalScore()` to show animation before clear
+  - Added `bufio.NewReader(os.Stdin).ReadBytes('\n')` pauses after animations
+  - Restructured `checkAndUnlockAchievements()` to always show achievement section
+  - Added helpful tips display when no new achievements
+  - Fixed indentation of career level display block (removed from inside achievement conditional)
+
+### User Experience
+
+#### 🎨 Animations Now Clearly Visible
+- **Splash Screen**: Users see big UNICORN title, loading spinner, and success message with manual pause
+- **Game Over**: Dramatic victory/defeat animation displays with pause before detailed results
+- **Achievement Unlocks**: Flashy star effects and colored boxes clearly visible
+
+#### 📊 Better Feedback & Guidance
+- **Always Informed**: Achievement check section shows after every game
+- **Helpful Tips**: When no achievements unlocked, game provides actionable guidance:
+  - Wealth goals: Reach $1M, $5M, $10M, $50M net worth
+  - Performance goals: Achieve positive ROI, 2x, 5x, 10x returns
+  - Strategy goals: Diversify investments, master sectors, get successful exits
+  - Career goals: Play more games, build win streaks
+- **Progress Tracking**: Career level, total points, available balance always visible
+
+#### 💡 Example Impact
+**Before**: Animation flashed → Screen cleared → User saw nothing → "I didn't see any animations"
+**After**: Animation displays → User sees it → "Press Enter" pause → User enjoys animation → Continues
+
+**Before**: Game ends → No feedback if no new achievements → "No rewards at game end"
+**After**: Game ends → "ACHIEVEMENT CHECK" section → Shows progress OR helpful tips → Always informed
+
+---
+
 ## Version 3.19.0 - Animated CLI Experience (2025-11-05)
 
 ### Major Features Added
