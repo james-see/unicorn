@@ -874,13 +874,13 @@ func displayFinalScore(gs *game.GameState) {
 	netWorth, roi, successfulExits := gs.GetFinalScore()
 	won := netWorth >= gs.Difficulty.StartingCash*2 // Won if doubled starting cash
 	animations.ShowGameOverAnimation(won, netWorth)
-	
+
 	// Pause to let user see the animation
 	fmt.Print("\nPress 'Enter' to see detailed results...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
-	
+
 	clear.ClearIt()
-	
+
 	cyan := color.New(color.FgCyan, color.Bold)
 	magenta := color.New(color.FgMagenta, color.Bold)
 
@@ -1014,7 +1014,7 @@ func findPlayerRank(leaderboard []game.PlayerScore) int {
 func main() {
 	// Show animated splash screen on first launch
 	animations.ShowGameStartAnimation()
-	
+
 	// Pause to let user enjoy the splash screen
 	fmt.Print("\nPress 'Enter' to continue to main menu...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
@@ -1304,7 +1304,7 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 	// Always show achievement section
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
-	
+
 	fmt.Println("\n" + strings.Repeat("=", 70))
 	cyan.Printf("                    ACHIEVEMENT CHECK\n")
 	fmt.Println(strings.Repeat("=", 70))
