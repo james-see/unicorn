@@ -4,15 +4,29 @@ import (
 	"time"
 
 	tm "github.com/buger/goterm"
+	"github.com/pterm/pterm"
 )
 
-// Clear
+// ClearIt clears the screen with a loading spinner
 func ClearIt() {
-	tm.Clear() // Clear current screen
-	// By moving cursor to top-left position we ensure that console output
-	// will be overwritten each time, instead of adding new.
+	// Show spinner - make it visible
+	spinner, _ := pterm.DefaultSpinner.
+		WithSequence("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏").
+		WithRemoveWhenDone(false).
+		Start("Refreshing screen...")
+	
+	// Let spinner animate visibly - longer duration so user can see it
+	time.Sleep(500 * time.Millisecond)
+	
+	// Stop spinner
+	spinner.Stop()
+	
+	// Clear the screen
+	tm.Clear()
 	tm.MoveCursor(1, 1)
 	tm.Println("Current Time:", time.Now().Format(time.RFC1123))
-	tm.Flush() // Call it every time at the end of rendering
-	time.Sleep(time.Second)
+	tm.Flush()
+	
+	// Small delay after clearing
+	time.Sleep(100 * time.Millisecond)
 }

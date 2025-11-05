@@ -1423,6 +1423,10 @@ func showTopScores(sortBy string, difficulty string) {
 	var err error
 	var title string
 
+	// Show spinner while loading
+	spinner, _ := animations.StartSpinner("Loading leaderboard...")
+	defer spinner.Stop()
+
 	if sortBy == "roi" {
 		scores, err = db.GetTopScoresByROI(10, difficulty)
 		title = "TOP 10 BY ROI"
@@ -1481,6 +1485,10 @@ func showRecentGames() {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 
+	// Show spinner while loading
+	spinner, _ := animations.StartSpinner("Loading recent games...")
+	defer spinner.Stop()
+
 	scores, err := db.GetRecentGames(10)
 	if err != nil {
 		color.Red("Error loading recent games: %v", err)
@@ -1533,6 +1541,10 @@ func displayPlayerStats() {
 		return
 	}
 
+	// Show spinner while loading
+	spinner, _ := animations.StartSpinner("Loading player stats...")
+	defer spinner.Stop()
+
 	stats, err := db.GetPlayerStats(playerName)
 	if err != nil {
 		color.Red("Error loading stats: %v", err)
@@ -1554,6 +1566,10 @@ func displayPlayerStats() {
 
 	green := color.New(color.FgGreen, color.Bold)
 	yellow := color.New(color.FgYellow)
+
+	// Show spinner while loading detailed stats
+	spinner2, _ := animations.StartSpinner("Loading detailed stats...")
+	defer spinner2.Stop()
 
 	// Get stats for VC mode
 	vcStats, err := db.GetPlayerStatsByMode(playerName, "vc")

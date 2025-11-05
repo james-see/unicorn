@@ -31,6 +31,14 @@ func ShowLoadingSpinner(text string, duration time.Duration) {
 	spinner.Stop()
 }
 
+// StartSpinner starts a spinner and returns it for manual control
+func StartSpinner(text string) (*pterm.SpinnerPrinter, error) {
+	return pterm.DefaultSpinner.
+		WithSequence("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏").
+		WithRemoveWhenDone(true).
+		Start(text)
+}
+
 // ShowSuccessMessage displays an animated success message
 func ShowSuccessMessage(message string) {
 	pterm.Success.Println(message)
