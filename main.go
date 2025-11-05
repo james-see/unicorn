@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatih/color"
 	achievements "github.com/jamesacampbell/unicorn/achievements"
+	animations "github.com/jamesacampbell/unicorn/animations"
 	ascii "github.com/jamesacampbell/unicorn/ascii"
 
 	// analytics "github.com/jamesacampbell/unicorn/analytics"
@@ -727,6 +728,12 @@ func playTurn(gs *game.GameState, autoMode bool) {
 
 	// Print separator line instead of clearing screen
 	fmt.Println(strings.Repeat("=", 70))
+
+	// Show round transition animation for milestones (every 5 turns)
+	if gs.Portfolio.Turn%5 == 0 {
+		animations.ShowRoundTransition(gs.Portfolio.Turn)
+	}
+
 	yellow.Printf("\n%s MONTH %d of %d\n", ascii.Calendar, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
 
 	// Strategic Advisor: Show preview of next board vote
@@ -864,12 +871,16 @@ func playTurn(gs *game.GameState, autoMode bool) {
 
 func displayFinalScore(gs *game.GameState) {
 	clear.ClearIt()
+
+	// Show animated game over screen
+	netWorth, roi, successfulExits := gs.GetFinalScore()
+	won := netWorth >= gs.Difficulty.StartingCash*2 // Won if doubled starting cash
+	animations.ShowGameOverAnimation(won, netWorth)
+
 	cyan := color.New(color.FgCyan, color.Bold)
 	magenta := color.New(color.FgMagenta, color.Bold)
 
 	cyan.Print(ascii.GameOverHeader)
-
-	netWorth, roi, successfulExits := gs.GetFinalScore()
 
 	fmt.Printf("\n%s Player: %s\n", ascii.Star, gs.PlayerName)
 	fmt.Printf("%s Turns Played: %d\n", ascii.Calendar, gs.Portfolio.Turn-1)
@@ -997,6 +1008,10 @@ func findPlayerRank(leaderboard []game.PlayerScore) int {
 }
 
 func main() {
+	// Show animated splash screen on first launch
+	animations.ShowGameStartAnimation()
+	time.Sleep(500 * time.Millisecond)
+
 	// Initialize database
 	err := db.InitDB("unicorn_scores.db")
 	if err != nil {
@@ -1025,7 +1040,7 @@ func main() {
 		case "6":
 			displayHelpGuide()
 		case "7":
-			fmt.Println("\nThanks for playing! " + ascii.Star2)
+			animations.ShowInfoMessage("Thanks for playing! " + ascii.Star2)
 			return
 		default:
 			color.Red("Invalid choice!")
@@ -1292,13 +1307,9 @@ func checkAndUnlockAchievements(gs *game.GameState) {
 			// Save to database
 			db.UnlockAchievement(gs.PlayerName, ach.ID)
 
-			// Display
-			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
-			fmt.Printf("\n%s  ", ach.Icon)
-			rarityColor.Printf("%s", ach.Name)
-			fmt.Printf(" [%s]\n", ach.Rarity)
-			yellow.Printf("   %s\n", ach.Description)
-			fmt.Printf("   +%d points\n", ach.Points)
+			// Display with animation
+			achievementText := fmt.Sprintf("%s %s [%s]\n+%d points", ach.Icon, ach.Name, ach.Rarity, ach.Points)
+			animations.ShowAchievementUnlock(achievementText, ach.Description)
 		}
 
 		// Calculate new career level and points

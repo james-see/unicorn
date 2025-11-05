@@ -1,5 +1,67 @@
 # Changelog
 
+## Version 3.19.0 - Animated CLI Experience (2025-11-05)
+
+### Major Features Added
+
+#### 🎨 Beautiful Terminal Animations
+- **New Package**: Added pterm v0.12.82 for modern CLI animations and effects
+- **Splash Screen**: Animated startup with big "UNICORN" title, styled info box, and loading spinner
+- **Achievement Unlocks**: Flashy animations with stars (✨⭐🏆) and colored boxes when unlocking achievements
+- **Round Milestones**: Animated header transitions every 5 turns showing progress
+- **Game Over Screens**: Epic victory/defeat animations with big text and styled result boxes
+
+#### 💼 New Animation Library Functions
+- `ShowGameStartAnimation()` - Animated splash screen on game launch
+- `ShowAchievementUnlock()` - Flashy achievement notification with effects
+- `ShowRoundTransition()` - Milestone round transitions
+- `ShowGameOverAnimation()` - Victory or defeat end-game animation
+- `ShowLoadingSpinner()` - Customizable loading animations
+- `ShowSuccessMessage()`, `ShowErrorMessage()`, `ShowWarningMessage()`, `ShowInfoMessage()` - Styled notification messages
+- `ShowInvestmentAnimation()` - Investment processing animation
+- `ShowExitAnimation()` - Successful exit celebration with fireworks effect
+- `TypewriterEffect()` - Character-by-character text animation
+- `ShowProgressBar()` - Animated progress bars
+
+### Technical Changes
+
+#### New Files
+- `animations/animations.go` - Complete animation library with 15+ animation functions
+- `ANIMATIONS.md` - Comprehensive documentation for animation system
+
+#### Modified Files
+- `main.go`:
+  - Added animations package import
+  - Integrated splash screen animation in `main()` function on startup
+  - Added achievement unlock animations in `checkAndUnlockAchievements()`
+  - Added round transition animations in `playTurn()` (every 5 turns)
+  - Added game over animations in `displayFinalScore()`
+  - Enhanced quit message with styled info notification
+- `go.mod`:
+  - Added pterm v0.12.82 as direct dependency
+  - Added indirect dependencies: atomicgo.dev/cursor, atomicgo.dev/keyboard, atomicgo.dev/schedule, github.com/gookit/color, github.com/lithammer/fuzzysearch, github.com/mattn/go-runewidth, github.com/rivo/uniseg, github.com/xo/terminfo, golang.org/x/term, golang.org/x/text
+  - Upgraded Go toolchain to 1.24.1
+
+### User Experience
+
+#### 🚀 Enhanced Visual Feedback
+- **Immersive Startup**: Players are greeted with a beautiful animated splash screen showing the game loading
+- **Celebration Moments**: Achievement unlocks now have satisfying visual effects with stars and animations
+- **Progress Markers**: Every 5 turns shows a special milestone header to mark game progress
+- **Epic Conclusions**: Win or lose, the game ends with a dramatic full-screen animation
+
+#### 🎮 Improved Game Feel
+- **Professional Polish**: The CLI now feels like a modern application with smooth animations
+- **Visual Hierarchy**: Important moments (achievements, game over) are highlighted with animations
+- **Pacing**: Animations are timed perfectly (0.5-2 seconds) to enhance without slowing gameplay
+- **Feedback**: Loading spinners and status messages provide clear feedback during operations
+
+#### 📊 Example Impact
+Before: Plain text "Achievement Unlocked: High Roller"
+After: Flashing stars → Animated box → "🏆 ACHIEVEMENT UNLOCKED 🏆" with colored borders and timed display
+
+---
+
 ## Version 3.18.8 - Negative Equity Pool Bug Fix (2025-11-04)
 
 ### Bug Fixes
