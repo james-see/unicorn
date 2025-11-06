@@ -748,37 +748,67 @@ func FindPlayerRank(leaderboard []game.PlayerScore) int {
 	return len(leaderboard)
 }
 
-func SelectDifficulty() game.Difficulty {
+func SelectDifficulty(username string) game.Difficulty {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	green := color.New(color.FgGreen)
 	yellow := color.New(color.FgYellow)
 	red := color.New(color.FgRed)
 	magenta := color.New(color.FgMagenta)
+	gray := color.New(color.FgHiBlack)
+
+	// Get player level
+	profile, err := database.GetPlayerProfile(username)
+	playerLevel := 1
+	if err == nil {
+		playerLevel = profile.Level
+	}
 
 	cyan.Println("\n" + strings.Repeat("=", 60))
 	cyan.Println("                 SELECT DIFFICULTY")
 	cyan.Println(strings.Repeat("=", 60))
+	
+	if playerLevel > 1 {
+		fmt.Printf("\n   Your Level: %d\n", playerLevel)
+	}
 
+	// Easy - always available
 	green.Printf("\n1. Easy")
 	fmt.Printf(" - %s\n", game.EasyDifficulty.Description)
 	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
 		FormatMoney(game.EasyDifficulty.StartingCash), game.EasyDifficulty.MaxTurns)
 
+	// Medium - always available
 	yellow.Printf("\n2. Medium")
 	fmt.Printf(" - %s\n", game.MediumDifficulty.Description)
 	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
 		FormatMoney(game.MediumDifficulty.StartingCash), game.MediumDifficulty.MaxTurns)
 
-	red.Printf("\n3. Hard")
-	fmt.Printf(" - %s\n", game.HardDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
-		FormatMoney(game.HardDifficulty.StartingCash), game.HardDifficulty.MaxTurns)
+	// Hard - requires level 5
+	if playerLevel >= 5 {
+		red.Printf("\n3. Hard")
+		fmt.Printf(" - %s\n", game.HardDifficulty.Description)
+		fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
+			FormatMoney(game.HardDifficulty.StartingCash), game.HardDifficulty.MaxTurns)
+	} else {
+		gray.Printf("\n3. Hard 🔒")
+		gray.Printf(" - Unlocks at Level 5\n")
+		fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
+			FormatMoney(game.HardDifficulty.StartingCash), game.HardDifficulty.MaxTurns)
+	}
 
-	magenta.Printf("\n4. Expert")
-	fmt.Printf(" - %s\n", game.ExpertDifficulty.Description)
-	fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
-		FormatMoney(game.ExpertDifficulty.StartingCash), game.ExpertDifficulty.MaxTurns)
+	// Expert - requires level 10
+	if playerLevel >= 10 {
+		magenta.Printf("\n4. Expert")
+		fmt.Printf(" - %s\n", game.ExpertDifficulty.Description)
+		fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
+			FormatMoney(game.ExpertDifficulty.StartingCash), game.ExpertDifficulty.MaxTurns)
+	} else {
+		gray.Printf("\n4. Expert 🔒")
+		gray.Printf(" - Unlocks at Level 10\n")
+		fmt.Printf("   Starting Cash: $%s | Max Turns: %d\n",
+			FormatMoney(game.ExpertDifficulty.StartingCash), game.ExpertDifficulty.MaxTurns)
+	}
 
 	fmt.Print("\nEnter your choice (1-4): ")
 	reader := bufio.NewReader(os.Stdin)
@@ -794,9 +824,21 @@ func SelectDifficulty() game.Difficulty {
 	case "1":
 		return game.EasyDifficulty
 	case "3":
-		return game.HardDifficulty
+		if playerLevel >= 5 {
+			return game.HardDifficulty
+		} else {
+			color.Yellow("\n🔒 Hard difficulty unlocks at Level 5. Playing Medium instead.")
+			time.Sleep(1500 * time.Millisecond)
+			return game.MediumDifficulty
+		}
 	case "4":
-		return game.ExpertDifficulty
+		if playerLevel >= 10 {
+			return game.ExpertDifficulty
+		} else {
+			color.Yellow("\n🔒 Expert difficulty unlocks at Level 10. Playing Medium instead.")
+			time.Sleep(1500 * time.Millisecond)
+			return game.MediumDifficulty
+		}
 	default:
 		return game.MediumDifficulty
 	}
@@ -983,8 +1025,8 @@ func investmentPhase(gs *game.GameState) {
 }
 
 func PlayVCMode(username string) {
-	// Select difficulty
-	difficulty := SelectDifficulty()
+	// Select difficulty (passing username for level checking)
+	difficulty := SelectDifficulty(username)
 	clear.ClearIt()
 
 	// Ask for automated mode
