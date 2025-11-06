@@ -73,11 +73,12 @@ func DisplayWelcome(username string, difficulty game.Difficulty, playerUpgrades 
 	fmt.Printf("Management Fee: 2%% annually ($%s/year)\n", FormatMoney(int64(float64(difficulty.StartingCash)*0.02)))
 	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
 
-	// Display active upgrades
-	if len(playerUpgrades) > 0 {
+	// Display active upgrades (filtered for VC mode)
+	vcUpgrades := upgrades.FilterUpgradeIDsForGameMode(playerUpgrades, "vc")
+	if len(vcUpgrades) > 0 {
 		fmt.Println()
-		green.Println("✨ ACTIVE UPGRADES:")
-		for _, upgradeID := range playerUpgrades {
+		green.Println("✨ ACTIVE UPGRADES FOR THIS GAME:")
+		for _, upgradeID := range vcUpgrades {
 			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
 				fmt.Printf("   %s %s - %s\n", upgrade.Icon, upgrade.Name, upgrade.Description)
 			}

@@ -374,3 +374,56 @@ func IsOwned(upgradeID string, ownedUpgrades []string) bool {
 	return false
 }
 
+// GetUpgradesForGameMode returns upgrades relevant to a specific game mode
+func GetUpgradesForGameMode(gameMode string) []Upgrade {
+	var upgrades []Upgrade
+	
+	for _, upgrade := range AllUpgrades {
+		if gameMode == "founder" {
+			// Founder mode: include Founder Perks and shared Game Modes
+			if upgrade.Category == CategoryFounderPerks || upgrade.Category == CategoryGameModes {
+				upgrades = append(upgrades, upgrade)
+			}
+		} else if gameMode == "vc" {
+			// VC mode: exclude Founder Perks
+			if upgrade.Category != CategoryFounderPerks {
+				upgrades = append(upgrades, upgrade)
+			}
+		} else {
+			// Unknown mode: return all
+			upgrades = append(upgrades, upgrade)
+		}
+	}
+	
+	return upgrades
+}
+
+// FilterUpgradeIDsForGameMode filters a list of upgrade IDs to only those relevant for the game mode
+func FilterUpgradeIDsForGameMode(upgradeIDs []string, gameMode string) []string {
+	var filtered []string
+	
+	for _, id := range upgradeIDs {
+		upgrade, exists := AllUpgrades[id]
+		if !exists {
+			continue
+		}
+		
+		if gameMode == "founder" {
+			// Founder mode: only Founder Perks and Game Modes
+			if upgrade.Category == CategoryFounderPerks || upgrade.Category == CategoryGameModes {
+				filtered = append(filtered, id)
+			}
+		} else if gameMode == "vc" {
+			// VC mode: exclude Founder Perks
+			if upgrade.Category != CategoryFounderPerks {
+				filtered = append(filtered, id)
+			}
+		} else {
+			// Unknown mode: include all
+			filtered = append(filtered, id)
+		}
+	}
+	
+	return filtered
+}
+

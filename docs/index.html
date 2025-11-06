@@ -341,6 +341,13 @@
             background: rgba(0, 0, 0, 0.2);
             border-radius: 10px;
             overflow: hidden;
+            overflow-x: auto;
+            display: block;
+        }
+
+        .leaderboard-table table {
+            width: 100%;
+            min-width: 600px;
         }
 
         .leaderboard-table th {
@@ -349,6 +356,7 @@
             text-align: left;
             font-weight: 700;
             border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+            white-space: nowrap;
         }
 
         .leaderboard-table td {
@@ -427,10 +435,55 @@
         @media (max-width: 768px) {
             h1 { font-size: 2.5rem; }
             .tagline { font-size: 1.2rem; }
-            .card { padding: 2rem; }
+            .card { padding: 1.5rem; }
             .logo { font-size: 3rem; }
             .stats { gap: 1rem; }
             .download-btn { padding: 1rem 2rem; font-size: 1.1rem; }
+            
+            /* Mobile-friendly leaderboard */
+            .leaderboard-table {
+                font-size: 0.85rem;
+            }
+            
+            .leaderboard-table th,
+            .leaderboard-table td {
+                padding: 0.5rem;
+            }
+            
+            /* Hide less important columns on mobile */
+            .leaderboard-table th:nth-child(5),
+            .leaderboard-table td:nth-child(5),
+            .leaderboard-table th:nth-child(6),
+            .leaderboard-table td:nth-child(6),
+            .leaderboard-table th:nth-child(7),
+            .leaderboard-table td:nth-child(7) {
+                display: none;
+            }
+            
+            .filter-tabs {
+                font-size: 0.85rem;
+            }
+            
+            .filter-tab {
+                padding: 0.4rem 0.8rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            h1 { font-size: 2rem; }
+            .tagline { font-size: 1rem; }
+            .card { padding: 1rem; }
+            .card h2 { font-size: 1.5rem; }
+            
+            /* Even more compact on very small screens */
+            .leaderboard-table {
+                font-size: 0.75rem;
+            }
+            
+            .leaderboard-table th,
+            .leaderboard-table td {
+                padding: 0.4rem;
+            }
         }
     </style>
 </head>
@@ -456,7 +509,7 @@
             <div class="logo">🦄</div>
             <h1>UNICORN</h1>
             <p class="tagline">Build or Invest in the Next Unicorn</p>
-            <p style="font-size: 1rem; opacity: 0.9; margin-top: -1rem;">Two Game Modes: Play as a VC Investor or as a Startup Founder</p>
+            <p style="font-size: 1.1rem; opacity: 0.9; margin-top: 0.5rem; margin-bottom: 1.5rem;">Two Game Modes: Play as a VC Investor or as a Startup Founder</p>
             
             <div class="stats">
                 <a href="https://github.com/jamesacampbell/unicorn" target="_blank" class="stat-badge">
@@ -466,10 +519,13 @@
                     🎮 <strong>2 Game Modes</strong>
                 </div>
                 <div class="stat-badge">
-                    💰 <strong>35+ Achievements</strong>
+                    💎 <strong>50 Levels</strong>
                 </div>
                 <div class="stat-badge">
-                    🏢 <strong>20 Startups</strong>
+                    🏆 <strong>45+ Achievements</strong>
+                </div>
+                <div class="stat-badge">
+                    🏢 <strong>30 Startups</strong>
                 </div>
                 <div class="stat-badge">
                     🎯 <strong>60+ Events</strong>
@@ -576,31 +632,61 @@
         </div>
 
         <div class="card">
+            <h2>💎 Player Progression System (v3.20.0 - NEW!)</h2>
+            <div class="features">
+                <div class="feature">
+                    <h3>🌟 50 Levels</h3>
+                    <p>Progress from "Novice Investor" to "Titan of Industry" with exponential XP requirements</p>
+                </div>
+                <div class="feature">
+                    <h3>📊 Experience Points</h3>
+                    <p>Earn XP after every game: +100 base, +50 for ROI, +200 per exit, difficulty bonuses, achievement XP</p>
+                </div>
+                <div class="feature">
+                    <h3>🔓 Level Unlocks</h3>
+                    <p>Unlock Hard (L5), Expert (L10), Nightmare Mode (L15), and special features as you progress</p>
+                </div>
+                <div class="feature">
+                    <h3>🎉 Visual Celebrations</h3>
+                    <p>Level-up screens with XP breakdowns, progress bars, and unlock previews after every game</p>
+                </div>
+                <div class="feature">
+                    <h3>📈 Achievement Chains</h3>
+                    <p>Connected achievements with prerequisites, progressive tracking, and hidden challenges</p>
+                </div>
+                <div class="feature">
+                    <h3>📊 Analytics Dashboard</h3>
+                    <p>Trend analysis, difficulty breakdowns, AI insights, and global performance comparisons</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>✨ VC Mode Features</h2>
             <div class="features">
                 <div class="feature">
                     <h3>💰 Portfolio Management</h3>
-                    <p>Invest in 20 startups across 12+ sectors: FinTech, BioTech, CleanTech, Gaming, and more</p>
+                    <p>Invest in 30 startups across 12+ sectors: FinTech, BioTech, CleanTech, Gaming, and more</p>
                 </div>
                 <div class="feature">
                     <h3>🏆 Difficulty Levels</h3>
-                    <p>Choose from Easy, Medium, Hard, or Expert mode. Each with unique challenges and rewards</p>
+                    <p>Choose from Easy, Medium, Hard, or Expert mode. Unlock higher difficulties by leveling up</p>
                 </div>
                 <div class="feature">
                     <h3>📊 Global Leaderboards</h3>
                     <p>Compete worldwide! Track top 10 scores by net worth or ROI with difficulty filters</p>
                 </div>
                 <div class="feature">
-                    <h3>🎯 35+ Achievements</h3>
-                    <p>Unlock achievements across 6 categories from Common to Legendary rarity</p>
+                    <h3>🎯 45+ Achievements</h3>
+                    <p>Unlock achievements across 6 categories from Common to Legendary rarity. Progress tracking!</p>
                 </div>
                 <div class="feature">
-                    <h3>📈 Career Progression</h3>
-                    <p>Level up from Intern to Legendary Investor with 11 career levels</p>
+                    <h3>🎮 Upgrades & Perks</h3>
+                    <p>Spend achievement points on permanent upgrades: better terms, more intel, special abilities</p>
                 </div>
                 <div class="feature">
                     <h3>🎲 60+ Random Events</h3>
-                    <p>Experience market crashes, IPOs, acquisitions, pivots, and more over 60 turns</p>
+                    <p>Dynamic market cycles, economic events, IPOs, acquisitions, and more over 60 turns</p>
                 </div>
             </div>
         </div>
@@ -790,8 +876,8 @@
                     return;
                 }
 
-                // Build table
-                let html = '<table class="leaderboard-table">';
+                // Build table with responsive wrapper
+                let html = '<div class="leaderboard-table"><table>';
                 html += '<thead><tr>';
                 html += '<th>Rank</th>';
                 html += '<th>Player</th>';
@@ -819,7 +905,7 @@
                     html += '</tr>';
                 });
 
-                html += '</tbody></table>';
+                html += '</tbody></table></div>';
                 content.innerHTML = html;
 
             } catch (error) {
@@ -865,8 +951,8 @@
                     return;
                 }
 
-                // Build table
-                let html = '<table class="leaderboard-table">';
+                // Build table with responsive wrapper
+                let html = '<div class="leaderboard-table"><table>';
                 html += '<thead><tr>';
                 html += '<th>Rank</th>';
                 html += '<th>Founder</th>';
@@ -894,7 +980,7 @@
                     html += '</tr>';
                 });
 
-                html += '</tbody></table>';
+                html += '</tbody></table></div>';
                 content.innerHTML = html;
 
             } catch (error) {

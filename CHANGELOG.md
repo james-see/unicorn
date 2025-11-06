@@ -1,5 +1,94 @@
 # Changelog
 
+## Version 3.20.1 - Bug Fix: XP Integration & Documentation Update (2025-11-06)
+
+### Bug Fixes
+
+#### 🐛 XP System Integration
+- **Issue**: XP system was not being called after games completed - players didn't see XP earned
+- **Fix**: 
+  - Integrated XP calculation and display into both VC Mode and Founder Mode completion flows
+  - Added `DisplayXPGained()` function calls to show detailed XP breakdown
+  - Added level-up celebration screens with `DisplayLevelUp()` function
+  - XP now properly awarded for: game completion (+100), positive ROI (+50), successful exits (+200), difficulty bonuses (0-200), achievements (+10 × points)
+  - Founder mode bonuses: IPO (+500), acquisition (+300), profitability (+100)
+
+#### 🎮 Upgrade Filtering by Game Mode
+- **Issue**: All upgrades shown regardless of game mode (VC upgrades in Founder, Founder upgrades in VC)
+- **Fix**:
+  - Added `GetUpgradesForGameMode()` and `FilterUpgradeIDsForGameMode()` functions
+  - VC Mode now shows only: Investment Terms, Financial Perks, Information, Board Powers, Special Abilities, Game Modes
+  - Founder Mode now shows only: Founder Perks and Game Modes
+  - Upgraded displays now labeled "ACTIVE UPGRADES FOR THIS GAME"
+
+### Documentation Updates
+
+#### 📚 README.md (GitHub)
+- Added comprehensive Player Progression System section (v3.20.0)
+- Updated "What's New" with v3.20.0 as latest release
+- Updated feature list: 45+ achievements, 50 levels, 30 startups
+- Updated main menu documentation to show all 9 menu options
+- Added detailed XP sources and level unlock information
+
+#### 🎮 In-Game Help (ui/help_ui.go)
+- Updated game overview to highlight both VC and Founder modes
+- Added Player Progression System section with XP breakdown
+- Added Achievements & Upgrades section
+- Added Analytics Dashboard section
+- Updated strategy tips to include progression advice
+
+#### 🌐 GitHub Pages (docs/index.html)
+- **Fixed spacing issue**: "Two Game Modes" line now has proper margin (0.5rem top, 1.5rem bottom)
+- **Updated header stats**: 50 Levels, 45+ Achievements, 30 Startups
+- **Added new section**: Player Progression System (v3.20.0) with 6 feature cards
+- **Updated VC Mode features**: Upgraded from 20 to 30 startups, mentioned upgrades system
+- **Mobile-responsive leaderboards**: 
+  - Horizontal scroll support
+  - Responsive font sizing (0.85rem tablets, 0.75rem phones)
+  - Hide less important columns on mobile (Exits, Difficulty, Date)
+  - Optimized for 768px (tablet) and 480px (phone) breakpoints
+  - Table wrapper with min-width for proper display
+
+### Technical Changes
+
+**Modified Files**:
+- `ui/achievements_ui.go` - Added XP integration to VC mode completion
+- `ui/founder_ui.go` - Added XP integration to Founder mode completion
+- `ui/vc_ui.go` - Added upgrade filtering for VC mode welcome screen
+- `upgrades/upgrades.go` - Added game mode filtering functions
+- `README.md` - Comprehensive documentation update
+- `ui/help_ui.go` - Enhanced in-game help with progression details
+- `docs/index.html` - Landing page updates and mobile responsiveness
+
+**New Functions**:
+- `GetUpgradesForGameMode(gameMode string)` - Returns upgrades relevant to specific mode
+- `FilterUpgradeIDsForGameMode(upgradeIDs []string, gameMode string)` - Filters owned upgrades by mode
+
+### User Experience Improvements
+
+**Example Impact**:
+- Players now see exactly how much XP they earned after every game
+- Level-up celebrations make progression feel rewarding
+- Upgrade lists are no longer cluttered with irrelevant items
+- Mobile players can view leaderboards comfortably
+- Complete documentation helps new players understand all features
+
+**XP Display Example**:
+```
+📊 EXPERIENCE EARNED:
+   +100 XP - Game Completion
+   +50 XP - Positive ROI
+   +200 XP - Successful Exit
+   +50 XP - Medium Difficulty
+   +30 XP - New Achievements (1)
+   
+   Total XP Gained: +430 XP
+
+   Level 3 Progress: [■■■■■■□□□□] 650/1000 XP
+```
+
+---
+
 ## Version 3.20.0 - Major Feature Update: Progression, Analytics & Enhanced Achievements (2025-11-06)
 
 ### Major Features Added

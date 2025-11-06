@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	achievements "github.com/jamesacampbell/unicorn/achievements"
+	animations "github.com/jamesacampbell/unicorn/animations"
 	ascii "github.com/jamesacampbell/unicorn/ascii"
 	clear "github.com/jamesacampbell/unicorn/clear"
+	db "github.com/jamesacampbell/unicorn/database"
 	founder "github.com/jamesacampbell/unicorn/founder"
 	leaderboard "github.com/jamesacampbell/unicorn/leaderboard"
-	achievements "github.com/jamesacampbell/unicorn/achievements"
-	db "github.com/jamesacampbell/unicorn/database"
+	progression "github.com/jamesacampbell/unicorn/progression"
 	upgrades "github.com/jamesacampbell/unicorn/upgrades"
 )
 
@@ -182,13 +184,14 @@ func displayFounderWelcome(fs *founder.FounderState) {
 	}
 	fmt.Printf("📈 Product Maturity: %.0f%%\n", fs.ProductMaturity*100)
 	
-	// Display active upgrades
-	if len(fs.PlayerUpgrades) > 0 {
+	// Display active upgrades (filtered for Founder mode)
+	founderUpgrades := upgrades.FilterUpgradeIDsForGameMode(fs.PlayerUpgrades, "founder")
+	if len(founderUpgrades) > 0 {
 		green := color.New(color.FgGreen)
 		fmt.Println("\n" + strings.Repeat("─", 70))
-		green.Println("✨ ACTIVE UPGRADES:")
+		green.Println("✨ ACTIVE UPGRADES FOR THIS GAME:")
 		fmt.Println(strings.Repeat("─", 70))
-		for _, upgradeID := range fs.PlayerUpgrades {
+		for _, upgradeID := range founderUpgrades {
 			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
 				fmt.Printf("  %s %s\n", upgrade.Icon, upgrade.Name)
 			}
@@ -2501,11 +2504,22 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 	// Check for new achievements
 	newAchievements := achievements.CheckAchievements(gameStats, previouslyUnlocked)
 	
+	// Get list of newly unlocked achievement IDs
+	newAchievementIDs := []string{}
+	for _, ach := range newAchievements {
+		newAchievementIDs = append(newAchievementIDs, ach.ID)
+	}
+	
+	// Always show achievement section
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	cyan.Printf("                    ACHIEVEMENT CHECK\n")
+	fmt.Println(strings.Repeat("=", 70))
+	
 	// Save and display new achievements
 	if len(newAchievements) > 0 {
-		cyan := color.New(color.FgCyan, color.Bold)
-		yellow := color.New(color.FgYellow)
-		
 		fmt.Println("\n" + strings.Repeat("?", 60))
 		cyan.Printf("     %s NEW ACHIEVEMENTS UNLOCKED! %s\n", ascii.Star, ascii.Star)
 		fmt.Println(strings.Repeat("?", 60))
@@ -2514,53 +2528,112 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 			// Save to database
 			db.UnlockAchievement(fs.FounderName, ach.ID)
 			
-			// Display
-			rarityColor := color.New(color.Attribute(achievements.GetRarityColor(ach.Rarity)))
-			fmt.Printf("\n%s  ", ach.Icon)
-			rarityColor.Printf("%s", ach.Name)
-			fmt.Printf(" [%s]\n", ach.Rarity)
-			yellow.Printf("   %s\n", ach.Description)
-			fmt.Printf("   +%d points\n", ach.Points)
+			// Display with animation
+			achievementText := fmt.Sprintf("%s %s [%s]\n+%d points", ach.Icon, ach.Name, ach.Rarity, ach.Points)
+			animations.ShowAchievementUnlock(achievementText, ach.Description)
 		}
-		
-		// Calculate new career level and points
-		totalLifetimePoints := 0
-		allUnlocked, _ := db.GetPlayerAchievements(fs.FounderName)
-		for _, id := range allUnlocked {
-			if ach, exists := achievements.AllAchievements[id]; exists {
-				totalLifetimePoints += ach.Points
-			}
-		}
-
-		// Get owned upgrades to calculate available balance
-		ownedUpgrades, _ := db.GetPlayerUpgrades(fs.FounderName)
-		availableBalance := totalLifetimePoints
-		spentOnUpgrades := 0
-		for _, upgradeID := range ownedUpgrades {
-			if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
-				availableBalance -= upgrade.Cost
-				spentOnUpgrades += upgrade.Cost
-			}
-		}
-
-		level, title, nextLevel := achievements.CalculateCareerLevel(totalLifetimePoints)
-		green := color.New(color.FgGreen)
-		
-		fmt.Println("\n" + strings.Repeat("=", 60))
-		fmt.Printf("Career Level: ")
-		yellow.Printf("%d - %s", level, title)
-		fmt.Printf("\nAvailable Balance: ")
-		green.Printf("%d pts", availableBalance)
-		fmt.Printf("\nTotal Lifetime Points: %d pts", totalLifetimePoints)
-		if spentOnUpgrades > 0 {
-			fmt.Printf(" (Spent: %d pts)", spentOnUpgrades)
-		}
-		fmt.Println()
-		if nextLevel < 2001 {
-			fmt.Printf("Next Level: %d points\n", nextLevel)
-		}
-		fmt.Println(strings.Repeat("=", 60))
+	} else {
+		yellow.Println("\nNo new achievements unlocked this game.")
+		yellow.Println("Keep playing to unlock more achievements!")
 	}
+	
+	// Calculate and award XP
+	xpEarned := progression.CalculateXPReward(&gameStats, newAchievementIDs)
+	
+	// Get profile before adding XP to compare levels
+	profileBefore, _ := db.GetPlayerProfile(fs.FounderName)
+	oldLevel := profileBefore.Level
+	
+	// Add XP to player profile
+	leveledUp, newLevel, err := db.AddExperience(fs.FounderName, xpEarned)
+	if err != nil {
+		color.Yellow("\nWarning: Could not add XP: %v", err)
+	} else {
+		// Display XP breakdown
+		xpBreakdown := make(map[string]int)
+		xpBreakdown["Game Completion"] = progression.XPGameComplete
+		
+		if gameStats.ROI > 0 {
+			xpBreakdown["Positive ROI"] = progression.XPPositiveROI
+		}
+		
+		if gameStats.SuccessfulExits > 0 {
+			xpBreakdown["Successful Exit"] = progression.XPSuccessfulExit * gameStats.SuccessfulExits
+		}
+		
+		// Founder mode specific bonuses
+		if gameStats.HasExited && gameStats.ExitType == "ipo" {
+			xpBreakdown["IPO Exit"] = 500
+		} else if gameStats.HasExited && gameStats.ExitType == "acquisition" {
+			xpBreakdown["Acquisition Exit"] = 300
+		}
+		
+		if gameStats.MonthsToProfitability > 0 && gameStats.MonthsToProfitability <= 24 {
+			xpBreakdown["Reached Profitability"] = 100
+		}
+		
+		if len(newAchievementIDs) > 0 {
+			achXP := 0
+			for _, achvID := range newAchievementIDs {
+				if achv, exists := achievements.AllAchievements[achvID]; exists {
+					achXP += achv.Points * progression.XPAchievementBase
+				}
+			}
+			if achXP > 0 {
+				xpBreakdown[fmt.Sprintf("New Achievements (%d)", len(newAchievementIDs))] = achXP
+			}
+		}
+		
+		DisplayXPGained(xpBreakdown, xpEarned)
+		
+		// Show level up screen if leveled up
+		if leveledUp {
+			levelInfo := progression.GetLevelInfo(newLevel)
+			DisplayLevelUp(fs.FounderName, oldLevel, newLevel, levelInfo.Unlocks)
+		} else {
+			// Show progress towards next level
+			profileAfter, _ := db.GetPlayerProfile(fs.FounderName)
+			fmt.Println()
+			yellow.Printf("   Level %d Progress: ", profileAfter.Level)
+			progressBar := progression.FormatXPBar(profileAfter.ExperiencePoints, profileAfter.NextLevelXP, 20)
+			fmt.Printf("%s %d/%d XP\n", progressBar, profileAfter.ExperiencePoints, profileAfter.NextLevelXP)
+		}
+	}
+	
+	// Calculate and display career level and points (for old achievement system compatibility)
+	totalLifetimePoints := 0
+	allUnlocked, _ := db.GetPlayerAchievements(fs.FounderName)
+	for _, id := range allUnlocked {
+		if ach, exists := achievements.AllAchievements[id]; exists {
+			totalLifetimePoints += ach.Points
+		}
+	}
+
+	// Get owned upgrades to calculate available balance
+	ownedUpgrades, _ := db.GetPlayerUpgrades(fs.FounderName)
+	availableBalance := totalLifetimePoints
+	spentOnUpgrades := 0
+	for _, upgradeID := range ownedUpgrades {
+		if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+			availableBalance -= upgrade.Cost
+			spentOnUpgrades += upgrade.Cost
+		}
+	}
+
+	level, title, _ := achievements.CalculateCareerLevel(totalLifetimePoints)
+	green := color.New(color.FgGreen)
+	
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Printf("Career Level: ")
+	yellow.Printf("%d - %s", level, title)
+	fmt.Printf("\nAvailable Balance: ")
+	green.Printf("%d pts", availableBalance)
+	fmt.Printf("\nTotal Lifetime Points: %d pts", totalLifetimePoints)
+	if spentOnUpgrades > 0 {
+		fmt.Printf(" (Spent: %d pts)", spentOnUpgrades)
+	}
+	fmt.Println()
+	fmt.Println(strings.Repeat("=", 60))
 }
 
 func formatFounderCurrency(amount int64) string {

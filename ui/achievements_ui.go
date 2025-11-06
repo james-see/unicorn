@@ -13,6 +13,7 @@ import (
 	"github.com/jamesacampbell/unicorn/clear"
 	"github.com/jamesacampbell/unicorn/database"
 	"github.com/jamesacampbell/unicorn/game"
+	"github.com/jamesacampbell/unicorn/progression"
 	"github.com/jamesacampbell/unicorn/upgrades"
 )
 
@@ -63,6 +64,7 @@ func CheckAndUnlockAchievements(gs *game.GameState) {
 
 	// Build game stats for achievement checking
 	gameStats := achievements.GameStats{
+		GameMode:            "vc",
 		FinalNetWorth:       netWorth,
 		ROI:                 roi,
 		SuccessfulExits:     successfulExits,
@@ -83,6 +85,12 @@ func CheckAndUnlockAchievements(gs *game.GameState) {
 
 	// Check for new achievements
 	newAchievements := achievements.CheckAchievements(gameStats, previouslyUnlocked)
+	
+	// Get list of newly unlocked achievement IDs
+	newAchievementIDs := []string{}
+	for _, ach := range newAchievements {
+		newAchievementIDs = append(newAchievementIDs, ach.ID)
+	}
 
 	// Always show achievement section
 	cyan := color.New(color.FgCyan, color.Bold)
@@ -114,6 +122,67 @@ func CheckAndUnlockAchievements(gs *game.GameState) {
 		fmt.Println("  • Performance: Achieve positive ROI (break even, 2x, 5x, 10x returns)")
 		fmt.Println("  • Strategy: Diversify investments, master sectors, get successful exits")
 		fmt.Println("  • Career: Play more games, build win streaks")
+	}
+	
+	// Calculate and award XP
+	xpEarned := progression.CalculateXPReward(&gameStats, newAchievementIDs)
+	
+	// Get profile before adding XP to compare levels
+	profileBefore, _ := database.GetPlayerProfile(gs.PlayerName)
+	oldLevel := profileBefore.Level
+	
+	// Add XP to player profile
+	leveledUp, newLevel, err := database.AddExperience(gs.PlayerName, xpEarned)
+	if err != nil {
+		color.Yellow("\nWarning: Could not add XP: %v", err)
+	} else {
+		// Display XP breakdown
+		xpBreakdown := make(map[string]int)
+		xpBreakdown["Game Completion"] = progression.XPGameComplete
+		
+		if gameStats.ROI > 0 {
+			xpBreakdown["Positive ROI"] = progression.XPPositiveROI
+		}
+		
+		if gameStats.SuccessfulExits > 0 {
+			xpBreakdown[fmt.Sprintf("Successful Exits (%d)", gameStats.SuccessfulExits)] = progression.XPSuccessfulExit * gameStats.SuccessfulExits
+		}
+		
+		switch strings.ToLower(gameStats.Difficulty) {
+		case "medium":
+			xpBreakdown["Medium Difficulty"] = progression.XPDifficultyMedium
+		case "hard":
+			xpBreakdown["Hard Difficulty"] = progression.XPDifficultyHard
+		case "expert":
+			xpBreakdown["Expert Difficulty"] = progression.XPDifficultyExpert
+		}
+		
+		if len(newAchievementIDs) > 0 {
+			achXP := 0
+			for _, achvID := range newAchievementIDs {
+				if achv, exists := achievements.AllAchievements[achvID]; exists {
+					achXP += achv.Points * progression.XPAchievementBase
+				}
+			}
+			if achXP > 0 {
+				xpBreakdown[fmt.Sprintf("New Achievements (%d)", len(newAchievementIDs))] = achXP
+			}
+		}
+		
+		DisplayXPGained(xpBreakdown, xpEarned)
+		
+		// Show level up screen if leveled up
+		if leveledUp {
+			levelInfo := progression.GetLevelInfo(newLevel)
+			DisplayLevelUp(gs.PlayerName, oldLevel, newLevel, levelInfo.Unlocks)
+		} else {
+			// Show progress towards next level
+			profileAfter, _ := database.GetPlayerProfile(gs.PlayerName)
+			fmt.Println()
+			yellow.Printf("   Level %d Progress: ", profileAfter.Level)
+			progressBar := progression.FormatXPBar(profileAfter.ExperiencePoints, profileAfter.NextLevelXP, 20)
+			fmt.Printf("%s %d/%d XP\n", progressBar, profileAfter.ExperiencePoints, profileAfter.NextLevelXP)
+		}
 	}
 
 	// Calculate and display career level and points (always show)

@@ -196,6 +196,23 @@ Choose from companies across 12+ sectors:
 - **Special Achievements:** Hidden achievements to discover
 - **Cross-Mode Progression:** Points from both VC and Founder mode contribute to career level
 
+### 💎 Player Progression System (v3.20.0)
+- **50 Levels:** Progress from "Novice Investor" to "Titan of Industry"
+- **Experience Points (XP):** Earned after every game in both modes
+  - Base: 100 XP per game completion
+  - Performance: +50 XP for positive ROI, +200 XP per successful exit
+  - Difficulty: 0/50/100/200 XP for Easy/Medium/Hard/Expert
+  - Achievements: +10 XP × achievement points
+  - Founder Bonuses: +500 XP for IPO, +300 for acquisition, +100 for profitability
+- **Level Unlocks:** Progressive difficulty and feature unlocks
+  - Level 5: Hard Difficulty
+  - Level 10: Expert Difficulty + Analytics Dashboard
+  - Level 15: Nightmare Mode + Achievement Chains
+  - Level 20+: Game Modifiers, Secondary Markets, Prestige System
+- **Visual Progress:** XP bars, level-up celebrations, and progress tracking
+- **Persistent Profiles:** Player profiles with level history and total XP earned
+- **Rank Titles:** Earn prestige titles as you level up
+
 ## How to Play
 
 ```bash
@@ -210,8 +227,11 @@ go build -o unicorn
 # 2. Leaderboards - View top scores
 # 3. Player Statistics - Check your career stats
 # 4. Achievements - View achievements & career level
-# 5. Help & Info - Complete game guide
-# 6. Quit
+# 5. Progression & Levels - View your XP, level, and unlocks
+# 6. Analytics Dashboard - Performance trends and insights
+# 7. Upgrades - Purchase permanent upgrades with achievement points
+# 8. Help & Info - Complete game guide
+# 9. Quit
 
 # After starting a new game, you'll be prompted:
 # 1. VC Investor Mode (Classic) - Build a portfolio of startups
@@ -239,7 +259,20 @@ go build -o unicorn
 
 ## What's New
 
-### v3.8.0 - Exit Options & Advisory Board! (LATEST)
+### v3.20.0 - Player Progression System & Enhanced Features! (LATEST)
+💎 **Level-Based Progression** - 50 levels with exponential XP requirements and rank titles
+📊 **Experience Points** - Earn XP from games, achievements, difficulty bonuses, and exits
+🔓 **Level Unlocks** - Progressive unlocking of difficulties (Hard at L5, Expert at L10, Nightmare at L15)
+🎯 **XP Rewards** - Detailed breakdown after every game showing exactly what you earned
+🎉 **Level-Up Celebrations** - Visual celebrations when you reach new levels with unlock previews
+📈 **Achievement Chains** - Connected achievements with prerequisites and progress tracking
+🔍 **Progressive Achievements** - Track progress toward milestones (e.g., "Win 10 games: 4/10")
+🎭 **Hidden Achievements** - Mystery achievements revealed only upon unlock
+📊 **Analytics Dashboard** - Deep insights with trend analysis, difficulty breakdowns, and AI recommendations
+🌍 **Market Cycles** - Dynamic economic conditions affecting startup valuations
+🎮 **Mode-Specific Upgrades** - Upgrades now correctly filtered by game mode (VC vs Founder)
+
+### v3.8.0 - Exit Options & Advisory Board!
 🏛️ **Exit Options** - IPO, Strategic Acquisition, or Secondary Sale with realistic requirements
 👔 **Advisory Board** - Hire real Silicon Valley legends (Gary V, Marc Andreessen, Reid Hoffman, etc.)
 💰 **Advisor Costs** - Setup fees ($10-50k) + equity (0.25-1%) + optional monthly retainers
