@@ -358,13 +358,137 @@ func BrowseAllAchievements() {
 }
 
 func DisplayAchievementLeaderboard() {
+	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
-
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	
 	cyan.Println("\n" + strings.Repeat("=", 70))
-	cyan.Println("            ACHIEVEMENT LEADERBOARD (Coming Soon)")
+	cyan.Println("            🏆 ACHIEVEMENT LEADERBOARD 🏆")
 	cyan.Println(strings.Repeat("=", 70))
-
-	color.Yellow("\nThis feature will show players with the most achievements!")
+	
+	// Get leaderboard data
+	leaderboard, err := database.GetAchievementLeaderboard(20) // Top 20
+	if err != nil {
+		color.Red("\nError loading leaderboard: %v", err)
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return
+	}
+	
+	if len(leaderboard) == 0 {
+		yellow.Println("\nNo players with achievements yet!")
+		yellow.Println("Be the first to unlock achievements!")
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return
+	}
+	
+	// Calculate actual points and rarity counts for each player
+	for i := range leaderboard {
+		playerAchievements, err := database.GetPlayerAchievements(leaderboard[i].PlayerName)
+		if err != nil {
+			continue
+		}
+		
+		totalPoints := 0
+		rareCount := 0
+		epicCount := 0
+		legendaryCount := 0
+		
+		for _, achID := range playerAchievements {
+			if ach, exists := achievements.AllAchievements[achID]; exists {
+				totalPoints += ach.Points
+				switch ach.Rarity {
+				case achievements.RarityRare:
+					rareCount++
+				case achievements.RarityEpic:
+					epicCount++
+				case achievements.RarityLegendary:
+					legendaryCount++
+				}
+			}
+		}
+		
+		leaderboard[i].TotalPoints = totalPoints
+		leaderboard[i].RareCount = rareCount
+		leaderboard[i].EpicCount = epicCount
+		leaderboard[i].LegendaryCount = legendaryCount
+		
+		// Get career title
+		level, title, _ := achievements.CalculateCareerLevel(totalPoints)
+		leaderboard[i].CareerLevel = level
+		leaderboard[i].CareerTitle = title
+	}
+	
+	// Re-sort by total points (more accurate than count)
+	for i := 0; i < len(leaderboard); i++ {
+		for j := i + 1; j < len(leaderboard); j++ {
+			if leaderboard[i].TotalPoints < leaderboard[j].TotalPoints ||
+				(leaderboard[i].TotalPoints == leaderboard[j].TotalPoints &&
+					leaderboard[i].AchievementCount < leaderboard[j].AchievementCount) {
+				leaderboard[i], leaderboard[j] = leaderboard[j], leaderboard[i]
+			}
+		}
+	}
+	
+	// Display leaderboard
+	fmt.Printf("\n%-5s %-25s %-8s %-12s %-20s %-15s\n", 
+		"RANK", "PLAYER", "ACHIEV.", "POINTS", "CAREER LEVEL", "RARITY BREAKDOWN")
+	fmt.Println(strings.Repeat("-", 110))
+	
+	for i, entry := range leaderboard {
+		rankColor := color.New(color.FgWhite)
+		if i == 0 {
+			rankColor = color.New(color.FgYellow, color.Bold)
+		} else if i == 1 {
+			rankColor = color.New(color.FgCyan)
+		} else if i == 2 {
+			rankColor = color.New(color.FgGreen)
+		}
+		
+		rankIcon := ""
+		if i == 0 {
+			rankIcon = "🥇"
+		} else if i == 1 {
+			rankIcon = "🥈"
+		} else if i == 2 {
+			rankIcon = "🥉"
+		}
+		
+		rankColor.Printf("%-5s", fmt.Sprintf("%d%s", i+1, rankIcon))
+		fmt.Printf("%-25s ", entry.PlayerName)
+		green.Printf("%-8d ", entry.AchievementCount)
+		yellow.Printf("%-12d ", entry.TotalPoints)
+		fmt.Printf("%-20s ", fmt.Sprintf("L%d - %s", entry.CareerLevel, entry.CareerTitle))
+		
+		// Rarity breakdown
+		rarityStr := ""
+		if entry.RareCount > 0 {
+			rarityStr += fmt.Sprintf("R:%d ", entry.RareCount)
+		}
+		if entry.EpicCount > 0 {
+			epicColor := color.New(color.FgMagenta)
+			rarityStr += fmt.Sprintf("E:%d ", entry.EpicCount)
+			epicColor.Printf("%-15s", rarityStr)
+		} else {
+			fmt.Printf("%-15s", rarityStr)
+		}
+		if entry.LegendaryCount > 0 {
+			legendaryColor := color.New(color.FgYellow, color.Bold)
+			legendaryColor.Printf("L:%d", entry.LegendaryCount)
+		}
+		fmt.Println()
+	}
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	fmt.Println("\nLegend:")
+	fmt.Println("  R = Rare achievements")
+	fmt.Println("  E = Epic achievements")
+	fmt.Println("  L = Legendary achievements")
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 // DisplayAchievementChains shows all achievement chains with progress
@@ -394,7 +518,12 @@ func DisplayAchievementChains(playerName string) {
 		chainAchievements := achievements.GetAchievementsByChain(chainID)
 		
 		fmt.Println()
-		yellow.Printf("▶ %s Chain: ", strings.Title(strings.ReplaceAll(chainID, "_", " ")))
+		chainName := strings.ReplaceAll(chainID, "_", " ")
+		// Capitalize first letter
+		if len(chainName) > 0 {
+			chainName = strings.ToUpper(string(chainName[0])) + chainName[1:]
+		}
+		yellow.Printf("▶ %s Chain: ", chainName)
 		green.Printf("%d/%d ", unlocked, total)
 		
 		// Progress bar
@@ -626,19 +755,25 @@ func EnhancedAchievementMenu() {
 		yellow.Println("3. View Progressive Achievements")
 		yellow.Println("4. View Hidden Achievements")
 		yellow.Println("5. Browse All")
-		yellow.Println("6. Back to Main Menu")
+		yellow.Println("6. Achievement Leaderboard")
+		yellow.Println("7. Back to Main Menu")
 		
 		fmt.Print("\nEnter your choice: ")
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
 		
-		if choice == "6" {
+		if choice == "7" {
 			return
 		}
 		
 		if choice == "5" {
 			BrowseAllAchievements()
+			continue
+		}
+		
+		if choice == "6" {
+			DisplayAchievementLeaderboard()
 			continue
 		}
 		

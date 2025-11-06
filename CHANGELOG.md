@@ -1,5 +1,67 @@
 # Changelog
 
+## Version 3.22.0 - Achievement Leaderboard Feature (2025-11-06)
+
+### Major Features Added
+
+#### 🏆 Achievement Leaderboard
+- **Global Competition**: View top players ranked by achievement points and count
+- **Comprehensive Rankings**: Shows top 20 players with detailed statistics
+- **Leaderboard Display**:
+  - Rank with medals (🥇🥈🥉) for top 3 players
+  - Player name and achievement count
+  - Total achievement points
+  - Career level and title
+  - Rarity breakdown (Rare/Epic/Legendary counts)
+- **Color-Coded Rankings**: Gold for 1st, Cyan for 2nd, Green for 3rd
+- **Accessible from Menu**: Main Menu → Achievements → Achievement Leaderboard (option 6)
+
+### Technical Changes
+
+**New Files**:
+- None (features added to existing files)
+
+**Modified Files**:
+- `database/database.go` - Added `GetAchievementLeaderboard()` function and `AchievementLeaderboardEntry` struct
+- `ui/achievements_ui.go` - Implemented `DisplayAchievementLeaderboard()` function and added menu option
+
+**New Functions**:
+- `GetAchievementLeaderboard(limit int)` - Returns top players ranked by achievement points and count
+- `DisplayAchievementLeaderboard()` - Displays formatted leaderboard with rankings, stats, and rarity breakdowns
+
+**New Data Structures**:
+- `AchievementLeaderboardEntry` - Tracks player name, achievement count, total points, career level, and rarity counts
+
+### User Experience Improvements
+
+**Example Impact**:
+- Players can now see how they rank against others
+- Competitive element encourages achievement hunting
+- Clear visibility into top performers and their achievement collections
+- Rarity breakdown shows quality of achievements, not just quantity
+
+**Leaderboard Display Example**:
+```
+🏆 ACHIEVEMENT LEADERBOARD 🏆
+======================================================================
+
+RANK  PLAYER                    ACHIEV.  POINTS       CAREER LEVEL        RARITY BREAKDOWN
+--------------------------------------------------------------------------------------------------------------
+
+1🥇  PlayerOne                  25       450          L5 - Partner        R:5 E:2 L:1
+2🥈  PlayerTwo                  22       380          L4 - Principal     R:3 E:1
+3🥉  PlayerThree                20       350          L4 - Principal     R:4
+...
+```
+
+### Game Balance
+- Leaderboard shows top 20 players to keep competition focused
+- Rankings based on total points (more accurate than just count)
+- Career level display provides context for player progression
+- Rarity breakdown highlights quality achievements
+
+---
+
 ## Version 3.21.0 - Investor Syndicates Feature (2025-11-06)
 
 ### Major Features Added

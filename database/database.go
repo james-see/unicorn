@@ -480,6 +480,85 @@ func GetPlayerAchievementPoints(playerName string) (int, error) {
 	return len(achievements) * 10, nil
 }
 
+// AchievementLeaderboardEntry represents a player's achievement stats for leaderboard
+type AchievementLeaderboardEntry struct {
+	PlayerName        string
+	AchievementCount  int
+	TotalPoints       int
+	CareerLevel       int
+	CareerTitle       string
+	RareCount         int
+	EpicCount         int
+	LegendaryCount    int
+}
+
+// GetAchievementLeaderboard returns top players by achievement count and points
+func GetAchievementLeaderboard(limit int) ([]AchievementLeaderboardEntry, error) {
+	// Get all unique players with achievements
+	query := `
+		SELECT DISTINCT player_name
+		FROM player_achievements
+		ORDER BY player_name
+	`
+	
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query players: %v", err)
+	}
+	defer rows.Close()
+	
+	var players []string
+	for rows.Next() {
+		var playerName string
+		if err := rows.Scan(&playerName); err != nil {
+			continue
+		}
+		players = append(players, playerName)
+	}
+	
+		// Build leaderboard entries
+		leaderboard := []AchievementLeaderboardEntry{}
+		for _, playerName := range players {
+			achievements, err := GetPlayerAchievements(playerName)
+			if err != nil {
+				continue
+			}
+			
+			entry := AchievementLeaderboardEntry{
+				PlayerName:       playerName,
+				AchievementCount: len(achievements),
+				TotalPoints:      0, // Will be calculated in UI layer
+			}
+			
+			// Get career level from profile
+			profile, err := GetPlayerProfile(playerName)
+			if err == nil {
+				entry.CareerLevel = profile.Level
+			}
+			
+			leaderboard = append(leaderboard, entry)
+		}
+	
+	// Sort by achievement count (descending), then by points
+	// Simple bubble sort for small datasets
+	for i := 0; i < len(leaderboard); i++ {
+		for j := i + 1; j < len(leaderboard); j++ {
+			if leaderboard[i].AchievementCount < leaderboard[j].AchievementCount ||
+				(leaderboard[i].AchievementCount == leaderboard[j].AchievementCount &&
+					leaderboard[i].TotalPoints < leaderboard[j].TotalPoints) {
+				leaderboard[i], leaderboard[j] = leaderboard[j], leaderboard[i]
+			}
+		}
+	}
+	
+	// Limit results
+	if limit > 0 && limit < len(leaderboard) {
+		leaderboard = leaderboard[:limit]
+	}
+	
+	return leaderboard, nil
+}
+
 // Upgrade functions
 
 // PurchaseUpgrade saves a purchased upgrade for a player
