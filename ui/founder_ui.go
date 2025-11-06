@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"bufio"
@@ -19,7 +19,7 @@ import (
 	upgrades "github.com/jamesacampbell/unicorn/upgrades"
 )
 
-func playFounderMode(username string) {
+func PlayFounderMode(username string) {
 	clear.ClearIt()
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)

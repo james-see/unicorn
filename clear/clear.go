@@ -16,7 +16,7 @@ func ClearIt() {
 		Start("Refreshing screen...")
 	
 	// Let spinner animate visibly - longer duration so user can see it
-	time.Sleep(800 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	
 	// Stop spinner
 	spinner.Stop()
@@ -33,6 +33,6 @@ func ClearIt() {
 		WithRemoveWhenDone(true).
 		Start("Loading...")
 	
-	time.Sleep(800 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	spinner2.Stop()
 }
