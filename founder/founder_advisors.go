@@ -245,5 +245,310 @@ func (fs *FounderState) UpdateAffiliateProgram() []string {
 }
 
 // ============================================================================
+// CHAIRMAN OF THE BOARD
+// ============================================================================
+
+// GetChairman returns the current chairman, if any
+func (fs *FounderState) GetChairman() *BoardMember {
+	for i := range fs.BoardMembers {
+		if fs.BoardMembers[i].IsActive && fs.BoardMembers[i].IsChairman {
+			return &fs.BoardMembers[i]
+		}
+	}
+	return nil
+}
+
+// SetChairman promotes an advisor to chairman of the board
+// Requires additional equity (1.5-2x) and higher monthly retainer
+func (fs *FounderState) SetChairman(advisorName string) error {
+	// Find the advisor
+	var advisorIndex = -1
+	for i := range fs.BoardMembers {
+		if fs.BoardMembers[i].Name == advisorName && fs.BoardMembers[i].IsActive {
+			advisorIndex = i
+			break
+		}
+	}
+
+	if advisorIndex == -1 {
+		return fmt.Errorf("advisor not found: %s", advisorName)
+	}
+
+	advisor := &fs.BoardMembers[advisorIndex]
+
+	// Check if already chairman
+	if advisor.IsChairman {
+		return fmt.Errorf("%s is already the chairman", advisorName)
+	}
+
+	// Remove any existing chairman
+	currentChairman := fs.GetChairman()
+	if currentChairman != nil {
+		currentChairman.IsChairman = false
+	}
+
+	// Calculate additional equity cost (chairman needs 1.5-2x equity)
+	additionalEquity := advisor.EquityCost * (0.5 + rand.Float64()*0.5) // 0.5-1x additional
+	totalEquityNeeded := advisor.EquityCost + additionalEquity
+
+	// Check if we have enough equity pool
+	availableEquity := fs.EquityPool - fs.EquityAllocated
+	if availableEquity < additionalEquity {
+		return fmt.Errorf("insufficient equity pool (need %.2f%%, have %.2f%% available)", additionalEquity, availableEquity)
+	}
+
+	// Update equity allocation
+	fs.EquityAllocated += additionalEquity
+	advisor.EquityCost = totalEquityNeeded
+
+	// Update cap table
+	for i := range fs.CapTable {
+		if fs.CapTable[i].Name == advisorName {
+			fs.CapTable[i].Equity = totalEquityNeeded
+			break
+		}
+	}
+
+	// Set as chairman
+	advisor.IsChairman = true
+
+	return nil
+}
+
+// RemoveChairman removes the chairman role (with consequences)
+func (fs *FounderState) RemoveChairman() error {
+	chairman := fs.GetChairman()
+	if chairman == nil {
+		return fmt.Errorf("no chairman to remove")
+	}
+
+	// Remove chairman role
+	chairman.IsChairman = false
+
+	// Consequences: negative PR, board sentiment drop
+	// This will be handled in UpdateBoardSentiment
+	// Board pressure increases by 20-30 points
+	if fs.BoardPressure < 100 {
+		fs.BoardPressure += 20 + rand.Intn(11) // 20-30 point increase
+		if fs.BoardPressure > 100 {
+			fs.BoardPressure = 100
+		}
+	}
+
+	// Board sentiment becomes more negative
+	if fs.BoardSentiment == "happy" {
+		fs.BoardSentiment = "pleased"
+	} else if fs.BoardSentiment == "pleased" {
+		fs.BoardSentiment = "neutral"
+	} else if fs.BoardSentiment == "neutral" {
+		fs.BoardSentiment = "concerned"
+	} else if fs.BoardSentiment == "concerned" {
+		fs.BoardSentiment = "angry"
+	}
+
+	return nil
+}
+
+// MitigateCrisis allows chairman to reduce severity of negative events
+// Returns true if chairman successfully mitigated, false otherwise
+func (fs *FounderState) MitigateCrisis(event *RandomEvent) bool {
+	chairman := fs.GetChairman()
+	if chairman == nil || event.IsPositive {
+		return false
+	}
+
+	// Chairman can mitigate: legal, press, regulation events
+	mitigatableTypes := []string{"legal", "press", "regulation"}
+	isMitigatable := false
+	for _, t := range mitigatableTypes {
+		if event.Type == t {
+			isMitigatable = true
+			break
+		}
+	}
+
+	if !isMitigatable {
+		return false
+	}
+
+	// 70% chance chairman successfully mitigates
+	if rand.Float64() < 0.7 {
+		// Reduce impact by 30-50%
+		mitigationFactor := 0.5 + rand.Float64()*0.2 // 0.5-0.7 (30-50% reduction)
+
+		// Apply mitigation to impact
+		if event.Impact.CashCost > 0 {
+			event.Impact.CashCost = int64(float64(event.Impact.CashCost) * mitigationFactor)
+		}
+		if event.Impact.ChurnChange > 0 {
+			event.Impact.ChurnChange *= mitigationFactor
+		}
+		if event.Impact.CACChange > 1.0 {
+			// Reduce CAC increase
+			event.Impact.CACChange = 1.0 + (event.Impact.CACChange-1.0)*mitigationFactor
+		}
+		if event.Impact.GrowthChange < 1.0 {
+			// Reduce growth decrease
+			event.Impact.GrowthChange = 1.0 - (1.0-event.Impact.GrowthChange)*mitigationFactor
+		}
+		if event.Impact.DurationMonths > 0 {
+			event.Impact.DurationMonths = int(float64(event.Impact.DurationMonths) * mitigationFactor)
+		}
+
+		// Downgrade severity
+		if event.Severity == "critical" {
+			event.Severity = "major"
+		} else if event.Severity == "major" {
+			event.Severity = "moderate"
+		} else if event.Severity == "moderate" {
+			event.Severity = "minor"
+		}
+
+		return true
+	}
+
+	return false
+}
+
+// RemoveAdvisor removes an advisor from the board (with equity buyback option)
+func (fs *FounderState) RemoveAdvisor(advisorName string, buybackEquity bool) error {
+	// Find the advisor
+	var advisorIndex = -1
+	for i := range fs.BoardMembers {
+		if fs.BoardMembers[i].Name == advisorName && fs.BoardMembers[i].IsActive {
+			advisorIndex = i
+			break
+		}
+	}
+
+	if advisorIndex == -1 {
+		return fmt.Errorf("advisor not found: %s", advisorName)
+	}
+
+	advisor := &fs.BoardMembers[advisorIndex]
+
+	// Cannot remove chairman directly - must remove chairman role first
+	if advisor.IsChairman {
+		return fmt.Errorf("cannot remove chairman directly. Remove chairman role first, then remove advisor")
+	}
+
+	// Calculate buyback cost if requested
+	if buybackEquity {
+		// Buyback equity at current valuation (expensive)
+		// Estimate valuation: MRR * 10-20x multiple (conservative)
+		estimatedValuation := fs.MRR * 15 // 15x MRR multiple
+		if estimatedValuation < 1000000 {
+			estimatedValuation = 1000000 // Minimum $1M valuation
+		}
+		
+		buybackCost := int64(float64(estimatedValuation) * (advisor.EquityCost / 100.0))
+		
+		if buybackCost > fs.Cash {
+			return fmt.Errorf("insufficient cash for equity buyback (need $%s, have $%s)", 
+				formatCurrency(buybackCost), formatCurrency(fs.Cash))
+		}
+
+		fs.Cash -= buybackCost
+		
+		// Return equity to founder (reduce EquityGivenAway)
+		fs.EquityGivenAway -= advisor.EquityCost
+		if fs.EquityGivenAway < 0 {
+			fs.EquityGivenAway = 0
+		}
+
+		// Remove from cap table
+		for i := range fs.CapTable {
+			if fs.CapTable[i].Name == advisorName {
+				fs.CapTable = append(fs.CapTable[:i], fs.CapTable[i+1:]...)
+				break
+			}
+		}
+	} else {
+		// No buyback - advisor keeps equity but is removed from board
+		// This causes negative PR and board sentiment issues
+		if fs.BoardPressure < 100 {
+			fs.BoardPressure += 10 + rand.Intn(11) // 10-20 point increase
+			if fs.BoardPressure > 100 {
+				fs.BoardPressure = 100
+			}
+		}
+
+		// Board sentiment becomes more negative
+		if fs.BoardSentiment == "happy" {
+			fs.BoardSentiment = "pleased"
+		} else if fs.BoardSentiment == "pleased" {
+			fs.BoardSentiment = "neutral"
+		} else if fs.BoardSentiment == "neutral" {
+			fs.BoardSentiment = "concerned"
+		}
+	}
+
+	// Mark advisor as inactive
+	advisor.IsActive = false
+
+	return nil
+}
+
+// FireBoardMember removes an investor board member (as majority owner)
+// This has serious consequences - investors don't like being fired
+func (fs *FounderState) FireBoardMember(memberName string) error {
+	// Find the board member
+	var memberIndex = -1
+	for i := range fs.BoardMembers {
+		if fs.BoardMembers[i].Name == memberName && fs.BoardMembers[i].IsActive {
+			if fs.BoardMembers[i].Type == "investor" {
+				memberIndex = i
+				break
+			}
+		}
+	}
+
+	if memberIndex == -1 {
+		return fmt.Errorf("investor board member not found: %s", memberName)
+	}
+
+	member := &fs.BoardMembers[memberIndex]
+
+	// Check if founder has majority ownership (51%+)
+	founderEquity := 100.0 - fs.EquityGivenAway - fs.EquityPool
+	if founderEquity < 51.0 {
+		return fmt.Errorf("cannot fire board member: you need 51%%+ ownership (you have %.1f%%)", founderEquity)
+	}
+
+	// Cannot fire chairman directly - must remove chairman role first
+	if member.IsChairman {
+		return fmt.Errorf("cannot fire chairman directly. Remove chairman role first, then fire board member")
+	}
+
+	// Serious consequences for firing an investor board member
+	// Board pressure increases significantly
+	if fs.BoardPressure < 100 {
+		fs.BoardPressure += 30 + rand.Intn(21) // 30-50 point increase
+		if fs.BoardPressure > 100 {
+			fs.BoardPressure = 100
+		}
+	}
+
+	// Board sentiment becomes very negative
+	if fs.BoardSentiment == "happy" || fs.BoardSentiment == "pleased" {
+		fs.BoardSentiment = "angry"
+	} else if fs.BoardSentiment == "neutral" {
+		fs.BoardSentiment = "angry"
+	} else if fs.BoardSentiment == "concerned" {
+		fs.BoardSentiment = "angry"
+	}
+
+	// Reduce board seats
+	if fs.BoardSeats > 1 {
+		fs.BoardSeats--
+	}
+
+	// Mark member as inactive
+	member.IsActive = false
+
+	return nil
+}
+
+// ============================================================================
 // COMPETITORS
 // ============================================================================

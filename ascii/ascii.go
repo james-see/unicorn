@@ -76,6 +76,27 @@ const AchievementsHeader = `
 ╚══════════════════════════════════════════════════════════╝
 `
 
+// Board table ASCII art
+const BoardTable = `
+                    ╔═══════════════════════════════════════╗
+                    ║                                       ║
+                    ║         BOARD OF DIRECTORS            ║
+                    ║                                       ║
+                    ╚═══════════════════════════════════════╝
+                              ║         ║
+                    ┌─────────┴─────────┴─────────┐
+                    │                           │
+         [Member 1] │                           │ [Member 2]
+                    │                           │
+                    │                           │
+         [Member 3] │                           │ [Member 4]
+                    │                           │
+                    │                           │
+                    └───────────────────────────┘
+                              ║
+                         [Chairman]
+`
+
 // ASCII art for section headers
 func GetSectionHeader(title string) string {
 	return "\n" + strings.Repeat("═", 60) + "\n" +

@@ -29,6 +29,7 @@ type InvestmentTerms struct {
 	LiquidationPref     float64 // Liquidation preference (1x, 2x, etc.)
 	HasAntiDilution     bool    // Anti-dilution protection
 	ConversionDiscount  float64 // Discount on conversion (for SAFE/Convertible)
+	ValuationCap        int64   // Valuation cap for SAFE conversion (0 = no cap)
 }
 
 // Investment represents a player's investment in a startup
@@ -58,6 +59,13 @@ type Portfolio struct {
 	ManagementFeesCharged int64   // Total management fees paid
 	AnnualManagementFee   float64 // Annual management fee rate (e.g., 0.02 for 2%)
 	FollowOnReserve       int64   // Reserve fund for follow-on investments
+	CarryInterestPaid     int64   // Total carry interest paid to LPs (20% of profits above hurdle)
+	
+	// LP Commitments & Capital Calls
+	LPCommittedCapital    int64   // Total capital committed by LPs
+	LPCalledCapital       int64   // Capital already called from LPs
+	LastCapitalCallTurn   int     // Last turn when capital was called
+	CapitalCallSchedule   []int   // Scheduled turns for capital calls (e.g., [1, 13, 25, 37, 49])
 }
 
 // Startup represents a company available for investment
@@ -251,6 +259,23 @@ type PlayerScore struct {
 }
 
 
+// initializeLPCommitments sets up LP commitments and capital call schedule
+func initializeLPCommitments(startingCash int64, maxTurns int) (int64, []int) {
+	// Typical VC fund: LPs commit 2-3x the initial fund size
+	// Capital calls happen quarterly (every 3 months) or semi-annually
+	lpCommittedCapital := startingCash * 2 // 2x committed capital
+	capitalCallFrequency := 3 // Quarterly capital calls (every 3 months)
+	capitalCallSchedule := []int{}
+	
+	// Schedule capital calls: first call at turn 1, then every 3 months
+	// Each call is 25% of committed capital (4 calls total over 12 months)
+	for turn := 1; turn <= maxTurns; turn += capitalCallFrequency {
+		capitalCallSchedule = append(capitalCallSchedule, turn)
+	}
+	
+	return lpCommittedCapital, capitalCallSchedule
+}
+
 func NewGame(playerName string, difficulty Difficulty, playerUpgrades []string) *GameState {
 	rand.Seed(time.Now().UnixNano())
 
@@ -282,6 +307,9 @@ func NewGame(playerName string, difficulty Difficulty, playerUpgrades []string) 
 		}
 	}
 
+	// Initialize LP Commitments
+	lpCommittedCapital, capitalCallSchedule := initializeLPCommitments(startingCash, maxTurns)
+
 	gs := &GameState{
 		PlayerName:     playerName,
 		Difficulty:     difficulty,
@@ -294,6 +322,11 @@ func NewGame(playerName string, difficulty Difficulty, playerUpgrades []string) 
 			InitialFundSize:     startingCash,
 			AnnualManagementFee: managementFee,
 			FollowOnReserve:     followOnReserve,
+			CarryInterestPaid:   0,
+			LPCommittedCapital:  lpCommittedCapital,
+			LPCalledCapital:     0,
+			LastCapitalCallTurn: 0,
+			CapitalCallSchedule: capitalCallSchedule,
 		},
 	}
 
@@ -427,6 +460,15 @@ func formatCurrency(amount int64) string {
 func (gs *GameState) ProcessTurn() []string {
 	messages := []string{}
 
+	// Process capital calls (before management fees, so fees are charged on larger fund)
+	capitalCallMessages := gs.ProcessCapitalCalls()
+	messages = append(messages, capitalCallMessages...)
+	
+	// Process capital calls for AI players
+	for i := range gs.AIPlayers {
+		gs.processAICapitalCalls(i)
+	}
+
 	// Process management fees
 	feeMessages := gs.ProcessManagementFees()
 	messages = append(messages, feeMessages...)
@@ -556,8 +598,113 @@ func (gs *GameState) GetPortfolioValue() int64 {
 	return total
 }
 
+func (gs *GameState) GetTotalInvested() int64 {
+	total := int64(0)
+	for _, inv := range gs.Portfolio.Investments {
+		total += inv.AmountInvested
+	}
+	return total
+}
+
+// SectorBreakdownData represents sector performance metrics
+type SectorBreakdownData struct {
+	Count         int
+	TotalInvested int64
+	CurrentValue  int64
+}
+
+func (gs *GameState) GetSectorBreakdown() map[string]SectorBreakdownData {
+	breakdown := make(map[string]SectorBreakdownData)
+	
+	for _, inv := range gs.Portfolio.Investments {
+		data := breakdown[inv.Category]
+		data.Count++
+		data.TotalInvested += inv.AmountInvested
+		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
+		data.CurrentValue += value
+		breakdown[inv.Category] = data
+	}
+	
+	return breakdown
+}
+
+func (gs *GameState) calculateInvestmentROI(inv Investment) float64 {
+	if inv.AmountInvested == 0 {
+		return 0.0
+	}
+	currentValue := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
+	profit := float64(currentValue - inv.AmountInvested)
+	return (profit / float64(inv.AmountInvested)) * 100.0
+}
+
+func (gs *GameState) GetBestPerformers(count int) []Investment {
+	investments := make([]Investment, len(gs.Portfolio.Investments))
+	copy(investments, gs.Portfolio.Investments)
+	
+	// Sort by ROI (descending)
+	for i := 0; i < len(investments)-1; i++ {
+		for j := i + 1; j < len(investments); j++ {
+			roiI := gs.calculateInvestmentROI(investments[i])
+			roiJ := gs.calculateInvestmentROI(investments[j])
+			if roiJ > roiI {
+				investments[i], investments[j] = investments[j], investments[i]
+			}
+		}
+	}
+	
+	if count > len(investments) {
+		count = len(investments)
+	}
+	return investments[:count]
+}
+
+func (gs *GameState) GetWorstPerformers(count int) []Investment {
+	investments := make([]Investment, len(gs.Portfolio.Investments))
+	copy(investments, gs.Portfolio.Investments)
+	
+	// Sort by ROI (ascending)
+	for i := 0; i < len(investments)-1; i++ {
+		for j := i + 1; j < len(investments); j++ {
+			roiI := gs.calculateInvestmentROI(investments[i])
+			roiJ := gs.calculateInvestmentROI(investments[j])
+			if roiJ < roiI {
+				investments[i], investments[j] = investments[j], investments[i]
+			}
+		}
+	}
+	
+	if count > len(investments) {
+		count = len(investments)
+	}
+	return investments[:count]
+}
+
 func (gs *GameState) IsGameOver() bool {
 	return gs.Portfolio.Turn > gs.Portfolio.MaxTurns
+}
+
+// CalculateCarryInterest calculates projected carry interest based on current portfolio value
+// Returns: projected carry, hurdle return, excess profit, and whether carry applies
+func (gs *GameState) CalculateCarryInterest() (projectedCarry int64, hurdleReturn float64, excessProfit float64, applies bool) {
+	totalStartingCapital := float64(gs.Portfolio.InitialFundSize + gs.Portfolio.FollowOnReserve)
+	
+	// Hurdle rate: 8% annual = ~0.67% monthly over 60 months = ~40% total return
+	hurdleReturn = totalStartingCapital * 0.40 // 40% hurdle (8% annual over 5 years)
+	
+	currentNetWorth := float64(gs.Portfolio.NetWorth)
+	profit := currentNetWorth - totalStartingCapital
+	
+	if profit > hurdleReturn {
+		excessProfit = profit - hurdleReturn
+		projectedCarry = int64(excessProfit * 0.20) // 20% carry on excess profit
+		applies = true
+	} else {
+		projectedCarry = 0
+		excessProfit = 0
+		applies = false
+	}
+	
+	return projectedCarry, hurdleReturn, excessProfit, applies
 }
 
 func (gs *GameState) GetFinalScore() (netWorth int64, roi float64, successfulExits int) {
@@ -565,6 +712,20 @@ func (gs *GameState) GetFinalScore() (netWorth int64, roi float64, successfulExi
 
 	// Calculate ROI based on TOTAL starting capital (cash + follow-on reserve)
 	totalStartingCapital := gs.Portfolio.InitialFundSize + gs.Portfolio.FollowOnReserve
+	roi = ((float64(netWorth) - float64(totalStartingCapital)) / float64(totalStartingCapital)) * 100.0
+
+	// Calculate carry interest (20% of profits above 8% annual hurdle rate)
+	carryInterest, _, _, applies := gs.CalculateCarryInterest()
+	
+	if applies {
+		gs.Portfolio.CarryInterestPaid = carryInterest
+		// Net worth after carry goes to LPs
+		netWorth -= carryInterest
+	} else {
+		gs.Portfolio.CarryInterestPaid = 0
+	}
+
+	// Recalculate ROI after carry
 	roi = ((float64(netWorth) - float64(totalStartingCapital)) / float64(totalStartingCapital)) * 100.0
 
 	// Count successful exits (investments that 5x'd or more)

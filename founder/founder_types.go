@@ -46,6 +46,7 @@ type BoardMember struct {
 	MonthAdded        int
 	EquityCost        float64 // Equity given for this seat
 	IsActive          bool
+	IsChairman        bool    // Whether this member is the chairman of the board
 	ContributionScore float64 // 0-1, how valuable their advice has been
 }
 
@@ -212,6 +213,7 @@ type AcquisitionOffer struct {
 	Month        int
 	DueDiligence string // "bad", "normal", "good"
 	TermsQuality string // "poor", "good", "excellent"
+	IsCompetitor bool   // true if offer is from a competitor AI
 }
 
 // ExitOption represents different ways to exit the company

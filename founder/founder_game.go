@@ -202,7 +202,13 @@ func (fs *FounderState) CheckForAcquisition() *AcquisitionOffer {
 		return nil
 	}
 
-	// 5% chance per month after Series A
+	// Check for competitor acquisition first (higher priority)
+	competitorOffer := fs.CheckForCompetitorAcquisition()
+	if competitorOffer != nil {
+		return competitorOffer
+	}
+
+	// 5% chance per month after Series A for strategic acquirer
 	if rand.Float64() > 0.05 {
 		return nil
 	}
@@ -240,6 +246,108 @@ func (fs *FounderState) CheckForAcquisition() *AcquisitionOffer {
 	}
 
 	return &offer
+}
+
+// CheckForCompetitorAcquisition checks if any competitor wants to acquire your startup
+func (fs *FounderState) CheckForCompetitorAcquisition() *AcquisitionOffer {
+	// Only check active competitors with high market share
+	for i := range fs.Competitors {
+		comp := &fs.Competitors[i]
+		if !comp.Active {
+			continue
+		}
+
+		// Competitors can only acquire if they have significant market share (15%+)
+		if comp.MarketShare < 0.15 {
+			continue
+		}
+
+		// Higher threat competitors are more likely to acquire
+		acquisitionChance := 0.02 // 2% base chance per month
+		if comp.Threat == "high" {
+			acquisitionChance = 0.04 // 4% for high threat
+		} else if comp.Threat == "medium" {
+			acquisitionChance = 0.03 // 3% for medium threat
+		}
+
+		// Silicon Valley companies have different acquisition behaviors
+		// Hooli is very aggressive
+		if comp.Name == "Hooli" || comp.Name == "Hooli Search" || comp.Name == "Gavin Belson's New Thing" {
+			acquisitionChance *= 1.5 // Hooli is more likely to acquire
+		}
+		
+		// Nucleus is competitive
+		if comp.Name == "Nucleus" {
+			acquisitionChance *= 1.3
+		}
+
+		// Competitors are more likely to acquire if you're struggling
+		if fs.CashRunwayMonths < 6 {
+			acquisitionChance *= 2.0 // Double chance if you're running low on cash
+		}
+
+		// Competitors are more likely if you're growing fast (they want to eliminate competition)
+		if fs.MonthlyGrowthRate > 0.20 {
+			acquisitionChance *= 1.5
+		}
+
+		// Hooli especially wants to acquire fast-growing competitors
+		if (comp.Name == "Hooli" || comp.Name == "Gavin Belson's New Thing") && fs.MonthlyGrowthRate > 0.25 {
+			acquisitionChance *= 2.0
+		}
+
+		if rand.Float64() > acquisitionChance {
+			continue
+		}
+
+		// Calculate offer - competitors typically offer less than strategic acquirers
+		// They're buying to eliminate competition, not for strategic value
+		multiple := 2.0 + rand.Float64()*2.5 // 2-4.5x revenue (lower than strategic)
+		annualRevenue := fs.MRR * 12
+		offerAmount := int64(float64(annualRevenue) * multiple)
+
+		// Hooli sometimes makes aggressive offers (but usually lowballs)
+		if comp.Name == "Hooli" && rand.Float64() < 0.2 {
+			// 20% chance Hooli makes a "Gavin Belson" style aggressive offer
+			offerAmount = int64(float64(offerAmount) * 1.5)
+		}
+
+		// Competitor offers are usually less favorable
+		dueDiligence := "normal"
+		termsQuality := "good"
+		if rand.Float64() < 0.3 {
+			dueDiligence = "bad"
+			termsQuality = "poor"
+			offerAmount = int64(float64(offerAmount) * 0.7) // Competitors lowball more often
+		}
+
+		// Hooli is known for bad terms
+		if comp.Name == "Hooli" || comp.Name == "Gavin Belson's New Thing" {
+			if rand.Float64() < 0.5 {
+				dueDiligence = "bad"
+				termsQuality = "poor"
+			}
+		}
+
+		offer := AcquisitionOffer{
+			Acquirer:     comp.Name,
+			OfferAmount:  offerAmount,
+			Month:        fs.Turn,
+			DueDiligence: dueDiligence,
+			TermsQuality: termsQuality,
+			IsCompetitor: true, // Mark as competitor acquisition
+		}
+
+		// Competitor exits market after acquisition (unless it's Hooli - they keep competing)
+		if comp.Name != "Hooli" && comp.Name != "Hooli Search" && comp.Name != "Gavin Belson's New Thing" {
+			comp.Active = false
+			comp.MarketShare = 0
+		}
+
+		return &offer
+	}
+
+	return nil
 }
 
 
@@ -391,10 +499,91 @@ func (fs *FounderState) GetBoardGuidance() []string {
 		return guidance
 	}
 
-	// Board members provide value based on their expertise
+	// Check for chairman first - chairman provides enhanced benefits
+	chairman := fs.GetChairman()
+	if chairman != nil && chairman.IsActive {
+		// Chairman provides guidance 60% of the time (vs 30% for regular advisors)
+		if rand.Float64() < 0.6 {
+			impactMultiplier := 2.0 // Chairman has 2x impact
+
+			switch chairman.Expertise {
+			case "sales":
+				// Sales expertise helps with customer acquisition
+				boost := int64(float64(fs.MRR) * (0.02 + rand.Float64()*0.03) * impactMultiplier) // 4-10% boost (2x)
+				if boost > 0 {
+					fs.MRR += boost
+					fs.DirectMRR += boost
+					guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman - Sales) introduced you to major customers (+$%s MRR)",
+						chairman.Name, formatCurrency(boost)))
+				}
+			case "product":
+				// Product expertise improves product maturity
+				if fs.ProductMaturity < 1.0 {
+					improvement := (0.02 + rand.Float64()*0.03) * impactMultiplier // 4-10% improvement (2x)
+					fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity+improvement)
+					guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman - Product) provided strategic product guidance (%.0f%% maturity gained)",
+						chairman.Name, improvement*100))
+				}
+			case "fundraising":
+				// Fundraising expertise improves future round terms
+				if len(fs.FundingRounds) < 3 {
+					guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman - Fundraising) is actively opening doors to top-tier investors",
+						chairman.Name))
+				}
+			case "operations":
+				// Operations expertise reduces costs
+				if fs.MonthlyTeamCost > 50000 {
+					savings := int64(float64(fs.MonthlyTeamCost) * (0.01 + rand.Float64()*0.02) * impactMultiplier) // 2-6% savings (2x)
+					fs.Cash += savings
+					guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman - Operations) identified significant cost savings (+$%s this month)",
+						chairman.Name, formatCurrency(savings)))
+				}
+			case "strategy":
+				// Strategy expertise helps avoid bad decisions
+				if fs.CustomerChurnRate > 0.15 {
+					reduction := (0.01 + rand.Float64()*0.02) * impactMultiplier // 2-6% churn reduction (2x)
+					fs.CustomerChurnRate = math.Max(0.01, fs.CustomerChurnRate-reduction)
+					guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman - Strategy) provided strategic guidance to reduce churn (%.0f%% improvement)",
+						chairman.Name, reduction*100))
+				}
+			}
+
+			// Chairman also provides investor relations benefit
+			if fs.BoardPressure > 0 {
+				pressureReduction := 5 + rand.Intn(11) // 5-15 point reduction
+				fs.BoardPressure -= pressureReduction
+				if fs.BoardPressure < 0 {
+					fs.BoardPressure = 0
+				}
+				guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman) improved investor relations (board pressure reduced by %d points)",
+					chairman.Name, pressureReduction))
+			}
+		}
+
+		// Chairman represents company at events (saves founder time, unlocks opportunities)
+		if rand.Float64() < 0.3 {
+			// 30% chance chairman attends event on your behalf
+			opportunityTypes := []string{"partnership", "customer", "fundraising"}
+			opportunityType := opportunityTypes[rand.Intn(len(opportunityTypes))]
+			
+			switch opportunityType {
+			case "partnership":
+				guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman) represented company at industry conference - opened partnership discussions",
+					chairman.Name))
+			case "customer":
+				guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman) spoke at conference on your behalf - generated customer leads",
+					chairman.Name))
+			case "fundraising":
+				guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman) networked at investor event - warming up potential investors",
+					chairman.Name))
+			}
+		}
+	}
+
+	// Regular board members provide value based on their expertise (30% chance)
 	for _, member := range fs.BoardMembers {
-		if !member.IsActive {
-			continue
+		if !member.IsActive || member.IsChairman {
+			continue // Skip chairman (already handled above)
 		}
 
 		// 30% chance per month a board member provides useful guidance

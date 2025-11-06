@@ -315,21 +315,14 @@ go build -o unicorn
 ✅ **Help & Information Menu** with complete guide
 ✅ **12+ Industry Sectors** for strategic diversification
 
-## Future Plans
+## Roadmap
 
-- **Founder Mode Enhancements:** 
-  - Competitor AI that can acquire your startup
-  - More strategic opportunities and random events
-  - Multiplayer founder mode
-  - Enhanced product development mechanics
-- **VC Mode Enhancements:**
-  - Follow-on investment rounds
-  - Board seats and involvement
-  - Co-investment with other VCs
-- **Cross-Mode Features:**
-  - Start as founder, then become VC with your exit money
-  - Global leaderboards
-  - Achievements for founder mode
+See [ROADMAP.md](ROADMAP.md) for the complete feature roadmap and planned enhancements.
+
+**Quick Summary:**
+- ✅ Many features already implemented (upgrades, board seats, follow-on investments, syndicates, global leaderboards)
+- 🚧 Planned: Carry interest, more AI personalities, portfolio dashboard, competitor AI for founder mode
+- 📋 Full details and priorities in [ROADMAP.md](ROADMAP.md)
 
 ## Demo
 

@@ -67,6 +67,8 @@ func DisplayWelcome(username string, difficulty game.Difficulty, playerUpgrades 
 	fmt.Printf("\nDifficulty: ")
 	yellow.Printf("%s\n", difficulty.Name)
 	fmt.Printf("Fund Size: $%s\n", FormatMoney(difficulty.StartingCash))
+	lpCommittedCapital := difficulty.StartingCash * 2
+	fmt.Printf("LP Committed Capital: $%s (capital calls quarterly)\n", FormatMoney(lpCommittedCapital))
 	fmt.Printf("Follow-on Reserve: $%s ($100k base + $50k per round)\n", FormatMoney(int64(1000000)))
 	fmt.Printf("Management Fee: 2%% annually ($%s/year)\n", FormatMoney(int64(float64(difficulty.StartingCash)*0.02)))
 	fmt.Printf("Game Duration: %d turns (%d years)\n", difficulty.MaxTurns, difficulty.MaxTurns/12)
@@ -289,6 +291,94 @@ func HandleFollowOnOpportunities(gs *game.GameState, opportunities []game.Follow
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
+// DisplayBoardMeeting shows a visual board meeting interface
+func DisplayBoardMeeting(gs *game.GameState, companyName string, voteTitle string) {
+	clear.ClearIt()
+
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow, color.Bold)
+	magenta := color.New(color.FgMagenta, color.Bold)
+	green := color.New(color.FgGreen)
+
+	// Get board members
+	members := gs.GetBoardMembers(companyName)
+
+	// Display board table header
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	magenta.Println("                    🏛️  BOARD MEETING 🏛️")
+	fmt.Println(strings.Repeat("=", 70))
+
+	cyan.Printf("\nCompany: %s\n", companyName)
+	yellow.Printf("Agenda: %s\n\n", voteTitle)
+
+	// Display board members
+	fmt.Println(strings.Repeat("-", 70))
+	green.Println("Board Members Present:")
+	fmt.Println(strings.Repeat("-", 70))
+
+	if len(members) == 0 {
+		fmt.Println("  (No board members found)")
+	} else {
+		for i, member := range members {
+			memberLabel := fmt.Sprintf("%d. %s", i+1, member.Name)
+			if member.IsPlayer {
+				magenta.Printf("  %s (%s) - %d vote(s)\n", memberLabel, member.Firm, member.VoteWeight)
+			} else {
+				fmt.Printf("  %s (%s) - %d vote(s)\n", memberLabel, member.Firm, member.VoteWeight)
+			}
+		}
+	}
+
+	fmt.Println(strings.Repeat("-", 70))
+	fmt.Println()
+
+	// Simple board table visualization
+	fmt.Println("                    ╔═══════════════════════════════════════╗")
+	fmt.Println("                    ║                                       ║")
+	fmt.Println("                    ║         BOARD OF DIRECTORS            ║")
+	fmt.Println("                    ║                                       ║")
+	fmt.Println("                    ╚═══════════════════════════════════════╝")
+	fmt.Println()
+
+	// Show members around the table (up to 4 positions)
+	positions := []string{"", "", "", ""}
+	for i, member := range members {
+		if i < 4 {
+			if member.IsPlayer {
+				positions[i] = fmt.Sprintf("👤 %s", member.Name)
+			} else {
+				positions[i] = fmt.Sprintf("💼 %s", member.Name)
+			}
+		}
+	}
+
+	if len(positions) > 0 && positions[0] != "" {
+		fmt.Printf("         %-25s │                           │", positions[0])
+		if len(positions) > 1 && positions[1] != "" {
+			fmt.Printf(" %s\n", positions[1])
+		} else {
+			fmt.Println()
+		}
+	} else {
+		fmt.Println("                    │                           │")
+	}
+	fmt.Println("                    │                           │")
+	if len(positions) > 2 && positions[2] != "" {
+		fmt.Printf("         %-25s │                           │", positions[2])
+		if len(positions) > 3 && positions[3] != "" {
+			fmt.Printf(" %s\n", positions[3])
+		} else {
+			fmt.Println()
+		}
+	} else {
+		fmt.Println("                    │                           │")
+	}
+	fmt.Println("                    └───────────────────────────┘")
+	fmt.Println()
+
+	time.Sleep(800 * time.Millisecond) // Brief pause for effect
+}
+
 func HandleBoardVotes(gs *game.GameState, votes []game.BoardVote) {
 	green := color.New(color.FgGreen, color.Bold)
 	cyan := color.New(color.FgCyan, color.Bold)
@@ -310,7 +400,9 @@ func HandleBoardVotes(gs *game.GameState, votes []game.BoardVote) {
 			continue // Vote already processed
 		}
 
-		fmt.Println("\n\n")
+		// Display board meeting interface
+		DisplayBoardMeeting(gs, vote.CompanyName, vote.Title)
+
 		fmt.Println(strings.Repeat("=", 70))
 		magenta.Println("            🏛️  BOARD VOTE REQUIRED!")
 		fmt.Println(strings.Repeat("=", 70))
@@ -425,6 +517,9 @@ func SelectInvestmentTerms(gs *game.GameState, startup *game.Startup, amount int
 		}
 		if opt.ConversionDiscount > 0 {
 			green.Printf("   ✓ %.0f%% Conversion Discount (bonus equity)\n", opt.ConversionDiscount*100)
+		}
+		if opt.ValuationCap > 0 {
+			green.Printf("   ✓ Valuation Cap: $%s (converts at cap if company raises above)\n", FormatMoney(opt.ValuationCap))
 		}
 	}
 
@@ -581,6 +676,39 @@ func PlayTurn(gs *game.GameState, autoMode bool) {
 		DisplayMiniLeaderboard(gs)
 	}
 
+	// Portfolio Dashboard option
+	if !autoMode {
+		fmt.Println()
+		yellow.Println("Press 'd' for Portfolio Dashboard, or Enter to continue...")
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input == "d" || input == "dashboard" {
+			DisplayPortfolioDashboard(gs)
+			// After dashboard, show portfolio again and ask to continue
+			fmt.Println()
+			yellow.Println("Press 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+			// Re-show portfolio summary
+			cyan.Print(ascii.PortfolioHeader)
+			if len(gs.Portfolio.Investments) > 0 {
+				for _, inv := range gs.Portfolio.Investments {
+					value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
+					profit := value - inv.AmountInvested
+					profitColor := color.New(color.FgGreen)
+					profitSign := "+"
+					if profit < 0 {
+						profitColor = color.New(color.FgRed)
+						profitSign = ""
+					}
+					fmt.Printf("   %s: $%s → $%s ", inv.CompanyName, FormatMoney(inv.AmountInvested), FormatMoney(value))
+					profitColor.Printf("(%s$%s)\n", profitSign, FormatMoney(abs(profit)))
+				}
+			}
+			fmt.Printf("\n%s Net Worth: $%s\n", ascii.Money, FormatMoney(gs.Portfolio.NetWorth))
+		}
+	}
+
 	// Always pause for exit events, even in auto mode
 	if hasExitEvent {
 		magenta := color.New(color.FgMagenta, color.Bold)
@@ -621,10 +749,15 @@ func DisplayFinalScore(gs *game.GameState) {
 
 	fmt.Printf("\n%s Player: %s\n", ascii.Star, gs.PlayerName)
 	fmt.Printf("%s Turns Played: %d\n", ascii.Calendar, gs.Portfolio.Turn-1)
-	fmt.Printf("%s Management Fees Paid: $%s\n\n", ascii.Money, FormatMoney(gs.Portfolio.ManagementFeesCharged))
+	fmt.Printf("%s Management Fees Paid: $%s\n", ascii.Money, FormatMoney(gs.Portfolio.ManagementFeesCharged))
+	if gs.Portfolio.CarryInterestPaid > 0 {
+		yellow := color.New(color.FgYellow)
+		yellow.Printf("%s Carry Interest Paid (20%%): $%s\n", ascii.Money, FormatMoney(gs.Portfolio.CarryInterestPaid))
+	}
+	fmt.Println()
 
 	green := color.New(color.FgGreen, color.Bold)
-	green.Printf("%s Final Net Worth: $%s\n", ascii.Money, FormatMoney(netWorth))
+	green.Printf("%s Final Net Worth (after carry): $%s\n", ascii.Money, FormatMoney(netWorth))
 
 	roiColor := color.New(color.FgGreen)
 	if roi < 0 {

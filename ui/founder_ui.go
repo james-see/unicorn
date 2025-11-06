@@ -1210,6 +1210,16 @@ func handleFundraising(fs *founder.FounderState) bool {
 	yellow.Println("📄 TERM SHEET OPTIONS")
 	fmt.Println(strings.Repeat("─", 70))
 	
+	currentEquity := 100.0 - fs.EquityGivenAway - fs.EquityPool
+	fmt.Printf("\n💼 Your Current Equity: %.2f%%\n", currentEquity)
+	if currentEquity >= 50.0 {
+		green := color.New(color.FgGreen)
+		green.Println("   ✓ You have majority control")
+	} else {
+		red := color.New(color.FgRed, color.Bold)
+		red.Println("   ⚠️  You don't have majority control (investors can force exits)")
+	}
+	
 	if hasFoundraisingAdvisor {
 		green := color.New(color.FgGreen)
 		green.Printf("\n💡 %s (advisor) helped improve these terms!\n", advisorName)
@@ -1217,11 +1227,22 @@ func handleFundraising(fs *founder.FounderState) bool {
 	}
 
 	for i, sheet := range termSheets {
+		newEquity := currentEquity - sheet.Equity
 		fmt.Printf("\n%d. %s\n", i+1, sheet.Terms)
 		fmt.Printf("   Amount: $%s\n", formatFounderCurrency(sheet.Amount))
 		fmt.Printf("   Pre-Money Valuation: $%s\n", formatFounderCurrency(sheet.PreValuation))
 		fmt.Printf("   Post-Money Valuation: $%s\n", formatFounderCurrency(sheet.PostValuation))
 		fmt.Printf("   Equity Given: %.1f%%\n", sheet.Equity)
+		fmt.Printf("   Your Equity After: %.2f%%", newEquity)
+		if newEquity < 50.0 && currentEquity >= 50.0 {
+			red := color.New(color.FgRed, color.Bold)
+			red.Printf(" ⚠️  (Loses majority control!)\n")
+		} else if newEquity < 50.0 {
+			yellow := color.New(color.FgYellow)
+			yellow.Printf(" ⚠️  (Already below 50%%)\n")
+		} else {
+			fmt.Println()
+		}
 		fmt.Printf("   → %s\n", sheet.Description)
 	}
 	fmt.Println("\n0. Cancel")
@@ -1242,6 +1263,28 @@ func handleFundraising(fs *founder.FounderState) bool {
 	}
 
 	selectedSheet := termSheets[termNum-1]
+	
+	// Check if this will drop founder below 50% equity
+	newEquity := currentEquity - selectedSheet.Equity
+	
+	if newEquity < 50.0 && currentEquity >= 50.0 {
+		red := color.New(color.FgRed, color.Bold)
+		yellow := color.New(color.FgYellow, color.Bold)
+		fmt.Println()
+		red.Println("⚠️  WARNING: This will drop you below 50% ownership!")
+		yellow.Printf("   Current equity: %.2f%%\n", currentEquity)
+		yellow.Printf("   After this round: %.2f%%\n", newEquity)
+		fmt.Println("   Without majority control, investors can force exit decisions.")
+		fmt.Println("   You may be forced to accept acquisition offers.")
+		fmt.Print("\nContinue anyway? (y/n): ")
+		confirm, _ := reader.ReadString('\n')
+		confirm = strings.TrimSpace(strings.ToLower(confirm))
+		if confirm != "y" && confirm != "yes" {
+			fmt.Println("\nCanceled")
+			return true
+		}
+	}
+	
 	success := fs.RaiseFundingWithTerms(roundName, selectedSheet)
 
 	if !success {
@@ -1269,12 +1312,33 @@ func displayAcquisitionOffer(fs *founder.FounderState, offer *founder.Acquisitio
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
 	white := color.New(color.FgWhite)
+	red := color.New(color.FgRed, color.Bold)
 
 	fmt.Println("\n" + strings.Repeat("=", 70))
-	cyan.Println("🎉 ACQUISITION OFFER!")
+	
+	// Check if this is a competitor acquisition
+	if offer.IsCompetitor {
+		red.Println("⚠️  COMPETITOR ACQUISITION OFFER!")
+		yellow.Printf("\n%s wants to acquire your company!\n", offer.Acquirer)
+		
+		// Silicon Valley-specific messages
+		if offer.Acquirer == "Hooli" || offer.Acquirer == "Gavin Belson's New Thing" {
+			red.Println("\n🏢 Hooli Acquisition Offer!")
+			fmt.Println("Gavin Belson wants to buy your company. This is typically a lowball offer")
+			fmt.Println("to eliminate competition. Watch out for bad terms and due diligence issues.")
+		} else if offer.Acquirer == "Nucleus" {
+			yellow.Println("\n⚛️  Nucleus wants to acquire you!")
+			fmt.Println("Your compression technology competitor wants to buy you out.")
+		} else {
+			fmt.Println("\nThis is a competitive acquisition - they're buying to eliminate competition.")
+			fmt.Println("Competitor offers are typically lower than strategic acquirer offers.")
+		}
+	} else {
+		cyan.Println("🎉 ACQUISITION OFFER!")
+		yellow.Printf("\n%s wants to acquire your company!\n", offer.Acquirer)
+	}
+	
 	fmt.Println(strings.Repeat("=", 70))
-
-	yellow.Printf("\n%s wants to acquire your company!\n", offer.Acquirer)
 	green.Printf("\nOffer Amount: $%s\n", formatFounderCurrency(offer.OfferAmount))
 
 	// Calculate and display payout breakdown for all cap table entities
@@ -1319,17 +1383,59 @@ func displayAcquisitionOffer(fs *founder.FounderState, offer *founder.Acquisitio
 	fmt.Printf("\nDue Diligence: %s\n", offer.DueDiligence)
 	fmt.Printf("Terms Quality: %s\n", offer.TermsQuality)
 
-	fmt.Print("\nAccept this offer? (y/n): ")
-	reader := bufio.NewReader(os.Stdin)
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(strings.ToLower(choice))
+	// Check if founder has majority ownership
+	forcedAcceptance := founderEquity < 50.0
 
-	if choice == "y" || choice == "yes" {
+	if forcedAcceptance {
+		red := color.New(color.FgRed, color.Bold)
+		yellow := color.New(color.FgYellow, color.Bold)
+		fmt.Println()
+		red.Println("⚠️  WARNING: You don't have majority ownership!")
+		yellow.Printf("   Your equity: %.2f%% (need 50%%+ for control)\n", founderEquity)
+		fmt.Println("   Without majority control, the board can force this acquisition.")
+		fmt.Println()
+		yellow.Println("   The acquisition will proceed automatically...")
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		
+		// Force acceptance
 		fs.Cash = founderPayout
 		fs.Turn = fs.MaxTurns + 1 // End game
-		color.Green("\n🎉 Congratulations! You've successfully exited!")
+		if offer.IsCompetitor {
+			if offer.Acquirer == "Hooli" || offer.Acquirer == "Gavin Belson's New Thing" {
+				red.Println("\n🏢 Hooli acquired your company!")
+				fmt.Println("Gavin Belson now owns your startup. This is not ideal.")
+			} else {
+				red.Println("\n⚠️  Acquisition completed - Competitor took control!")
+			}
+		} else {
+			color.Green("\n🎉 Acquisition completed - Board approved the exit!")
+		}
+		color.Yellow("   You received $%s (%.2f%% of $%s)", 
+			formatFounderCurrency(founderPayout), founderEquity, formatFounderCurrency(offer.OfferAmount))
 	} else {
-		color.Yellow("\n✓ Declined the offer. Continuing to build...")
+		fmt.Print("\nAccept this offer? (y/n): ")
+		reader := bufio.NewReader(os.Stdin)
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(strings.ToLower(choice))
+
+		if choice == "y" || choice == "yes" {
+			fs.Cash = founderPayout
+			fs.Turn = fs.MaxTurns + 1 // End game
+			
+			if offer.IsCompetitor {
+				if offer.Acquirer == "Hooli" || offer.Acquirer == "Gavin Belson's New Thing" {
+					yellow.Println("\n🏢 You accepted Hooli's acquisition offer.")
+					fmt.Println("Gavin Belson now owns your company. At least you got paid...")
+				} else {
+					color.Green("\n🎉 You accepted the competitor acquisition offer!")
+				}
+			} else {
+				color.Green("\n🎉 Congratulations! You've successfully exited!")
+			}
+		} else {
+			color.Yellow("\n✓ Declined the offer. Continuing to build...")
+		}
 	}
 }
 
@@ -1679,7 +1785,19 @@ func handleCompetitorManagement(fs *founder.FounderState) bool {
 
 		fmt.Printf("%d. %s - ", i+1, comp.Name)
 		threatColor.Printf("Threat: %s", comp.Threat)
-		fmt.Printf(" | Market Share: %.1f%% | Strategy: %s\n", comp.MarketShare*100, comp.Strategy)
+		fmt.Printf(" | Market Share: %.1f%% | Strategy: %s", comp.MarketShare*100, comp.Strategy)
+		
+		// Add Silicon Valley flavor text
+		if comp.Name == "Hooli" {
+			fmt.Printf(" | 🏢 Tech Giant")
+		} else if comp.Name == "Nucleus" {
+			fmt.Printf(" | ⚛️  Compression Competitor")
+		} else if comp.Name == "Gavin Belson's New Thing" {
+			fmt.Printf(" | 💼 Gavin's Latest")
+		} else if comp.Name == "Pied Piper" {
+			fmt.Printf(" | 🎵 Parallel Universe")
+		}
+		fmt.Println()
 	}
 
 	if activeCount == 0 {
@@ -2039,8 +2157,12 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 		cyan.Println("\n👥 CURRENT ADVISORS:")
 		for _, member := range fs.BoardMembers {
 			if member.IsActive {
-				fmt.Printf("  • %s (%s, %s) - %.2f%% equity\n",
-					member.Name, member.Type, member.Expertise, member.EquityCost)
+				role := "Advisor"
+				if member.IsChairman {
+					role = "👔 Chairman"
+				}
+				fmt.Printf("  • %s (%s, %s) - %.2f%% equity - %s\n",
+					member.Name, member.Type, member.Expertise, member.EquityCost, role)
 			}
 		}
 	}
@@ -2049,9 +2171,45 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 	fmt.Println("1. Add Board Seat (costs ~2% from equity pool)")
 	fmt.Println("2. Expand Equity Pool (dilutes you by 1-10%)")
 	green.Println("3. Add Advisor (0.25-1% equity for strategic guidance)")
+	if len(fs.BoardMembers) > 0 {
+		chairman := fs.GetChairman()
+		red := color.New(color.FgRed)
+		if chairman == nil {
+			yellow.Println("4. Set Advisor as Chairman (requires additional 0.5-1x equity)")
+		} else {
+			red.Println("4. Remove Chairman (causes negative PR & board pressure)")
+		}
+		red.Println("5. Remove Advisor (with equity buyback option)")
+		// Check if there are investor board members
+		hasInvestorMembers := false
+		for _, member := range fs.BoardMembers {
+			if member.IsActive && member.Type == "investor" {
+				hasInvestorMembers = true
+				break
+			}
+		}
+		if hasInvestorMembers {
+			red.Println("6. Fire Board Member (investor - requires 51%+ ownership)")
+		}
+	}
 	fmt.Println("0. Cancel")
 
-	fmt.Print("\nSelect option (0-3): ")
+	maxOption := "3"
+	if len(fs.BoardMembers) > 0 {
+		maxOption = "5"
+		// Check if there are investor board members
+		hasInvestorMembers := false
+		for _, member := range fs.BoardMembers {
+			if member.IsActive && member.Type == "investor" {
+				hasInvestorMembers = true
+				break
+			}
+		}
+		if hasInvestorMembers {
+			maxOption = "6"
+		}
+	}
+	fmt.Printf("\nSelect option (0-%s): ", maxOption)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
@@ -2079,6 +2237,27 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 			return true
 		}
 
+		// Check if this will drop founder below 50% equity
+		currentEquity := 100.0 - fs.EquityGivenAway - fs.EquityPool
+		newEquity := currentEquity - pct
+		
+		if newEquity < 50.0 && currentEquity >= 50.0 {
+			red := color.New(color.FgRed, color.Bold)
+			yellow := color.New(color.FgYellow, color.Bold)
+			fmt.Println()
+			red.Println("⚠️  WARNING: This will drop you below 50% ownership!")
+			yellow.Printf("   Current equity: %.2f%%\n", currentEquity)
+			yellow.Printf("   After expansion: %.2f%%\n", newEquity)
+			fmt.Println("   Without majority control, investors can force exit decisions.")
+			fmt.Print("\nContinue anyway? (y/n): ")
+			confirm, _ := reader.ReadString('\n')
+			confirm = strings.TrimSpace(strings.ToLower(confirm))
+			if confirm != "y" && confirm != "yes" {
+				fmt.Println("\nCanceled")
+				return true
+			}
+		}
+
 		fs.ExpandEquityPool(pct)
 		color.Green("\n✓ Expanded equity pool by %.1f%%", pct)
 		fmt.Printf("  New equity pool: %.1f%%\n", fs.EquityPool)
@@ -2086,6 +2265,32 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 
 	case "3":
 		handleAddAdvisor(fs)
+
+	case "4":
+		if len(fs.BoardMembers) == 0 {
+			color.Red("\nInvalid choice!")
+			return true
+		}
+		chairman := fs.GetChairman()
+		if chairman == nil {
+			handleSetChairman(fs)
+		} else {
+			handleRemoveChairman(fs)
+		}
+
+	case "5":
+		if len(fs.BoardMembers) == 0 {
+			color.Red("\nInvalid choice!")
+			return true
+		}
+		handleRemoveAdvisor(fs)
+
+	case "6":
+		if len(fs.BoardMembers) == 0 {
+			color.Red("\nInvalid choice!")
+			return true
+		}
+		handleFireBoardMember(fs)
 
 	case "0":
 		fmt.Println("\nCanceled")
@@ -2275,6 +2480,349 @@ func handleAddAdvisor(fs *founder.FounderState) {
 	fmt.Println("\n   💡 They will provide monthly guidance based on their expertise.")
 }
 
+func handleSetChairman(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	red := color.New(color.FgRed)
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("👔 SET ADVISOR AS CHAIRMAN")
+	fmt.Println(strings.Repeat("─", 70))
+
+	// List available advisors
+	availableAdvisors := []founder.BoardMember{}
+	for _, member := range fs.BoardMembers {
+		if member.IsActive && !member.IsChairman {
+			availableAdvisors = append(availableAdvisors, member)
+		}
+	}
+
+	if len(availableAdvisors) == 0 {
+		red.Println("\n❌ No advisors available to set as chairman!")
+		return
+	}
+
+	fmt.Println("\nSelect advisor to promote to Chairman:")
+	for i, advisor := range availableAdvisors {
+		fmt.Printf("%d. %s (%s) - Current equity: %.2f%%\n",
+			i+1, advisor.Name, advisor.Expertise, advisor.EquityCost)
+	}
+	fmt.Println("0. Cancel")
+
+	fmt.Print("\nSelect (0-%d): ", len(availableAdvisors))
+	choiceStr, _ := reader.ReadString('\n')
+	choiceStr = strings.TrimSpace(choiceStr)
+	choice, err := strconv.Atoi(choiceStr)
+	if err != nil || choice < 0 || choice > len(availableAdvisors) {
+		color.Red("\nInvalid choice!")
+		return
+	}
+
+	if choice == 0 {
+		fmt.Println("\nCanceled")
+		return
+	}
+
+	selectedAdvisor := availableAdvisors[choice-1]
+
+	// Calculate additional equity needed
+	currentEquity := selectedAdvisor.EquityCost
+	additionalEquity := currentEquity * (0.5 + rand.Float64()*0.5) // 0.5-1x additional
+	totalEquityNeeded := currentEquity + additionalEquity
+
+	// Check available equity
+	availableEquity := fs.EquityPool - fs.EquityAllocated
+	if availableEquity < additionalEquity {
+		red.Printf("\n❌ Insufficient equity pool! Need %.2f%%, have %.2f%% available\n", additionalEquity, availableEquity)
+		fmt.Println("   Expand your equity pool first.")
+		return
+	}
+
+	// Show cost breakdown
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Printf("💰 Chairman Promotion: %s\n", selectedAdvisor.Name)
+	fmt.Println(strings.Repeat("─", 70))
+	fmt.Printf("Current Equity: %.2f%%\n", currentEquity)
+	fmt.Printf("Additional Equity Required: %.2f%%\n", additionalEquity)
+	fmt.Printf("Total Equity After Promotion: %.2f%%\n", totalEquityNeeded)
+	fmt.Printf("\nBenefits:\n")
+	green.Println("  • 60% chance of guidance (vs 30% for advisors)")
+	green.Println("  • 2x impact on all benefits")
+	green.Println("  • Crisis management (mitigates negative events)")
+	green.Println("  • Investor relations (reduces board pressure)")
+	green.Println("  • Represents company at events")
+	fmt.Printf("\nTradeoffs:\n")
+	red.Printf("  • Additional %.2f%% equity dilution\n", additionalEquity)
+	red.Println("  • Higher monthly retainer ($5-15k vs $2-8k)")
+	red.Println("  • Removing chairman causes negative PR")
+
+	fmt.Print("\nConfirm promotion? (y/n): ")
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+
+	if confirm != "y" && confirm != "yes" {
+		fmt.Println("\nCanceled")
+		return
+	}
+
+	err = fs.SetChairman(selectedAdvisor.Name)
+	if err != nil {
+		red.Printf("\n❌ Error: %v\n", err)
+		return
+	}
+
+	green.Printf("\n✓ %s is now Chairman of the Board!\n", selectedAdvisor.Name)
+	fmt.Printf("  Additional equity: %.2f%%\n", additionalEquity)
+	fmt.Printf("  Total equity: %.2f%%\n", totalEquityNeeded)
+	fmt.Printf("  Remaining equity pool: %.2f%%\n", fs.EquityPool-fs.EquityAllocated)
+}
+
+func handleRemoveChairman(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	red := color.New(color.FgRed)
+	reader := bufio.NewReader(os.Stdin)
+
+	chairman := fs.GetChairman()
+	if chairman == nil {
+		red.Println("\n❌ No chairman to remove!")
+		return
+	}
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	red.Println("⚠️  REMOVE CHAIRMAN")
+	fmt.Println(strings.Repeat("─", 70))
+
+	fmt.Printf("\nCurrent Chairman: %s (%s)\n", chairman.Name, chairman.Expertise)
+	fmt.Printf("Current Equity: %.2f%%\n", chairman.EquityCost)
+
+	red.Println("\n⚠️  WARNING: Removing chairman will cause:")
+	red.Println("  • Negative PR and media attention")
+	red.Println("  • Board pressure increase (20-30 points)")
+	red.Println("  • Board sentiment deterioration")
+	red.Println("  • Potential investor concerns")
+
+	fmt.Printf("\nRemove %s as chairman? (y/n): ", chairman.Name)
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+
+	if confirm != "y" && confirm != "yes" {
+		fmt.Println("\nCanceled")
+		return
+	}
+
+	err := fs.RemoveChairman()
+	if err != nil {
+		red.Printf("\n❌ Error: %v\n", err)
+		return
+	}
+
+	yellow.Printf("\n⚠️  %s removed as chairman\n", chairman.Name)
+	red.Println("  Board pressure increased")
+	red.Println("  Board sentiment deteriorated")
+	fmt.Println("  (Chairman remains as advisor)")
+}
+
+func handleRemoveAdvisor(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	cyan := color.New(color.FgCyan)
+	red := color.New(color.FgRed)
+	green := color.New(color.FgGreen)
+	reader := bufio.NewReader(os.Stdin)
+
+	// Get active advisors (not chairman, not investors)
+	advisors := []founder.BoardMember{}
+	for _, member := range fs.BoardMembers {
+		if member.IsActive && member.Type == "advisor" && !member.IsChairman {
+			advisors = append(advisors, member)
+		}
+	}
+
+	if len(advisors) == 0 {
+		red.Println("\n❌ No advisors to remove (or all are chairman/investors)")
+		return
+	}
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	red.Println("⚠️  REMOVE ADVISOR")
+	fmt.Println(strings.Repeat("─", 70))
+
+	cyan.Println("\nSelect advisor to remove:")
+	for i, advisor := range advisors {
+		fmt.Printf("%d. %s (%s) - %.2f%% equity\n", i+1, advisor.Name, advisor.Expertise, advisor.EquityCost)
+	}
+	fmt.Println("0. Cancel")
+
+	fmt.Printf("\nSelect (0-%d): ", len(advisors))
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	choiceNum, err := strconv.Atoi(choice)
+	if err != nil || choiceNum < 0 || choiceNum > len(advisors) {
+		red.Println("\nInvalid choice!")
+		return
+	}
+
+	if choiceNum == 0 {
+		fmt.Println("\nCanceled")
+		return
+	}
+
+	selectedAdvisor := advisors[choiceNum-1]
+
+	// Ask about equity buyback
+	fmt.Println("\n" + strings.Repeat("-", 70))
+	yellow.Println("Equity Buyback Option:")
+	fmt.Println("  • Buyback equity: Expensive but advisor keeps no equity")
+	fmt.Println("  • No buyback: Advisor keeps equity but causes board pressure")
+	
+	// Calculate buyback cost
+	estimatedValuation := fs.MRR * 15
+	if estimatedValuation < 1000000 {
+		estimatedValuation = 1000000
+	}
+	buybackCost := int64(float64(estimatedValuation) * (selectedAdvisor.EquityCost / 100.0))
+	
+	fmt.Printf("\nBuyback cost: $%s (%.2f%% of estimated $%s valuation)\n", 
+		formatFounderCurrency(buybackCost), selectedAdvisor.EquityCost, formatFounderCurrency(estimatedValuation))
+	fmt.Printf("Your cash: $%s\n", formatFounderCurrency(fs.Cash))
+	
+	fmt.Print("\nBuyback equity? (y/n): ")
+	buybackChoice, _ := reader.ReadString('\n')
+	buybackChoice = strings.TrimSpace(strings.ToLower(buybackChoice))
+	buybackEquity := (buybackChoice == "y" || buybackChoice == "yes")
+
+	if buybackEquity && buybackCost > fs.Cash {
+		red.Printf("\n❌ Insufficient cash for buyback (need $%s)\n", formatFounderCurrency(buybackCost))
+		return
+	}
+
+	// Confirm removal
+	red.Printf("\n⚠️  WARNING: Removing %s will:\n", selectedAdvisor.Name)
+	if buybackEquity {
+		red.Printf("  • Cost $%s for equity buyback\n", formatFounderCurrency(buybackCost))
+		green.Println("  • Return equity to you")
+	} else {
+		red.Println("  • Increase board pressure (10-20 points)")
+		red.Println("  • Deteriorate board sentiment")
+		yellow.Println("  • Advisor keeps their equity")
+	}
+
+	fmt.Printf("\nRemove %s? (y/n): ", selectedAdvisor.Name)
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+	if confirm != "y" && confirm != "yes" {
+		fmt.Println("\nCanceled")
+		return
+	}
+
+	err = fs.RemoveAdvisor(selectedAdvisor.Name, buybackEquity)
+	if err != nil {
+		red.Printf("\n❌ Error: %v\n", err)
+		return
+	}
+
+	if buybackEquity {
+		green.Printf("\n✅ %s removed (equity bought back for $%s)\n", selectedAdvisor.Name, formatFounderCurrency(buybackCost))
+		green.Printf("  Equity returned: %.2f%%\n", selectedAdvisor.EquityCost)
+	} else {
+		yellow.Printf("\n⚠️  %s removed from board\n", selectedAdvisor.Name)
+		red.Println("  Board pressure increased")
+		red.Println("  Board sentiment deteriorated")
+		fmt.Printf("  (%s keeps %.2f%% equity)\n", selectedAdvisor.Name, selectedAdvisor.EquityCost)
+	}
+}
+
+func handleFireBoardMember(fs *founder.FounderState) {
+	yellow := color.New(color.FgYellow)
+	cyan := color.New(color.FgCyan)
+	red := color.New(color.FgRed, color.Bold)
+	reader := bufio.NewReader(os.Stdin)
+
+	// Get investor board members
+	investorMembers := []founder.BoardMember{}
+	for _, member := range fs.BoardMembers {
+		if member.IsActive && member.Type == "investor" {
+			investorMembers = append(investorMembers, member)
+		}
+	}
+
+	if len(investorMembers) == 0 {
+		red.Println("\n❌ No investor board members to fire")
+		return
+	}
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	red.Println("🔥 FIRE BOARD MEMBER")
+	fmt.Println(strings.Repeat("─", 70))
+
+	// Check founder equity
+	founderEquity := 100.0 - fs.EquityGivenAway - fs.EquityPool
+	if founderEquity < 51.0 {
+		red.Printf("\n❌ Cannot fire board members: You need 51%%+ ownership\n")
+		yellow.Printf("   Your current equity: %.1f%%\n", founderEquity)
+		return
+	}
+
+	cyan.Printf("\nYour equity: %.1f%% (majority owner)\n", founderEquity)
+	cyan.Println("\nSelect investor board member to fire:")
+	for i, member := range investorMembers {
+		role := ""
+		if member.IsChairman {
+			role = " (Chairman)"
+		}
+		fmt.Printf("%d. %s - %.2f%% equity%s\n", i+1, member.Name, member.EquityCost, role)
+	}
+	fmt.Println("0. Cancel")
+
+	fmt.Printf("\nSelect (0-%d): ", len(investorMembers))
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	choiceNum, err := strconv.Atoi(choice)
+	if err != nil || choiceNum < 0 || choiceNum > len(investorMembers) {
+		red.Println("\nInvalid choice!")
+		return
+	}
+
+	if choiceNum == 0 {
+		fmt.Println("\nCanceled")
+		return
+	}
+
+	selectedMember := investorMembers[choiceNum-1]
+
+	// Serious warning
+	red.Printf("\n⚠️  ⚠️  ⚠️  SERIOUS CONSEQUENCES ⚠️  ⚠️  ⚠️\n")
+	red.Printf("\nFiring %s will cause:\n", selectedMember.Name)
+	red.Println("  • Massive board pressure increase (30-50 points)")
+	red.Println("  • Board sentiment becomes ANGRY")
+	red.Println("  • Negative PR and media attention")
+	red.Println("  • Other investors will be very concerned")
+	red.Println("  • May impact future fundraising")
+	yellow.Printf("  • Board seats reduced by 1\n")
+	yellow.Printf("  • %s keeps %.2f%% equity (cannot buyback)\n", selectedMember.Name, selectedMember.EquityCost)
+
+	fmt.Printf("\n🔥 FIRE %s? (type 'FIRE' to confirm): ", selectedMember.Name)
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(confirm)
+	if confirm != "FIRE" {
+		fmt.Println("\nCanceled (must type 'FIRE' to confirm)")
+		return
+	}
+
+	err = fs.FireBoardMember(selectedMember.Name)
+	if err != nil {
+		red.Printf("\n❌ Error: %v\n", err)
+		return
+	}
+
+	red.Printf("\n🔥 %s FIRED from board\n", selectedMember.Name)
+	red.Println("  Board pressure increased significantly")
+	red.Println("  Board sentiment: ANGRY")
+	red.Println("  Negative PR generated")
+	yellow.Printf("  Board seats: %d\n", fs.BoardSeats)
+	fmt.Printf("  (%s keeps %.2f%% equity)\n", selectedMember.Name, selectedMember.EquityCost)
+}
+
 func handleExitOptions(fs *founder.FounderState) bool {
 	yellow := color.New(color.FgYellow)
 	cyan := color.New(color.FgCyan)
@@ -2356,7 +2904,34 @@ func handleExitOptions(fs *founder.FounderState) bool {
 		return true
 	}
 
-	// Confirm exit
+	// Check if founder has majority ownership
+	founderEquity := 100.0 - fs.EquityPool - fs.EquityGivenAway
+	forcedExit := founderEquity < 50.0
+
+	if forcedExit {
+		red := color.New(color.FgRed, color.Bold)
+		yellow := color.New(color.FgYellow, color.Bold)
+		fmt.Println()
+		red.Println("⚠️  WARNING: You don't have majority ownership!")
+		yellow.Printf("   Your equity: %.2f%% (need 50%%+ for control)\n", founderEquity)
+		fmt.Println("   Without majority control, investors can force exit decisions.")
+		fmt.Println()
+		yellow.Printf("   The %s exit will proceed automatically...\n", strings.ToUpper(selectedExit.Type))
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		
+		// Execute exit automatically
+		fs.ExecuteExit(selectedExit.Type)
+		
+		green.Printf("\n🎉 Exit completed via %s (Board approved)\n", strings.ToUpper(selectedExit.Type))
+		fmt.Printf("   Company Valuation: $%s\n", formatFounderCurrency(selectedExit.Valuation))
+		fmt.Printf("   Your Payout: $%s (%.2f%% equity)\n\n", 
+			formatFounderCurrency(selectedExit.FounderPayout), founderEquity)
+		
+		return false // Game ends
+	}
+
+	// Confirm exit (only if founder has majority)
 	fmt.Println("\n" + strings.Repeat("─", 70))
 	yellow.Printf("⚠️  CONFIRM %s\n", strings.ToUpper(selectedExit.Type))
 	fmt.Println(strings.Repeat("─", 70))

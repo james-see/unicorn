@@ -30,9 +30,10 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 		LiquidationPref:     1.0,
 		HasAntiDilution:     true,
 		ConversionDiscount:  0.0,
+		ValuationCap:        0,
 	})
 
-	// Option 2: SAFE (Simple Agreement for Future Equity)
+	// Option 2: SAFE (Simple Agreement for Future Equity) - Standard (discount only)
 	safeDiscount := 0.20 // Default 20%
 	for _, upgradeID := range gs.PlayerUpgrades {
 		if upgradeID == "enhanced_safe_discount" {
@@ -50,6 +51,26 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 		LiquidationPref:     0.0, // No liquidation preference with SAFE
 		HasAntiDilution:     false,
 		ConversionDiscount:  safeDiscount,
+		ValuationCap:        0, // No cap - uses discount only
+	})
+
+	// Option 2b: SAFE with Valuation Cap (more investor-friendly)
+	// Valuation cap is typically 50-80% of current valuation
+	valuationCap := int64(float64(startup.Valuation) * 0.65) // 65% of current valuation
+	if valuationCap < 500000 {
+		valuationCap = 500000 // Minimum $500k cap
+	}
+
+	options = append(options, InvestmentTerms{
+		Type:                "SAFE (Capped)",
+		HasProRataRights:    true,
+		HasInfoRights:       false,
+		HasBoardSeat:        false,
+		BoardSeatMultiplier: 1,
+		LiquidationPref:     0.0,
+		HasAntiDilution:     false,
+		ConversionDiscount:  safeDiscount,
+		ValuationCap:        valuationCap, // Capped at 65% of current valuation
 	})
 
 	// Option 3: Common Stock (founder-friendly)
@@ -62,6 +83,7 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 		LiquidationPref:     0.0,
 		HasAntiDilution:     false,
 		ConversionDiscount:  0.0,
+		ValuationCap:        0,
 	})
 
 	// Option 4: Preferred Stock with 2x Liquidation Preference (if upgrade unlocked)
@@ -83,6 +105,7 @@ func (gs *GameState) GenerateTermOptions(startup *Startup, amount int64) []Inves
 			LiquidationPref:     2.0, // 2x liquidation preference
 			HasAntiDilution:     true,
 			ConversionDiscount:  0.0,
+			ValuationCap:        0,
 		})
 	}
 
@@ -330,16 +353,35 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 			// Update total amount invested
 			inv.AmountInvested += amount
 
-			// Calculate effective investment amount (applying SAFE conversion discount if applicable)
+			// Calculate effective investment amount (applying SAFE conversion discount and valuation cap if applicable)
 			effectiveAmount := float64(inv.AmountInvested)
-			if inv.Terms.Type == "SAFE" && inv.Terms.ConversionDiscount > 0 {
-				// SAFE converts at a discount - your investment gets more equity
+			if inv.Terms.Type == "SAFE" || inv.Terms.Type == "SAFE (Capped)" {
+				// Apply discount to get effective amount
+				if inv.Terms.ConversionDiscount > 0 {
+					effectiveAmount = float64(inv.AmountInvested) * (1.0 + inv.Terms.ConversionDiscount)
+				}
+			} else if inv.Terms.ConversionDiscount > 0 {
+				// Non-SAFE with discount (shouldn't happen, but handle it)
 				effectiveAmount = float64(inv.AmountInvested) * (1.0 + inv.Terms.ConversionDiscount)
 			}
 
 			// Recalculate total equity based on total invested amount and post-money valuation
-			// This ensures equity is always calculated correctly relative to current valuation
-			newEquityPercent := (effectiveAmount / float64(postMoneyVal)) * 100.0
+			// For SAFEs with valuation caps, use the cap if round valuation exceeds cap
+			conversionValuation := float64(postMoneyVal)
+			if (inv.Terms.Type == "SAFE" || inv.Terms.Type == "SAFE (Capped)") && inv.Terms.ValuationCap > 0 {
+				// For SAFEs, conversion happens at the pre-money valuation (before new money comes in)
+				// But we calculate equity based on post-money
+				// If pre-money exceeds cap, use cap for conversion calculation
+				if preMoneyVal > inv.Terms.ValuationCap {
+					// Convert at cap valuation, then calculate post-money equity
+					// Effective post-money = cap + (postMoneyVal - preMoneyVal) = cap + raiseAmount
+					raiseAmount := postMoneyVal - preMoneyVal
+					effectivePostMoney := float64(inv.Terms.ValuationCap) + float64(raiseAmount)
+					conversionValuation = effectivePostMoney
+				}
+			}
+			
+			newEquityPercent := (effectiveAmount / conversionValuation) * 100.0
 
 			// Cap equity at 100% (should never happen, but safety check)
 			if newEquityPercent > 100.0 {
@@ -517,6 +559,7 @@ func (gs *GameState) MakeSyndicateInvestment(opportunityIndex int, amount int64)
 		LiquidationPref:     1.0,
 		HasAntiDilution:     true,
 		ConversionDiscount:  0.0,
+		ValuationCap:        0,
 	}
 	
 	investment := Investment{

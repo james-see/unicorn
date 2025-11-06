@@ -245,3 +245,53 @@ func (gs *GameState) ExecuteBoardVoteOutcome(vote BoardVote, passed bool) []stri
 
 	return messages
 }
+
+// BoardMemberInfo represents information about a board member
+type BoardMemberInfo struct {
+	Name        string
+	Firm        string
+	Type        string // "player", "ai_investor", "founder"
+	VoteWeight  int
+	IsPlayer    bool
+}
+
+// GetBoardMembers returns all board members for a company
+func (gs *GameState) GetBoardMembers(companyName string) []BoardMemberInfo {
+	members := []BoardMemberInfo{}
+
+	// Add player if they have a board seat
+	for _, inv := range gs.Portfolio.Investments {
+		if inv.CompanyName == companyName && inv.Terms.HasBoardSeat {
+			voteWeight := inv.Terms.BoardSeatMultiplier
+			if voteWeight == 0 {
+				voteWeight = 1
+			}
+			members = append(members, BoardMemberInfo{
+				Name:       gs.PlayerName,
+				Firm:       "Your Fund",
+				Type:       "player",
+				VoteWeight: voteWeight,
+				IsPlayer:   true,
+			})
+			break
+		}
+	}
+
+	// Add AI investors with board seats
+	for _, ai := range gs.AIPlayers {
+		for _, inv := range ai.Portfolio.Investments {
+			if inv.CompanyName == companyName && inv.Terms.HasBoardSeat {
+				members = append(members, BoardMemberInfo{
+					Name:       ai.Name,
+					Firm:       ai.Firm,
+					Type:       "ai_investor",
+					VoteWeight: 1, // AI always has 1 vote
+					IsPlayer:   false,
+				})
+				break // Only add each AI once per company
+			}
+		}
+	}
+
+	return members
+}

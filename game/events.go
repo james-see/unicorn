@@ -53,6 +53,71 @@ func (gs *GameState) ProcessManagementFees() []string {
 	return messages
 }
 
+func (gs *GameState) ProcessCapitalCalls() []string {
+	messages := []string{}
+
+	// Check if this turn has a scheduled capital call
+	for _, scheduledTurn := range gs.Portfolio.CapitalCallSchedule {
+		if scheduledTurn == gs.Portfolio.Turn {
+			// Calculate how much capital to call (25% of committed capital per call)
+			callAmount := gs.Portfolio.LPCommittedCapital / 4
+			remainingCommitment := gs.Portfolio.LPCommittedCapital - gs.Portfolio.LPCalledCapital
+
+			// Only call if there's remaining commitment
+			if remainingCommitment > 0 {
+				// Don't call more than remaining commitment
+				if callAmount > remainingCommitment {
+					callAmount = remainingCommitment
+				}
+
+				// Add capital to fund
+				gs.Portfolio.Cash += callAmount
+				gs.Portfolio.LPCalledCapital += callAmount
+				gs.Portfolio.LastCapitalCallTurn = gs.Portfolio.Turn
+
+				// Show message
+				messages = append(messages, fmt.Sprintf(
+					"💰 Capital Call: LPs wired $%s (Total called: $%s / $%s committed)",
+					formatCurrency(callAmount),
+					formatCurrency(gs.Portfolio.LPCalledCapital),
+					formatCurrency(gs.Portfolio.LPCommittedCapital),
+				))
+			}
+		}
+	}
+
+	return messages
+}
+
+func (gs *GameState) processAICapitalCalls(aiIndex int) []string {
+	messages := []string{}
+	ai := &gs.AIPlayers[aiIndex]
+
+	// Check if this turn has a scheduled capital call
+	for _, scheduledTurn := range ai.Portfolio.CapitalCallSchedule {
+		if scheduledTurn == ai.Portfolio.Turn {
+			// Calculate how much capital to call (25% of committed capital per call)
+			callAmount := ai.Portfolio.LPCommittedCapital / 4
+			remainingCommitment := ai.Portfolio.LPCommittedCapital - ai.Portfolio.LPCalledCapital
+
+			// Only call if there's remaining commitment
+			if remainingCommitment > 0 {
+				// Don't call more than remaining commitment
+				if callAmount > remainingCommitment {
+					callAmount = remainingCommitment
+				}
+
+				// Add capital to fund
+				ai.Portfolio.Cash += callAmount
+				ai.Portfolio.LPCalledCapital += callAmount
+				ai.Portfolio.LastCapitalCallTurn = ai.Portfolio.Turn
+			}
+		}
+	}
+
+	return messages
+}
+
 func (gs *GameState) ProcessDramaticEvents() []string {
 	messages := []string{}
 

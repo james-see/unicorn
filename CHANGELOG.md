@@ -1,5 +1,262 @@
 # Changelog
 
+## Version 3.24.0 - LP Commitments, Valuation Caps & Board Governance (2025-11-06)
+
+### Major Features Added
+
+#### 💰 LP Commitments & Capital Calls (VC Mode)
+- **Realistic Fund Management**: LPs commit 2x the initial fund size
+- **Quarterly Capital Calls**: Automatic capital calls every 3 months (25% of committed capital per call)
+- **Capital Call Processing**: Capital automatically added to fund during scheduled calls
+- **LP Tracking**: Full tracking of committed capital, called capital, remaining commitment, and next call date
+- **Portfolio Dashboard Integration**: New LP Commitments section showing:
+  - Total LP committed capital
+  - Capital called to date
+  - Remaining commitment
+  - Last capital call date
+  - Next scheduled capital call
+- **Welcome Screen**: Shows LP committed capital information at game start
+- **AI Players**: All AI competitors also use LP commitments for consistency
+
+#### 📊 Valuation Caps & Discounts (VC Mode)
+- **SAFE with Valuation Caps**: New investment option "SAFE (Capped)" with valuation cap protection
+- **Valuation Cap Mechanics**: Caps set at 65% of current valuation (minimum $500k)
+- **Conversion Logic**: SAFEs convert at cap valuation when company raises above cap, protecting investors
+- **Equity Calculation**: Proper handling of valuation caps during follow-on investments and funding rounds
+- **UI Display**: Valuation cap information shown when selecting investment terms
+- **Benefits**: Investors get better terms when companies raise at valuations exceeding the cap
+
+#### 🏛️ Board Meeting Interface (VC Mode)
+- **Visual Board Table**: ASCII art board table displayed during board meetings
+- **Member Visualization**: Board members shown around table with icons (player vs AI investors)
+- **Automatic Display**: Board meeting interface automatically shown when board votes are required
+- **Animations**: Brief pause for visual effect during board meetings
+- **Integration**: Seamlessly integrated into board vote handling flow
+
+#### 👥 View Board Members (VC Mode)
+- **GetBoardMembers() Function**: Returns all board members (player + AI investors) for a company
+- **Portfolio Dashboard Integration**: Board seats section showing companies where you have board seats
+- **Detailed View**: Press 'b' in portfolio dashboard to see all board members with vote weights
+- **Vote Weight Display**: Shows voting power including double board seat upgrades
+- **Member Information**: Displays name, firm, type, and vote weight for each board member
+
+#### 🔥 Fire Board Members (Founder Mode)
+- **FireBoardMember() Function**: Remove investor board members as majority owner
+- **51%+ Ownership Requirement**: Must have majority control to fire board members
+- **Serious Consequences**:
+  - Massive board pressure increase (30-50 points)
+  - Board sentiment becomes ANGRY
+  - Negative PR and media attention
+  - Other investors become very concerned
+  - May impact future fundraising
+- **Board Seat Reduction**: Reduces total board seats by 1
+- **Equity Retention**: Investor keeps their equity (cannot buyback)
+- **Confirmation**: Requires typing "FIRE" to confirm (safety measure)
+- **UI Handler**: Full interface with warnings and consequences display
+
+#### 🗑️ Remove Advisors (Founder Mode)
+- **RemoveAdvisor() Function**: Remove advisors from the board with equity buyback option
+- **Equity Buyback Option**:
+  - Expensive buyback at current valuation (15x MRR multiple, minimum $1M)
+  - Returns equity to founder
+  - Removes advisor from cap table
+- **No Buyback Option**:
+  - Advisor keeps equity but is removed from board
+  - Causes board pressure increase (10-20 points)
+  - Deteriorates board sentiment
+- **Protection**: Cannot remove chairman directly (must remove chairman role first)
+- **UI Handler**: Full interface with buyback cost calculation and confirmation
+
+### Technical Changes
+
+**New Files**:
+- None (features added to existing files)
+
+**Modified Files**:
+- `game/game.go` - Added LP commitment initialization, `initializeLPCommitments()` helper function
+- `game/events.go` - Added `ProcessCapitalCalls()` and `processAICapitalCalls()` functions
+- `game/investment.go` - Added `ValuationCap` field to `InvestmentTerms`, updated SAFE conversion logic
+- `game/board_votes.go` - Added `BoardMemberInfo` struct and `GetBoardMembers()` function
+- `ui/vc_ui.go` - Added `DisplayBoardMeeting()` function, integrated into board vote handling
+- `ui/portfolio_dashboard.go` - Added LP Commitments section, Board Seats section, `ViewBoardMembers()` function
+- `founder/founder_advisors.go` - Added `RemoveAdvisor()` and `FireBoardMember()` functions
+- `ui/founder_ui.go` - Added `handleRemoveAdvisor()` and `handleFireBoardMember()` UI handlers
+- `ascii/ascii.go` - Added `BoardTable` ASCII art constant
+- `ROADMAP.md` - Updated to mark completed features
+
+**New Functions**:
+- `initializeLPCommitments(startingCash, maxTurns)` - Sets up LP commitments and capital call schedule
+- `ProcessCapitalCalls()` - Processes scheduled capital calls for player
+- `processAICapitalCalls(aiIndex)` - Processes capital calls for AI players
+- `GetBoardMembers(companyName)` - Returns all board members for a company
+- `DisplayBoardMeeting(gs, companyName, voteTitle)` - Shows visual board meeting interface
+- `ViewBoardMembers(gs)` - Detailed view of all board members
+- `RemoveAdvisor(advisorName, buybackEquity)` - Removes advisor with buyback option
+- `FireBoardMember(memberName)` - Fires investor board member (requires 51%+ ownership)
+
+### User Experience Improvements
+
+**LP Commitments**:
+- Clear display of LP commitment status in portfolio dashboard
+- Capital call notifications during turns
+- Welcome screen shows LP committed capital
+
+**Valuation Caps**:
+- Clear display of valuation cap in investment terms selection
+- Explanation of cap benefits in UI
+
+**Board Meetings**:
+- Visual board table makes board meetings more immersive
+- Clear display of all board members and their voting power
+- Better understanding of board composition
+
+**Board Governance**:
+- Clear warnings about consequences of firing board members
+- Equity buyback cost calculation displayed before removal
+- Confirmation requirements for serious actions
+
+### Game Balance
+
+**LP Commitments**:
+- Provides additional capital over time (realistic VC fund structure)
+- Capital calls happen quarterly, giving players more funds to invest
+- Management fees calculated on larger fund size after capital calls
+
+**Valuation Caps**:
+- Gives investors protection when companies raise at higher valuations
+- More investor-friendly than standard SAFE (discount only)
+- Adds strategic choice between standard SAFE and capped SAFE
+
+**Board Governance**:
+- Firing board members has serious consequences (realistic)
+- Equity buyback is expensive but returns equity to founder
+- Requires majority ownership to fire investors (realistic control requirement)
+
+---
+
+## Version 3.23.0 - Chairman of the Board, Enhanced Analytics & Silicon Valley Competitors (2025-11-06)
+
+### Major Features Added
+
+#### 👔 Chairman of the Board (Founder Mode)
+- **Appoint Advisors as Chairman**: Promote any advisor to chairman of the board for enhanced governance
+- **Benefits**:
+  - **60% Guidance Chance** (vs 30% for regular advisors) with 2x impact multiplier
+  - **Crisis Management**: Chairman mitigates negative events (legal, press, regulation) by 30-50%
+  - **Investor Relations**: Reduces board pressure by 5-15 points monthly
+  - **Event Representation**: Chairman speaks on your behalf at conferences (30% chance per month)
+  - **Network Access**: Better partnership opportunities and fundraising connections
+- **Tradeoffs**:
+  - **Higher Equity Cost**: Requires 1.5-2x equity (0.5-2% vs 0.25-1% for regular advisor)
+  - **Higher Monthly Costs**: $5-15k/month retainer (vs $2-8k for regular advisor)
+  - **Removal Consequences**: Removing chairman causes negative PR, board pressure increase, and sentiment deterioration
+- **UI**: Full interface for setting/removing chairman with cost breakdown and benefit display
+
+#### 💰 Enhanced Carry Interest Display (VC Mode)
+- **Portfolio Dashboard Integration**: Added comprehensive carry interest projection section
+- **Real-Time Calculations**: Shows projected carry, hurdle return, excess profit during game
+- **Progress Tracking**: Displays progress to 40% hurdle (8% annual over 5 years)
+- **Detailed Metrics**:
+  - Starting capital and hurdle return amount
+  - Current profit vs hurdle
+  - Projected carry (20% of excess profit)
+  - Net to LPs after carry
+  - Progress percentage to hurdle
+- **Helper Function**: New `CalculateCarryInterest()` function for real-time projections
+
+#### 🤖 More AI Personalities (VC Mode)
+- **4 New AI Players Added**:
+  - **Michael Chen (First Round Capital)** - `seed_focused` strategy, focuses on early-stage companies (<$3M valuation)
+  - **Emily Rodriguez (Greylock Partners)** - `enterprise_focused` strategy, prefers SaaS/GovTech companies
+  - **James Wilson (Index Ventures)** - `deep_tech` strategy, focuses on DeepTech/Hardware startups
+  - **Sophie Martin (Lightspeed Venture Partners)** - `consumer_focused` strategy, consumer SaaS focus
+- **Total AI Players**: Now 12 total (up from 8) with 9 distinct investment strategies
+- **Strategy Diversity**: Each AI has unique investment criteria based on company category, valuation, and risk profile
+
+#### 📊 Enhanced Portfolio Dashboard (VC Mode)
+- **Carry Interest Section**: Complete projection with hurdle tracking
+- **Financial Metrics**: Starting capital, hurdle return, current profit, excess profit calculations
+- **Progress Indicators**: Visual progress to hurdle with percentage display
+- **LP Returns**: Shows net to LPs after carry interest deduction
+
+#### 🏢 Silicon Valley Competitor AI System (Founder Mode)
+- **20 Silicon Valley Companies**: Competitors based on HBO's Silicon Valley TV show:
+  - **High Threat**: Hooli, Nucleus, Action Jack's Company, Pied Piper, Hooli Search, Gavin Belson's New Thing
+  - **Medium Threat**: End Frame, Bream-Hall, Raviga, SeeFood, Hooli XYZ, Hooli Chat, Hooli Connect, Fiber
+  - **Low Threat**: Aviato, Optimal Tip-to-Tip, Hooli Box, Bachmanity, Homicide, Bro
+- **Strategic AI Behaviors** (15% chance per month):
+  - **Steal Customers** (40% chance): Competitors steal 5-15% of your customers based on market share
+  - **Launch Competing Products** (30% chance): Increases threat level and your CAC by 10%
+  - **Aggressive Pricing** (15% chance): Undercuts your prices, reducing growth rate by 5-15%
+  - **Poach Talent** (15% chance): Hires away employees, reducing team productivity
+- **Hooli-Specific Behaviors** (10% chance per month):
+  - Massive marketing campaigns (increases market share, raises your CAC)
+  - Conference announcements (intensifies competition)
+  - Executive poaching (slows product development)
+  - Patent lawsuits (costs $50-150k in legal fees)
+- **Enhanced Acquisition Logic**:
+  - **Hooli**: 1.5x more likely to acquire, often lowballs with bad terms, sometimes makes aggressive "Gavin Belson" offers
+  - **Nucleus**: 1.3x more likely to acquire (competitive)
+  - **Company-Specific**: Different acquisition behaviors based on Silicon Valley company personalities
+  - **Hooli Stays Active**: Unlike other competitors, Hooli continues competing even after acquisition attempts
+- **UI Enhancements**: Silicon Valley flavor text, special acquisition messages, themed completion screens
+
+### Technical Changes
+
+**New Files**:
+- None (features added to existing files)
+
+**Modified Files**:
+- `founder/founder_types.go` - Added `IsChairman` field to `BoardMember` struct
+- `founder/founder_advisors.go` - Added chairman functions: `GetChairman()`, `SetChairman()`, `RemoveChairman()`, `MitigateCrisis()`
+- `founder/founder_game.go` - Enhanced `GetBoardGuidance()` with chairman benefits (60% chance, 2x impact)
+- `founder/founder_events.go` - Replaced generic competitor names with Silicon Valley companies, enhanced `UpdateCompetitors()` with strategic AI behaviors
+- `founder/founder_game.go` - Enhanced `CheckForCompetitorAcquisition()` with company-specific logic
+- `game/game.go` - Added `CalculateCarryInterest()` helper function
+- `ui/portfolio_dashboard.go` - Added carry interest projection section with detailed metrics
+- `game/ai_players.go` - Added 4 new AI players with distinct strategies
+- `ui/founder_ui.go` - Added chairman management UI, Silicon Valley competitor flavor text, enhanced acquisition messages
+
+**New Functions**:
+- `GetChairman()` - Returns current chairman
+- `SetChairman(advisorName)` - Promotes advisor to chairman (requires additional equity)
+- `RemoveChairman()` - Removes chairman role (with consequences)
+- `MitigateCrisis(event)` - Chairman mitigates negative events
+- `CalculateCarryInterest()` - Calculates projected carry interest with hurdle tracking
+
+### User Experience Improvements
+
+**Chairman of the Board**:
+- Clear cost/benefit breakdown when promoting advisor
+- Warning messages about removal consequences
+- Enhanced monthly guidance with 2x impact
+- Crisis mitigation messages when chairman helps
+
+**Carry Interest**:
+- Real-time projections during game (not just at end)
+- Clear progress indicators to hurdle
+- Detailed financial breakdown in dashboard
+
+**Silicon Valley Competitors**:
+- Recognizable company names add flavor and humor
+- Strategic behaviors create dynamic gameplay
+- Hooli's aggressive tactics create memorable moments
+- Company-specific acquisition behaviors add realism
+
+### Game Balance
+
+**Chairman**:
+- High equity cost (1.5-2x) balances powerful benefits
+- Removal consequences prevent abuse
+- 60% guidance chance with 2x impact provides significant advantage
+
+**Competitors**:
+- 15% monthly action chance prevents overwhelming player
+- Hooli's 10% dramatic action chance creates memorable events
+- Market share growth/shrinkage mechanics reward active competition
+
+---
+
 ## Version 3.22.0 - Achievement Leaderboard Feature (2025-11-06)
 
 ### Major Features Added

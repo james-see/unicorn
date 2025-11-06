@@ -6,7 +6,11 @@ import (
 
 
 func (gs *GameState) InitializeAIPlayers() {
-	gs.AIPlayers = []AIPlayer{
+	// Initialize LP commitments for AI players
+	lpCommittedCapital, capitalCallSchedule := initializeLPCommitments(gs.Difficulty.StartingCash, gs.Difficulty.MaxTurns)
+	
+	// Randomly select 3-5 AI players from the pool
+	allAIPlayers := []AIPlayer{
 		{
 			Name:          "CARL",
 			Firm:          "Sterling & Cooper",
@@ -20,6 +24,11 @@ func (gs *GameState) InitializeAIPlayers() {
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
 				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
 			},
 		},
 		{
@@ -35,6 +44,11 @@ func (gs *GameState) InitializeAIPlayers() {
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
 				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
 			},
 		},
 		{
@@ -50,9 +64,206 @@ func (gs *GameState) InitializeAIPlayers() {
 				InitialFundSize:     gs.Difficulty.StartingCash,
 				AnnualManagementFee: 0.02,
 				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "Alex Rodriguez",
+			Firm:          "Tiger Global",
+			Strategy:      "aggressive",
+			RiskTolerance: 0.85, // Very aggressive growth investor
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "Jessica Park",
+			Firm:          "Y Combinator",
+			Strategy:      "early_stage",
+			RiskTolerance: 0.6, // Early-stage specialist, moderate risk
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "Raj Patel",
+			Firm:          "SoftBank Vision Fund",
+			Strategy:      "mega_fund",
+			RiskTolerance: 0.75, // Mega-fund, high valuations
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "David Kim",
+			Firm:          "Andreessen Horowitz",
+			Strategy:      "balanced",
+			RiskTolerance: 0.55, // Balanced approach, tech-focused
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "Lisa Thompson",
+			Firm:          "Benchmark Capital",
+			Strategy:      "conservative",
+			RiskTolerance: 0.35, // Conservative, quality-focused
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "Michael Chen",
+			Firm:          "First Round Capital",
+			Strategy:      "seed_focused",
+			RiskTolerance: 0.65, // Seed-stage specialist, higher risk tolerance
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "Emily Rodriguez",
+			Firm:          "Greylock Partners",
+			Strategy:      "enterprise_focused",
+			RiskTolerance: 0.45, // Enterprise SaaS focus, moderate risk
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "James Wilson",
+			Firm:          "Index Ventures",
+			Strategy:      "deep_tech",
+			RiskTolerance: 0.7, // Deep tech focus, high risk/high reward
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
+			},
+		},
+		{
+			Name:          "Sophie Martin",
+			Firm:          "Lightspeed Venture Partners",
+			Strategy:      "consumer_focused",
+			RiskTolerance: 0.6, // Consumer products focus, moderate-high risk
+			Portfolio: Portfolio{
+				Cash:                gs.Difficulty.StartingCash,
+				NetWorth:            gs.Difficulty.StartingCash,
+				Turn:                1,
+				MaxTurns:            gs.Difficulty.MaxTurns,
+				InitialFundSize:     gs.Difficulty.StartingCash,
+				AnnualManagementFee: 0.02,
+				FollowOnReserve:     gs.Portfolio.FollowOnReserve,
+				CarryInterestPaid:   0,
+				LPCommittedCapital:  lpCommittedCapital,
+				LPCalledCapital:     0,
+				LastCapitalCallTurn: 0,
+				CapitalCallSchedule: capitalCallSchedule,
 			},
 		},
 	}
+
+	// Shuffle and select 3-5 players
+	rand.Shuffle(len(allAIPlayers), func(i, j int) {
+		allAIPlayers[i], allAIPlayers[j] = allAIPlayers[j], allAIPlayers[i]
+	})
+	
+	numPlayers := 3 + rand.Intn(3) // 3-5 AI players
+	if numPlayers > len(allAIPlayers) {
+		numPlayers = len(allAIPlayers)
+	}
+	
+	gs.AIPlayers = allAIPlayers[:numPlayers]
 }
 
 func (gs *GameState) AIPlayerMakeInvestments() {
@@ -87,6 +298,24 @@ func (gs *GameState) AIPlayerMakeInvestments() {
 				shouldInvest = startup.RiskScore < 0.4 && startup.GrowthPotential > 0.5
 			} else if ai.Strategy == "aggressive" {
 				shouldInvest = startup.GrowthPotential > 0.7 || (startup.RiskScore > 0.7 && startup.GrowthPotential > 0.6)
+			} else if ai.Strategy == "early_stage" {
+				// Y Combinator: Focus on early-stage companies with high growth potential
+				shouldInvest = startup.Valuation < 2000000 && startup.GrowthPotential > 0.6 && startup.RiskScore < 0.8
+			} else if ai.Strategy == "mega_fund" {
+				// SoftBank: Invest in larger rounds, focus on scale
+				shouldInvest = startup.Valuation > 1000000 && startup.GrowthPotential > 0.65
+			} else if ai.Strategy == "seed_focused" {
+				// First Round: Seed-stage focus, lower valuations, high growth potential
+				shouldInvest = startup.Valuation < 3000000 && startup.GrowthPotential > 0.65 && startup.RiskScore < 0.75
+			} else if ai.Strategy == "enterprise_focused" {
+				// Greylock: Enterprise SaaS focus, prefer SaaS category
+				shouldInvest = (startup.Category == "SaaS" || startup.Category == "GovTech") && startup.GrowthPotential > 0.55 && startup.RiskScore < 0.65
+			} else if ai.Strategy == "deep_tech" {
+				// Index Ventures: Deep tech focus, high risk tolerance
+				shouldInvest = (startup.Category == "DeepTech" || startup.Category == "Hardware") && startup.GrowthPotential > 0.6
+			} else if ai.Strategy == "consumer_focused" {
+				// Lightspeed: Consumer products focus, moderate-high risk
+				shouldInvest = startup.Category == "SaaS" && startup.GrowthPotential > 0.6 && startup.RiskScore < 0.7
 			} else { // balanced
 				shouldInvest = startup.GrowthPotential > 0.5 && startup.RiskScore < 0.7
 			}
@@ -123,6 +352,7 @@ func (gs *GameState) AIPlayerMakeInvestments() {
 						LiquidationPref:     1.0,
 						HasAntiDilution:     true,
 						ConversionDiscount:  0.0,
+						ValuationCap:        0,
 					}
 
 					investment := Investment{
