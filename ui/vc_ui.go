@@ -17,7 +17,6 @@ import (
 	"github.com/jamesacampbell/unicorn/upgrades"
 )
 
-
 func FormatCurrency(amount int64) string {
 	if amount < 0 {
 		return fmt.Sprintf("-$%s", FormatCurrency(-amount))
@@ -33,7 +32,6 @@ func FormatCurrency(amount int64) string {
 	}
 	return result
 }
-
 
 func AskForAutomatedMode() bool {
 	cyan := color.New(color.FgCyan, color.Bold)
@@ -210,7 +208,6 @@ func DisplayStartup(s game.Startup, index int, availableCash int64, playerUpgrad
 	}
 	growthColor.Printf("    Growth Potential: %s\n", growthLabel)
 }
-
 
 func HandleFollowOnOpportunities(gs *game.GameState, opportunities []game.FollowOnOpportunity) {
 	green := color.New(color.FgGreen, color.Bold)
@@ -449,7 +446,6 @@ func SelectInvestmentTerms(gs *game.GameState, startup *game.Startup, amount int
 
 	return options[choiceNum-1]
 }
-
 
 func PlayTurn(gs *game.GameState, autoMode bool) {
 	yellow := color.New(color.FgYellow, color.Bold)
@@ -767,7 +763,7 @@ func SelectDifficulty(username string) game.Difficulty {
 	cyan.Println("\n" + strings.Repeat("=", 60))
 	cyan.Println("                 SELECT DIFFICULTY")
 	cyan.Println(strings.Repeat("=", 60))
-	
+
 	if playerLevel > 1 {
 		fmt.Printf("\n   Your Level: %d\n", playerLevel)
 	}

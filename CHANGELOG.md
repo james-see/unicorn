@@ -1,5 +1,19 @@
 # Changelog
 
+## Version 3.20.2 - Code Formatting Cleanup (2025-11-06)
+
+### Technical Changes
+
+#### 🧹 Code Quality
+- **File**: `ui/vc_ui.go`
+- **Changes**: 
+  - Removed extra blank lines for cleaner code
+  - Added proper newline at end of file
+  - Improved code formatting consistency
+  - No functional changes, just linting improvements
+
+---
+
 ## Version 3.20.1 - Bug Fix: XP Integration & Documentation Update (2025-11-06)
 
 ### Bug Fixes
