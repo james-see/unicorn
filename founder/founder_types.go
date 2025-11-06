@@ -124,6 +124,7 @@ type FounderState struct {
 	// Advanced features
 	Partnerships       []Partnership
 	AffiliateProgram   *AffiliateProgram
+	ReferralProgram    *ReferralProgram
 	Competitors        []Competitor
 	GlobalMarkets      []Market
 	PivotHistory       []Pivot
@@ -247,6 +248,19 @@ type AffiliateProgram struct {
 	MonthlyPlatformFee int64
 	MonthlyRevenue     int64
 	CustomersAcquired  int
+}
+
+// ReferralProgram represents a customer referral program
+type ReferralProgram struct {
+	LaunchedMonth      int
+	RewardPerReferral  int64   // Cash reward per successful referral
+	RewardType         string  // "cash", "credit", "equity"
+	MonthlyBudget       int64   // Monthly budget for rewards
+	ReferralsThisMonth int
+	TotalReferrals     int
+	CustomersAcquired  int
+	MonthlyCost         int64   // Total monthly cost (rewards + platform fees)
+	PlatformFee         int64   // Monthly platform/management fee
 }
 
 // Competitor represents a competing company

@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -127,6 +129,7 @@ type AIPlayer struct {
 // GameState holds the entire game state
 type GameState struct {
 	PlayerName         string
+	PlayerFirmName     string // Player's VC firm name
 	Portfolio          Portfolio
 	AvailableStartups  []Startup
 	EventPool          []GameEvent
@@ -276,7 +279,19 @@ func initializeLPCommitments(startingCash int64, maxTurns int) (int64, []int) {
 	return lpCommittedCapital, capitalCallSchedule
 }
 
-func NewGame(playerName string, difficulty Difficulty, playerUpgrades []string) *GameState {
+// GenerateDefaultFirmName creates a default firm name from player name
+// Takes last name and adds "Capital" (e.g., "James Campbell" -> "Campbell Capital")
+func GenerateDefaultFirmName(playerName string) string {
+	parts := strings.Fields(playerName)
+	if len(parts) == 0 {
+		return "Your Capital"
+	}
+	// Use last name if multiple names, otherwise use the whole name
+	lastName := parts[len(parts)-1]
+	return lastName + " Capital"
+}
+
+func NewGame(playerName string, firmName string, difficulty Difficulty, playerUpgrades []string) *GameState {
 	rand.Seed(time.Now().UnixNano())
 
 	// Calculate follow-on reserve: $100k base + $50k per potential funding round
@@ -312,6 +327,7 @@ func NewGame(playerName string, difficulty Difficulty, playerUpgrades []string) 
 
 	gs := &GameState{
 		PlayerName:     playerName,
+		PlayerFirmName: firmName,
 		Difficulty:     difficulty,
 		PlayerUpgrades: playerUpgrades,
 		Portfolio: Portfolio{
@@ -635,6 +651,119 @@ func (gs *GameState) calculateInvestmentROI(inv Investment) float64 {
 	currentValue := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
 	profit := float64(currentValue - inv.AmountInvested)
 	return (profit / float64(inv.AmountInvested)) * 100.0
+}
+
+// ROIProjection represents projected ROI data for an investment
+type ROIProjection struct {
+	CurrentROI      float64 // Current ROI %
+	ProjectedROI    float64 // Projected ROI % at game end
+	BestCaseROI     float64 // Best case scenario ROI %
+	WorstCaseROI    float64 // Worst case scenario ROI %
+	ConfidenceLevel float64 // 0-1, confidence in projection
+	MonthsRemaining int     // Months until game end
+}
+
+// PredictROI calculates projected ROI for an investment based on:
+// - Current growth trajectory
+// - Risk factors
+// - Market conditions
+// - Historical performance
+func (gs *GameState) PredictROI(inv Investment) ROIProjection {
+	monthsRemaining := gs.Portfolio.MaxTurns - gs.Portfolio.Turn
+	if monthsRemaining <= 0 {
+		monthsRemaining = 1
+	}
+	
+	currentROI := gs.calculateInvestmentROI(inv)
+	
+	// Find the startup
+	var startup *Startup
+	for i := range gs.AvailableStartups {
+		if gs.AvailableStartups[i].Name == inv.CompanyName {
+			startup = &gs.AvailableStartups[i]
+			break
+		}
+	}
+	
+	if startup == nil {
+		return ROIProjection{
+			CurrentROI:      currentROI,
+			ProjectedROI:    currentROI,
+			BestCaseROI:     currentROI,
+			WorstCaseROI:    currentROI,
+			ConfidenceLevel: 0.0,
+			MonthsRemaining: monthsRemaining,
+		}
+	}
+	
+	// Calculate growth rate from rounds (if any)
+	growthRate := 1.0 // Base growth rate
+	if len(inv.Rounds) > 0 {
+		// Calculate average valuation increase per round
+		lastRound := inv.Rounds[len(inv.Rounds)-1]
+		if inv.InitialValuation > 0 {
+			roundGrowth := float64(lastRound.PostMoneyVal) / float64(inv.InitialValuation)
+			// Annualize growth (assume rounds happen every 12-18 months)
+			monthsSinceFirstRound := float64(lastRound.Month)
+			if monthsSinceFirstRound > 0 {
+				annualGrowth := math.Pow(roundGrowth, 12.0/monthsSinceFirstRound)
+				growthRate = annualGrowth
+			}
+		}
+	} else {
+		// No rounds yet, use growth potential
+		growthRate = 1.0 + startup.GrowthPotential*0.5 // 0-50% annual growth potential
+	}
+	
+	// Adjust for risk
+	riskAdjustment := 1.0 - (startup.RiskScore * 0.3) // Risk reduces growth by up to 30%
+	adjustedGrowthRate := growthRate * riskAdjustment
+	
+	// Project forward
+	monthsToProject := float64(monthsRemaining)
+	projectedMultiplier := math.Pow(adjustedGrowthRate, monthsToProject/12.0)
+	
+	// Calculate projected value
+	currentValue := float64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
+	projectedValue := currentValue * projectedMultiplier
+	projectedROI := ((projectedValue - float64(inv.AmountInvested)) / float64(inv.AmountInvested)) * 100.0
+	
+	// Best case: 1.5x growth rate
+	bestCaseMultiplier := math.Pow(adjustedGrowthRate*1.5, monthsToProject/12.0)
+	bestCaseValue := currentValue * bestCaseMultiplier
+	bestCaseROI := ((bestCaseValue - float64(inv.AmountInvested)) / float64(inv.AmountInvested)) * 100.0
+	
+	// Worst case: 0.5x growth rate (or down round)
+	worstCaseMultiplier := math.Pow(adjustedGrowthRate*0.5, monthsToProject/12.0)
+	worstCaseValue := currentValue * worstCaseMultiplier
+	worstCaseROI := ((worstCaseValue - float64(inv.AmountInvested)) / float64(inv.AmountInvested)) * 100.0
+	
+	// Confidence based on:
+	// - Number of rounds (more rounds = more data = higher confidence)
+	// - Risk level (lower risk = higher confidence)
+	// - Time remaining (more time = less confidence)
+	confidence := 0.5 // Base confidence
+	if len(inv.Rounds) > 0 {
+		confidence += 0.2 // More rounds = more confidence
+	}
+	if startup.RiskScore < 0.3 {
+		confidence += 0.2 // Low risk = more confidence
+	}
+	if monthsRemaining < 12 {
+		confidence += 0.1 // Less time = more predictable
+	}
+	if confidence > 1.0 {
+		confidence = 1.0
+	}
+	
+	return ROIProjection{
+		CurrentROI:      currentROI,
+		ProjectedROI:    projectedROI,
+		BestCaseROI:     bestCaseROI,
+		WorstCaseROI:    worstCaseROI,
+		ConfidenceLevel: confidence,
+		MonthsRemaining: monthsRemaining,
+	}
 }
 
 func (gs *GameState) GetBestPerformers(count int) []Investment {

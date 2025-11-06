@@ -1015,6 +1015,9 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 	affiliateMsgs := fs.UpdateAffiliateProgram()
 	messages = append(messages, affiliateMsgs...)
 
+	referralMsgs := fs.UpdateReferralProgram()
+	messages = append(messages, referralMsgs...)
+
 	competitorMsgs := fs.UpdateCompetitors()
 	messages = append(messages, competitorMsgs...)
 

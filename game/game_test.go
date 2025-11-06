@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewGame(t *testing.T) {
-	gs := NewGame("TestPlayer", MediumDifficulty, []string{})
+	gs := NewGame("TestPlayer", "TestPlayer Capital", MediumDifficulty, []string{})
 	
 	if gs == nil {
 		t.Fatal("NewGame returned nil")
@@ -25,7 +25,7 @@ func TestNewGame(t *testing.T) {
 }
 
 func TestMakeInvestment(t *testing.T) {
-	gs := NewGame("TestPlayer", MediumDifficulty, []string{})
+	gs := NewGame("TestPlayer", "TestPlayer Capital", MediumDifficulty, []string{})
 	
 	initialCash := gs.Portfolio.Cash
 	investAmount := int64(50000)
@@ -46,7 +46,7 @@ func TestMakeInvestment(t *testing.T) {
 }
 
 func TestProcessTurn(t *testing.T) {
-	gs := NewGame("TestPlayer", MediumDifficulty, []string{})
+	gs := NewGame("TestPlayer", "TestPlayer Capital", MediumDifficulty, []string{})
 	
 	// Make an investment first
 	gs.MakeInvestment(0, 50000)
@@ -65,7 +65,7 @@ func TestProcessTurn(t *testing.T) {
 }
 
 func TestGetFinalScore(t *testing.T) {
-	gs := NewGame("TestPlayer", MediumDifficulty, []string{})
+	gs := NewGame("TestPlayer", "TestPlayer Capital", MediumDifficulty, []string{})
 	
 	// Make an investment
 	gs.MakeInvestment(0, 50000)

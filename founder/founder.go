@@ -131,6 +131,7 @@ func NewFounderGame(founderName string, template StartupTemplate, playerUpgrades
 		// Initialize advanced features
 		Partnerships:       []Partnership{},
 		AffiliateProgram:   nil,
+		ReferralProgram:    nil,
 		Competitors:        []Competitor{},
 		GlobalMarkets:      []Market{},
 		PivotHistory:       []Pivot{},

@@ -1,5 +1,133 @@
 # Changelog
 
+## Version 3.26.0 - VC Firm Name Customization (2025-11-06)
+
+### Major Features Added
+
+#### 🏢 VC Firm Name Customization (VC Mode)
+- **Custom Firm Names**: Players can now set their own VC firm name when starting a game
+- **Smart Defaults**: Automatically generates firm name from player's last name + "Capital"
+  - Example: "James Campbell" → "Campbell Capital"
+  - Handles edge cases (single names, empty input, etc.)
+- **User-Friendly Prompt**: Clean interface to set firm name with default suggestion
+- **Consistent Display**: Firm name appears throughout the game:
+  - Board meeting displays (when you have board seats)
+  - Leaderboard rankings (vs AI competitors)
+  - Portfolio metrics and comparisons
+- **Replaces Generic Text**: No more "Your Fund" - now shows your actual firm name
+- **Implementation**: 
+  - New `PlayerFirmName` field in `GameState`
+  - `GenerateDefaultFirmName()` function for smart defaults
+  - `AskForFirmName()` UI function for user input
+  - Updated all display locations to use firm name
+
+### User Experience Improvements
+- **Personalization**: Makes the game feel more personalized and professional
+- **Immersion**: Better role-playing experience as a VC investor
+- **Consistency**: Firm name appears consistently across all game displays
+- **Flexibility**: Can use default or customize to any name you want
+
+### Technical Changes
+
+**Modified Files**:
+- `game/game.go` - Added `PlayerFirmName` field, `GenerateDefaultFirmName()` function, updated `NewGame()` signature
+- `ui/vc_ui.go` - Added `AskForFirmName()` function, updated `PlayVCMode()` flow
+- `game/board_votes.go` - Updated to use `PlayerFirmName` instead of "Your Fund"
+- `game/metrics.go` - Updated leaderboard to use `PlayerFirmName`
+- `game/game_test.go` - Updated tests to include firm name parameter
+
+**New Functions**:
+- `GenerateDefaultFirmName(playerName)` - Creates default firm name from player name
+- `AskForFirmName(username)` - Prompts user for firm name with default suggestion
+
+### Notes
+- Firm name is set per-game (not persisted across games, allowing flexibility)
+- Default generation handles various name formats gracefully
+- All existing functionality preserved, just with personalized firm names
+
+---
+
+## Version 3.25.0 - Employee Option Pool Dilution, ROI Predictor & Referral Programs (2025-11-06)
+
+### Major Features Added
+
+#### 📊 Employee Option Pool Dilution (VC Mode)
+- **Realistic Dilution Mechanics**: Companies now set aside 15-20% of post-money valuation for employee stock options in each funding round
+- **Automatic Dilution**: All existing shareholders (founders + investors) are automatically diluted by the option pool
+- **Standard Practice**: Reflects real-world VC deal structures where option pools are standard
+- **Down Round Handling**: Even in down rounds, companies set aside 10-15% for option pools
+- **Impact**: Makes dilution calculations more realistic and educational
+- **Implementation**: Integrated into funding round processing in `game/events.go`
+
+#### 🔮 ROI Predictor (VC Mode)
+- **Projected ROI Calculator**: New analytics tool that predicts future ROI for investments
+- **Growth Analysis**: Analyzes growth trajectory from funding rounds and historical performance
+- **Risk Adjustment**: Adjusts projections based on company risk factors
+- **Multiple Scenarios**: Provides:
+  - Current ROI
+  - Projected ROI (expected)
+  - Best case ROI (1.5x growth rate)
+  - Worst case ROI (0.5x growth rate)
+  - Confidence level (0-100% based on data quality)
+- **Confidence Factors**: Higher confidence with:
+  - More funding rounds (more data)
+  - Lower risk companies
+  - Less time remaining (more predictable)
+- **Use Case**: Helps make informed follow-on investment decisions
+- **Implementation**: New `PredictROI()` function in `game/game.go` with `ROIProjection` type
+
+#### 🛑 End Affiliate Program (Founder Mode)
+- **Program Shutdown**: Ability to shut down affiliate programs at any time
+- **Customer Transition Options**:
+  - **Transition to Direct**: Convert affiliate customers to direct sales (no churn)
+  - **Let Churn**: Affiliate customers churn when program ends
+- **Use Cases**: Useful when program isn't performing well or costs are too high
+- **Customer Management**: Properly handles customer records and MRR transitions
+- **Implementation**: New `EndAffiliateProgram()` function in `founder/founder_advisors.go`
+
+#### 🎁 Customer Referral Program (Founder Mode)
+- **Paid Referral System**: Customers refer new customers for cash rewards
+- **Requirements**: Need at least 10 customers to launch
+- **Setup Costs**: $10-30k one-time setup cost
+- **Monthly Costs**: $2-5k platform fee + reward costs
+- **Reward Structure**: Configurable reward per referral ($500-$2000)
+- **Conversion Rate**: 60-80% of referrals convert to customers
+- **Scaling**: More customers = more referrals (2-5% chance per customer per month)
+- **Budget Management**: Monthly budget caps rewards (2-5% of MRR, minimum $5k)
+- **Customer Source**: Referral customers tracked as "referral" source
+- **Integration**: Automatically processes monthly in game loop
+- **Implementation**: New `ReferralProgram` type and functions in `founder/founder_advisors.go`
+
+### Documentation & Education Updates
+
+#### 📚 Enhanced Help & FAQ System
+- **New FAQ Sections**:
+  - Employee Option Pool Dilution explanation
+  - ROI Predictor usage guide
+  - End Affiliate Program documentation
+  - Customer Referral Program guide
+- **Expanded VC Education**:
+  - Carry Interest (20% of profits above hurdle rate)
+  - LP Commitments (quarterly capital calls)
+  - Valuation Caps (SAFE protection mechanics)
+  - More detailed investment term explanations
+- **Updated Game Overview**: Added new features to game mechanics section
+- **Implementation**: Updated `ui/help_ui.go` with comprehensive new content
+
+### Technical Improvements
+- **Code Quality**: All new features properly integrated and tested
+- **Linter Compliance**: All code passes linter checks
+- **Type Safety**: New types properly defined (`ROIProjection`, `ReferralProgram`)
+- **Game Loop Integration**: Referral program automatically processes each month
+
+### Notes
+- Employee Option Pool Dilution makes the game more realistic and educational
+- ROI Predictor helps players make better investment decisions
+- Referral Program provides an alternative customer acquisition channel in Founder Mode
+- All features are fully documented in the help system
+
+---
+
 ## Version 3.24.0 - LP Commitments, Valuation Caps & Board Governance (2025-11-06)
 
 ### Major Features Added

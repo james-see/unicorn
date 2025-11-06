@@ -1,6 +1,6 @@
 # Unicorn Game - Feature Roadmap
 
-**Last Updated:** 2025-11-06
+**Last Updated:** 2025-11-06 (v3.25.0)
 
 This document tracks planned features and enhancements for the Unicorn game. Items marked with ✅ are already implemented.
 
@@ -43,7 +43,7 @@ This document tracks planned features and enhancements for the Unicorn game. Ite
 - ✅ **Carry Interest** - 20% of profits above hurdle rate - Enhanced with dashboard display and projected calculations
 - ✅ **LP Commitments** - Capital call schedule and LP management - Quarterly capital calls, LP commitment tracking, displayed in portfolio dashboard
 - ✅ **Valuation Caps & Discounts** - More sophisticated term sheets - SAFE with valuation caps, protects investors when companies raise above cap
-- **Employee Option Pool Dilution** - Account for option pool in dilution calculations
+- ✅ **Employee Option Pool Dilution** - Account for option pool in dilution calculations - 15-20% dilution per round, automatically applied
 - **Participating Liquidation Preferences** - More complex exit scenarios
 
 #### AI & Competition
@@ -58,7 +58,7 @@ This document tracks planned features and enhancements for the Unicorn game. Ite
 
 #### Analytics & Tools
 - ✅ **Portfolio Dashboard** - Enhanced with carry interest projections, hurdle tracking, and detailed financial metrics
-- **ROI Predictor** - Projected ROI for each investment
+- ✅ **ROI Predictor** - Projected ROI for each investment - Analyzes growth trends, provides best/worst case scenarios with confidence levels
 - **Risk Calculator** - Probability of different outcomes
 - **Market Trends Visualization** - Visualize sector trends over time
 - **Exit Simulator** - Predict when companies might exit
@@ -97,10 +97,10 @@ This document tracks planned features and enhancements for the Unicorn game. Ite
 - ✅ **Remove Advisors** - Ability to remove advisors from the board (with equity buyback options) - Implemented with buyback option and consequences
 
 #### Partner & Channel Programs
-- **End Affiliate Program** - Ability to shut down affiliate program (with customer transition options)
+- ✅ **End Affiliate Program** - Ability to shut down affiliate program (with customer transition options) - Implemented with transition or churn options
 - **Ecosystem Partner Program** - For SaaS companies, set up ecosystem partnerships (like Salesforce AppExchange, Shopify App Store)
 - **Channel Partner Program** - Reseller/partner program for B2B SaaS companies
-- **Customer Referral Program** - Paid referral program where customers refer new customers and get paid
+- ✅ **Customer Referral Program** - Paid referral program where customers refer new customers and get paid - Implemented with configurable rewards, 60-80% conversion rate
 
 #### Gameplay Expansions
 - **Multiplayer Founder Mode** - Compete against other players

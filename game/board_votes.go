@@ -268,7 +268,7 @@ func (gs *GameState) GetBoardMembers(companyName string) []BoardMemberInfo {
 			}
 			members = append(members, BoardMemberInfo{
 				Name:       gs.PlayerName,
-				Firm:       "Your Fund",
+				Firm:       gs.PlayerFirmName,
 				Type:       "player",
 				VoteWeight: voteWeight,
 				IsPlayer:   true,

@@ -259,7 +259,19 @@ go build -o unicorn
 
 ## What's New
 
-### v3.20.0 - Player Progression System & Enhanced Features! (LATEST)
+### v3.26.0 - VC Firm Name Customization! (LATEST)
+- **Custom VC Firm Names**: Set your own firm name (defaults to last name + "Capital")
+- **Personalized Experience**: Your firm name appears in board meetings, leaderboards, and throughout the game
+- **Smart Defaults**: "James Campbell" automatically becomes "Campbell Capital"
+
+### v3.25.0 - Employee Option Pool Dilution, ROI Predictor & Referral Programs!
+- **Employee Option Pool Dilution**: Realistic 15-20% dilution per funding round for employee stock options
+- **ROI Predictor**: New analytics tool that projects future ROI with confidence levels
+- **End Affiliate Program**: Shut down affiliate programs with customer transition options
+- **Customer Referral Program**: Paid referral system where customers refer new customers
+- **Enhanced Help & FAQ**: Comprehensive new documentation and VC education
+
+### v3.20.0 - Player Progression System & Enhanced Features!
 💎 **Level-Based Progression** - 50 levels with exponential XP requirements and rank titles
 📊 **Experience Points** - Earn XP from games, achievements, difficulty bonuses, and exits
 🔓 **Level Unlocks** - Progressive unlocking of difficulties (Hard at L5, Expert at L10, Nightmare at L15)

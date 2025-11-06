@@ -118,7 +118,7 @@ func (gs *GameState) GetLeaderboard() []PlayerScore {
 	playerROI := ((float64(gs.Portfolio.NetWorth) - float64(totalStartingCapital)) / float64(totalStartingCapital)) * 100.0
 	scores = append(scores, PlayerScore{
 		Name:     gs.PlayerName,
-		Firm:     "Your Fund",
+		Firm:     gs.PlayerFirmName,
 		NetWorth: gs.Portfolio.NetWorth,
 		ROI:      playerROI,
 		IsPlayer: true,

@@ -1268,9 +1268,41 @@ func investmentPhase(gs *game.GameState, playerLevel int) {
 	}
 }
 
+func AskForFirmName(username string) string {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+
+	defaultFirmName := game.GenerateDefaultFirmName(username)
+
+	cyan.Println("\n" + strings.Repeat("=", 60))
+	cyan.Println("              VC FIRM NAME")
+	cyan.Println(strings.Repeat("=", 60))
+
+	yellow.Printf("\nEnter your VC firm name (default: %s): ", defaultFirmName)
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	if input == "" {
+		firmName := defaultFirmName
+		green.Printf("\n✓ Using default firm name: %s\n", firmName)
+		time.Sleep(1 * time.Second)
+		return firmName
+	}
+
+	green.Printf("\n✓ Firm name set: %s\n", input)
+	time.Sleep(1 * time.Second)
+	return input
+}
+
 func PlayVCMode(username string) {
 	// Select difficulty (passing username for level checking)
 	difficulty := SelectDifficulty(username)
+	clear.ClearIt()
+
+	// Ask for firm name
+	firmName := AskForFirmName(username)
 	clear.ClearIt()
 
 	// Ask for automated mode
@@ -1287,7 +1319,7 @@ func PlayVCMode(username string) {
 	DisplayWelcome(username, difficulty, playerUpgrades)
 
 	// Initialize game
-	gs := game.NewGame(username, difficulty, playerUpgrades)
+	gs := game.NewGame(username, firmName, difficulty, playerUpgrades)
 
 	// Get player level to check for syndicate unlock
 	profile, err := database.GetPlayerProfile(username)

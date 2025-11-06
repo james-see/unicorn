@@ -277,7 +277,11 @@ func (gs *GameState) ProcessFundingRounds() []string {
 						// Down round: pre-money is 60-90% of current valuation
 						downFactor := 0.6 + rand.Float64()*0.3 // 60%-90%
 						preMoneyVal = int64(float64(startup.Valuation) * downFactor)
-						postMoneyVal = preMoneyVal + event.RaiseAmount
+						
+						// Employee Option Pool Dilution: Even in down rounds, companies may set aside 10-15% for option pool
+						optionPoolPercent := 0.10 + rand.Float64()*0.05 // 10-15% in down rounds
+						effectivePostMoney := float64(preMoneyVal + event.RaiseAmount) / (1.0 - optionPoolPercent)
+						postMoneyVal = int64(effectivePostMoney)
 						dilutionFactor = float64(preMoneyVal) / float64(postMoneyVal)
 
 						// Check if any investor has board seat - down rounds require board approval
@@ -314,7 +318,20 @@ func (gs *GameState) ProcessFundingRounds() []string {
 					} else {
 						// Normal round
 						preMoneyVal = startup.Valuation
-						postMoneyVal = preMoneyVal + event.RaiseAmount
+						
+						// Employee Option Pool Dilution: Companies typically set aside 15-20% of post-money
+						// for employee option pool in new rounds. This dilutes all existing shareholders.
+						optionPoolPercent := 0.15 + rand.Float64()*0.05 // 15-20% of post-money
+						
+						// Calculate post-money valuation accounting for option pool
+						// If we raise $X, post-money = pre-money + $X
+						// But then we set aside optionPoolPercent of post-money for employees
+						// So effective post-money = (pre-money + raise) / (1 - optionPoolPercent)
+						// This means the raise amount needs to account for the pool
+						effectivePostMoney := float64(preMoneyVal + event.RaiseAmount) / (1.0 - optionPoolPercent)
+						postMoneyVal = int64(effectivePostMoney)
+						
+						// Dilution factor accounts for both the new money AND the option pool
 						dilutionFactor = float64(preMoneyVal) / float64(postMoneyVal)
 					}
 

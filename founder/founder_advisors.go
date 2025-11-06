@@ -244,6 +244,224 @@ func (fs *FounderState) UpdateAffiliateProgram() []string {
 	return messages
 }
 
+// EndAffiliateProgram shuts down the affiliate program
+// Optionally transitions customers to direct sales
+func (fs *FounderState) EndAffiliateProgram(transitionCustomers bool) error {
+	if fs.AffiliateProgram == nil {
+		return fmt.Errorf("no affiliate program is running")
+	}
+	
+	// If transitioning customers, convert affiliate customers to direct
+	if transitionCustomers && fs.AffiliateCustomers > 0 {
+		// Convert affiliate MRR to direct MRR
+		fs.DirectMRR += fs.AffiliateMRR
+		fs.DirectCustomers += fs.AffiliateCustomers
+		
+		// Update customer records
+		for i := range fs.CustomerList {
+			if fs.CustomerList[i].Source == "affiliate" && fs.CustomerList[i].IsActive {
+				fs.CustomerList[i].Source = "direct"
+			}
+		}
+		
+		// Reset affiliate metrics
+		fs.AffiliateMRR = 0
+		fs.AffiliateCustomers = 0
+	} else {
+		// Customers churn when program ends
+		churnedCustomers := fs.AffiliateCustomers
+		
+		// Mark affiliate customers as churned
+		for i := range fs.CustomerList {
+			if fs.CustomerList[i].Source == "affiliate" && fs.CustomerList[i].IsActive {
+				fs.CustomerList[i].IsActive = false
+				fs.CustomerList[i].MonthChurned = fs.Turn
+			}
+		}
+		
+		fs.Customers -= churnedCustomers
+		fs.AffiliateCustomers = 0
+		fs.AffiliateMRR = 0
+		fs.syncMRR()
+	}
+
+	// End the program
+	fs.AffiliateProgram = nil
+	
+	return nil
+}
+
+// ============================================================================
+// CUSTOMER REFERRAL PROGRAM
+// ============================================================================
+
+// LaunchReferralProgram starts a customer referral program
+func (fs *FounderState) LaunchReferralProgram(rewardPerReferral int64, rewardType string) error {
+	if fs.ReferralProgram != nil {
+		return fmt.Errorf("referral program already running")
+	}
+
+	if fs.Customers < 10 {
+		return fmt.Errorf("need at least 10 customers to launch referral program")
+	}
+
+	setupCost := int64(10000 + rand.Int63n(20000)) // $10-30k setup
+	if setupCost > fs.Cash {
+		return fmt.Errorf("insufficient cash (need $%s)", formatCurrency(setupCost))
+	}
+
+	fs.Cash -= setupCost
+
+	// Monthly budget: 2-5% of MRR, minimum $5k
+	monthlyBudget := int64(float64(fs.MRR) * (0.02 + rand.Float64()*0.03))
+	if monthlyBudget < 5000 {
+		monthlyBudget = 5000
+	}
+
+	platformFee := int64(2000 + rand.Int63n(3000)) // $2-5k/month platform fee
+
+	fs.ReferralProgram = &ReferralProgram{
+		LaunchedMonth:     fs.Turn,
+		RewardPerReferral: rewardPerReferral,
+		RewardType:        rewardType,
+		MonthlyBudget:     monthlyBudget,
+		ReferralsThisMonth: 0,
+		TotalReferrals:    0,
+		CustomersAcquired: 0,
+		MonthlyCost:        platformFee,
+		PlatformFee:        platformFee,
+	}
+
+	return nil
+}
+
+// UpdateReferralProgram processes monthly referral activity
+func (fs *FounderState) UpdateReferralProgram() []string {
+	var messages []string
+
+	if fs.ReferralProgram == nil {
+		return messages
+	}
+
+	prog := fs.ReferralProgram
+
+	// Pay platform fee
+	fs.Cash -= prog.PlatformFee
+
+	// Calculate referrals based on customer base
+	// Each customer has 2-5% chance per month to refer someone
+	// More customers = more referrals
+	referralChance := 0.02 + (float64(fs.Customers) / 1000.0) * 0.03 // 2-5% base, scales with customer count
+	if referralChance > 0.05 {
+		referralChance = 0.05 // Cap at 5%
+	}
+
+	newReferrals := 0
+	for i := 0; i < fs.Customers; i++ {
+		if rand.Float64() < referralChance {
+			newReferrals++
+		}
+	}
+
+	// Cap referrals based on monthly budget
+	maxReferrals := int(prog.MonthlyBudget / prog.RewardPerReferral)
+	if newReferrals > maxReferrals {
+		newReferrals = maxReferrals
+	}
+
+	if newReferrals > 0 {
+		// Calculate cost
+		totalRewardCost := int64(newReferrals) * prog.RewardPerReferral
+		
+		// Check if we have budget
+		if totalRewardCost > prog.MonthlyBudget {
+			totalRewardCost = prog.MonthlyBudget
+			newReferrals = int(prog.MonthlyBudget / prog.RewardPerReferral)
+		}
+
+		// Pay rewards
+		fs.Cash -= totalRewardCost
+
+		// Calculate new customers from referrals
+		// 60-80% of referrals convert to customers
+		conversionRate := 0.6 + rand.Float64()*0.2
+		newCustomers := int(float64(newReferrals) * conversionRate)
+
+		if newCustomers > 0 {
+			// Generate deal sizes
+			baseDealSize := fs.AvgDealSize
+			if baseDealSize == 0 {
+				switch fs.Category {
+				case "SaaS":
+					baseDealSize = 1000
+				case "DeepTech":
+					baseDealSize = 5000
+				case "GovTech":
+					baseDealSize = 2000
+				case "Hardware":
+					baseDealSize = 3000
+				default:
+					baseDealSize = 1000
+				}
+			}
+
+			var totalMRR int64
+			var dealSizes []int64
+			for i := 0; i < newCustomers; i++ {
+				dealSize := generateDealSize(baseDealSize, fs.Category)
+				fs.updateDealSizeRange(dealSize)
+				totalMRR += dealSize
+				dealSizes = append(dealSizes, dealSize)
+			}
+
+			// Add customers
+			fs.Customers += newCustomers
+			fs.DirectCustomers += newCustomers
+			fs.DirectMRR += totalMRR
+
+			// Add customers to tracking system
+			for _, dealSize := range dealSizes {
+				fs.addCustomer(dealSize, "referral")
+			}
+
+			prog.CustomersAcquired += newCustomers
+			prog.ReferralsThisMonth = newReferrals
+			prog.TotalReferrals += newReferrals
+			prog.MonthlyCost = prog.PlatformFee + totalRewardCost
+
+			fs.syncMRR()
+
+			// Recalculate average deal size
+			if fs.Customers > 0 {
+				fs.AvgDealSize = fs.MRR / int64(fs.Customers)
+			}
+
+			messages = append(messages, fmt.Sprintf("🎁 Referral program: %d referrals → %d new customers ($%s MRR, $%s rewards paid)",
+				newReferrals, newCustomers, formatCurrency(totalMRR), formatCurrency(totalRewardCost)))
+		} else {
+			messages = append(messages, fmt.Sprintf("🎁 Referral program: %d referrals this month, but none converted to customers",
+				newReferrals))
+		}
+	}
+
+	// Reset monthly counter
+	prog.ReferralsThisMonth = 0
+
+	return messages
+}
+
+// EndReferralProgram shuts down the referral program
+func (fs *FounderState) EndReferralProgram() error {
+	if fs.ReferralProgram == nil {
+		return fmt.Errorf("no referral program is running")
+	}
+
+	// Referral customers remain as direct customers (no churn)
+	fs.ReferralProgram = nil
+	
+	return nil
+}
+
 // ============================================================================
 // CHAIRMAN OF THE BOARD
 // ============================================================================
