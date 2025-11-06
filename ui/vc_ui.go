@@ -840,7 +840,92 @@ func SelectDifficulty(username string) game.Difficulty {
 	}
 }
 
-func investmentPhase(gs *game.GameState) {
+func handleSyndicateInvestment(gs *game.GameState) {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	magenta := color.New(color.FgMagenta, color.Bold)
+
+	if len(gs.SyndicateOpportunities) == 0 {
+		color.Yellow("\nNo syndicate opportunities available.")
+		return
+	}
+
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	magenta.Println("🤝 SYNDICATE INVESTMENT")
+	fmt.Println(strings.Repeat("=", 70))
+
+	fmt.Println("\nAvailable Syndicate Deals:")
+	for i, opp := range gs.SyndicateOpportunities {
+		startup := gs.AvailableStartups[opp.StartupIndex]
+		fmt.Printf("\n%d. %s\n", i+1, opp.CompanyName)
+		fmt.Printf("   Lead: %s (%s)\n", opp.LeadInvestor, opp.LeadInvestorFirm)
+		fmt.Printf("   Round Size: $%s | Valuation: $%s\n", FormatMoney(opp.TotalRoundSize), FormatMoney(opp.Valuation))
+		green.Printf("   Investment Range: $%s - $%s\n", FormatMoney(opp.YourMinShare), FormatMoney(opp.YourMaxShare))
+		fmt.Printf("   Category: %s\n", startup.Category)
+	}
+
+	fmt.Printf("\nSelect syndicate deal (1-%d, or 0 to cancel): ", len(gs.SyndicateOpportunities))
+	reader := bufio.NewReader(os.Stdin)
+	choiceStr, _ := reader.ReadString('\n')
+	choiceStr = strings.TrimSpace(choiceStr)
+
+	choice, err := strconv.Atoi(choiceStr)
+	if err != nil || choice < 0 || choice > len(gs.SyndicateOpportunities) {
+		color.Yellow("Cancelled.")
+		return
+	}
+
+	if choice == 0 {
+		return
+	}
+
+	opp := gs.SyndicateOpportunities[choice-1]
+
+	cyan.Printf("\n💵 CO-INVESTING IN: %s\n", opp.CompanyName)
+	fmt.Printf("   Lead Investor: %s (%s)\n", opp.LeadInvestor, opp.LeadInvestorFirm)
+	fmt.Printf("   Total Round: $%s\n", FormatMoney(opp.TotalRoundSize))
+	fmt.Printf("   Company Valuation: $%s\n", FormatMoney(opp.Valuation))
+	yellow.Printf("   Your Investment Range: $%s - $%s\n", FormatMoney(opp.YourMinShare), FormatMoney(opp.YourMaxShare))
+	fmt.Printf("\n   Benefits:\n")
+	for _, benefit := range opp.Benefits {
+		fmt.Printf("     • %s\n", benefit)
+	}
+
+	fmt.Printf("\nEnter investment amount ($%s - $%s, or 0 to cancel): $",
+		FormatMoney(opp.YourMinShare), FormatMoney(opp.YourMaxShare))
+	amountStr, _ := reader.ReadString('\n')
+	amountStr = strings.TrimSpace(amountStr)
+
+	if amountStr == "" || amountStr == "0" {
+		color.Yellow("Cancelled.")
+		return
+	}
+
+	amount, err := strconv.ParseInt(amountStr, 10, 64)
+	if err != nil {
+		color.Red("Invalid amount!")
+		return
+	}
+
+	err = gs.MakeSyndicateInvestment(choice-1, amount)
+	if err != nil {
+		color.Red("Error: %v", err)
+	} else {
+		green.Printf("\n%s Syndicate investment successful!\n", ascii.Check)
+		fmt.Printf("Invested $%s in %s via %s's syndicate\n", FormatMoney(amount), opp.CompanyName, opp.LeadInvestor)
+		fmt.Printf("Cash remaining: $%s\n", FormatMoney(gs.Portfolio.Cash))
+
+		// Calculate equity
+		equityPercent := (float64(amount) / float64(opp.TotalRoundSize)) * 100.0 * 1.05 // 5% bonus
+		if equityPercent > 20.0 {
+			equityPercent = 20.0
+		}
+		fmt.Printf("Equity acquired: %.2f%%\n", equityPercent)
+	}
+}
+
+func investmentPhase(gs *game.GameState, playerLevel int) {
 	clear.ClearIt()
 	green := color.New(color.FgGreen, color.Bold)
 	cyan := color.New(color.FgCyan, color.Bold)
@@ -897,6 +982,30 @@ func investmentPhase(gs *game.GameState) {
 	}
 	fmt.Println(strings.Repeat("=", 50))
 
+	// Show syndicate opportunities if unlocked
+	if playerLevel >= 2 && len(gs.SyndicateOpportunities) > 0 {
+		magenta := color.New(color.FgMagenta, color.Bold)
+		fmt.Println("\n" + strings.Repeat("=", 50))
+		magenta.Println("🤝 SYNDICATE OPPORTUNITIES (Co-Invest with Other VCs)")
+		fmt.Println(strings.Repeat("=", 50))
+
+		for i, opp := range gs.SyndicateOpportunities {
+			startup := gs.AvailableStartups[opp.StartupIndex]
+			cyan.Printf("\n[SYNDICATE %d] %s\n", i+1, opp.CompanyName)
+			fmt.Printf("   %s\n", startup.Description)
+			yellow.Printf("   Lead Investor: %s (%s)\n", opp.LeadInvestor, opp.LeadInvestorFirm)
+			fmt.Printf("   Total Round Size: $%s\n", FormatMoney(opp.TotalRoundSize))
+			fmt.Printf("   Company Valuation: $%s\n", FormatMoney(opp.Valuation))
+			green.Printf("   Your Share: $%s - $%s\n", FormatMoney(opp.YourMinShare), FormatMoney(opp.YourMaxShare))
+			fmt.Printf("   Benefits:\n")
+			for _, benefit := range opp.Benefits {
+				fmt.Printf("     • %s\n", benefit)
+			}
+			fmt.Println()
+		}
+		fmt.Println(strings.Repeat("=", 50))
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -908,7 +1017,7 @@ func investmentPhase(gs *game.GameState) {
 			break
 		}
 
-		fmt.Printf("\nEnter company number (1-%d) to invest, or press Enter to start: ", len(gs.AvailableStartups))
+		fmt.Printf("\nEnter company number (1-%d) to invest, 's' for syndicates, or press Enter to start: ", len(gs.AvailableStartups))
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 
@@ -917,6 +1026,12 @@ func investmentPhase(gs *game.GameState) {
 			gs.AIPlayerMakeInvestments()
 			color.Green("\n✓ AI players have made their investments!")
 			break
+		}
+
+		// Handle syndicate investments
+		if (input == "s" || input == "S") && playerLevel >= 2 && len(gs.SyndicateOpportunities) > 0 {
+			handleSyndicateInvestment(gs)
+			continue
 		}
 
 		companyNum, err := strconv.Atoi(input)
@@ -1041,8 +1156,20 @@ func PlayVCMode(username string) {
 	// Initialize game
 	gs := game.NewGame(username, difficulty, playerUpgrades)
 
+	// Get player level to check for syndicate unlock
+	profile, err := database.GetPlayerProfile(username)
+	playerLevel := 1
+	if err == nil {
+		playerLevel = profile.Level
+	}
+
+	// Generate syndicate opportunities if unlocked (level 2+)
+	if playerLevel >= 2 {
+		gs.GenerateSyndicateOpportunities(playerLevel)
+	}
+
 	// Investment phase at start
-	investmentPhase(gs)
+	investmentPhase(gs, playerLevel)
 
 	// Main game loop
 	for !gs.IsGameOver() {

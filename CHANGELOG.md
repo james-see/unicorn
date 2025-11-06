@@ -1,5 +1,86 @@
 # Changelog
 
+## Version 3.21.0 - Investor Syndicates Feature (2025-11-06)
+
+### Major Features Added
+
+#### 🤝 VC Mode Investor Syndicates
+- **Co-Investment Opportunities**: Players can now co-invest with AI investors on syndicate deals
+- **Progression Gated**: Unlocks at Level 2 (after playing 2 games) - encourages player progression
+- **Syndicate Mechanics**:
+  - 2-4 syndicate opportunities generated per game (if unlocked)
+  - Lead investors: CARL (Sterling & Cooper), Sarah Chen (Accel Partners), Marcus Williams (Sequoia Capital)
+  - Investment range: $25k minimum, up to 20-40% of round size
+  - 5% equity bonus for syndicate investments (better terms than solo investments)
+  - Preferred Stock terms with all standard protections
+- **Benefits**:
+  - Access to hot deals led by experienced investors
+  - Shared due diligence costs
+  - Network access through lead investor
+  - Lower risk profile for vetted deals
+  - Better terms than solo investments
+
+#### 🎮 User Interface
+- **Syndicate Display**: Dedicated section in investment phase showing all available syndicate opportunities
+- **Interactive Menu**: Press 's' during investment phase to access syndicate deals
+- **Detailed Information**: Shows lead investor, round size, valuation, investment range, and benefits
+- **Clear Investment Flow**: Step-by-step process for selecting and investing in syndicate deals
+
+### Technical Changes
+
+**New Files**:
+- None (features added to existing files)
+
+**Modified Files**:
+- `progression/unlocks.go` - Added syndicate_deals unlock at Level 2
+- `progression/progression.go` - Added syndicate_deals to level requirements and unlock messages
+- `game/game.go` - Added `SyndicateOpportunity` struct and `SyndicateOpportunities` field to `GameState`
+- `game/investment.go` - Added `GenerateSyndicateOpportunities()` and `MakeSyndicateInvestment()` functions
+- `ui/vc_ui.go` - Added syndicate display and `handleSyndicateInvestment()` function
+
+**New Functions**:
+- `GenerateSyndicateOpportunities(playerLevel int)` - Creates 2-4 co-investment opportunities with AI investors
+- `MakeSyndicateInvestment(opportunityIndex int, amount int64)` - Processes syndicate investment with 5% equity bonus
+- `handleSyndicateInvestment(gs *GameState)` - UI handler for syndicate investment flow
+
+**New Data Structures**:
+- `SyndicateOpportunity` - Tracks lead investor, round size, investment range, benefits, and company details
+
+### User Experience Improvements
+
+**Example Impact**:
+- New players learn the basics in their first 2 games
+- After 2 games, players unlock syndicate feature and see new investment opportunities
+- Syndicate deals provide alternative investment path with better terms
+- Players can diversify portfolio through both solo and syndicate investments
+- Clear progression incentive: "Play 2 games to unlock investor syndicates!"
+
+**Syndicate Display Example**:
+```
+🤝 SYNDICATE OPPORTUNITIES (Co-Invest with Other VCs)
+==================================================
+
+[SYNDICATE 1] TechStartup Inc
+   Lead Investor: Sarah Chen (Accel Partners)
+   Total Round Size: $1,200,000
+   Company Valuation: $500,000
+   Your Share: $25,000 - $480,000
+   Benefits:
+     • High-growth opportunity
+     • Access to hot deal
+     • Shared due diligence costs
+     • Network access through lead investor
+```
+
+### Game Balance
+- Syndicate feature gated behind progression (Level 2) to encourage replayability
+- 5% equity bonus provides meaningful advantage without breaking balance
+- Investment ranges scale with round size and available cash
+- Syndicate opportunities exclude companies already in player's portfolio
+- Standard Preferred Stock terms maintain consistency with solo investments
+
+---
+
 ## Version 3.20.2 - Code Formatting Cleanup (2025-11-06)
 
 ### Technical Changes

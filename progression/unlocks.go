@@ -34,6 +34,15 @@ var AllUnlocks = []Unlock{
 		Icon:        "🚀",
 	},
 	
+	// Level 2 - Syndicate deals (after 2 games)
+	{
+		Level:       2,
+		Feature:     "syndicate_deals",
+		Name:        "Investor Syndicates",
+		Description: "Co-invest with other VCs on larger deals",
+		Icon:        "🤝",
+	},
+	
 	// Level 5 - Hard mode
 	{
 		Level:       5,

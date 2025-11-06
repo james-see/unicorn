@@ -131,6 +131,7 @@ type GameState struct {
 	PlayerUpgrades     []string            // Player's purchased upgrades
 	InsuranceUsed      bool                // Track if Portfolio Insurance has been used this game
 	ProtectedCompany   string              // Company protected by Portfolio Insurance
+	SyndicateOpportunities []SyndicateOpportunity // Available syndicate deals
 }
 
 // FundingRoundEvent represents a scheduled funding round
@@ -183,6 +184,20 @@ type FollowOnOpportunity struct {
 	CurrentEquity float64
 	MinInvestment int64
 	MaxInvestment int64
+}
+
+// SyndicateOpportunity represents a co-investment opportunity with other VCs
+type SyndicateOpportunity struct {
+	CompanyName      string
+	StartupIndex     int
+	LeadInvestor     string  // Which AI investor is leading (e.g., "Sarah Chen - Accel Partners")
+	LeadInvestorFirm string
+	TotalRoundSize   int64   // Total amount being raised in this syndicate
+	YourMaxShare     int64   // Maximum you can invest (typically 20-40% of round)
+	YourMinShare     int64   // Minimum investment to join (typically $25k)
+	Valuation        int64   // Company valuation
+	Description      string  // Why this is a good deal
+	Benefits         []string // Benefits of joining (e.g., "Access to hot deal", "Lower risk")
 }
 
 // Predefined difficulty levels
@@ -288,6 +303,9 @@ func NewGame(playerName string, difficulty Difficulty, playerUpgrades []string) 
 	gs.ScheduleFundingRounds()
 	gs.ScheduleAcquisitions()
 	gs.ScheduleDramaticEvents()
+	
+	// Initialize syndicate opportunities (empty for now, generated during investment phase if unlocked)
+	gs.SyndicateOpportunities = []SyndicateOpportunity{}
 
 	return gs
 }

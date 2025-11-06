@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"math/rand"
 )
 
 
@@ -363,4 +364,185 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 func (gs *GameState) HasFollowOnOpportunities() bool {
 	opportunities := gs.GetFollowOnOpportunities()
 	return len(opportunities) > 0
+}
+
+// GenerateSyndicateOpportunities creates co-investment opportunities with AI investors
+// Only generates if player has unlocked syndicate feature (level 2+)
+func (gs *GameState) GenerateSyndicateOpportunities(playerLevel int) {
+	gs.SyndicateOpportunities = []SyndicateOpportunity{}
+	
+	// Check if syndicates are unlocked (level 2+)
+	if playerLevel < 2 {
+		return
+	}
+	
+	// Generate 2-4 syndicate opportunities from available startups
+	numOpportunities := 2 + rand.Intn(3) // 2-4 opportunities
+	
+	// Select random startups that aren't already in player's portfolio
+	availableForSyndicate := []int{}
+	for i, startup := range gs.AvailableStartups {
+		// Check if player already invested
+		alreadyInvested := false
+		for _, inv := range gs.Portfolio.Investments {
+			if inv.CompanyName == startup.Name {
+				alreadyInvested = true
+				break
+			}
+		}
+		if !alreadyInvested {
+			availableForSyndicate = append(availableForSyndicate, i)
+		}
+	}
+	
+	// Shuffle and take first N
+	if len(availableForSyndicate) > numOpportunities {
+		rand.Shuffle(len(availableForSyndicate), func(i, j int) {
+			availableForSyndicate[i], availableForSyndicate[j] = availableForSyndicate[j], availableForSyndicate[i]
+		})
+		availableForSyndicate = availableForSyndicate[:numOpportunities]
+	}
+	
+	// Generate syndicate opportunities
+	for _, startupIdx := range availableForSyndicate {
+		startup := gs.AvailableStartups[startupIdx]
+		
+		// Pick a random AI investor to lead
+		leadInvestorIdx := rand.Intn(len(gs.AIPlayers))
+		leadInvestor := gs.AIPlayers[leadInvestorIdx]
+		
+		// Calculate round size (typically 1.5-3x company valuation for seed rounds)
+		roundMultiplier := 1.5 + rand.Float64()*1.5 // 1.5x to 3x
+		totalRoundSize := int64(float64(startup.Valuation) * roundMultiplier)
+		
+		// Player can invest 20-40% of the round
+		playerSharePercent := 0.20 + rand.Float64()*0.20 // 20-40%
+		yourMaxShare := int64(float64(totalRoundSize) * playerSharePercent)
+		yourMinShare := int64(25000) // $25k minimum
+		
+		// Cap max share at available cash
+		if yourMaxShare > gs.Portfolio.Cash {
+			yourMaxShare = gs.Portfolio.Cash
+		}
+		
+		// Generate benefits based on startup characteristics
+		benefits := []string{}
+		if startup.GrowthPotential > 0.7 {
+			benefits = append(benefits, "High-growth opportunity")
+		}
+		if startup.RiskScore < 0.4 {
+			benefits = append(benefits, "Lower risk profile")
+		}
+		if leadInvestor.Strategy == "aggressive" {
+			benefits = append(benefits, "Access to hot deal")
+		} else if leadInvestor.Strategy == "conservative" {
+			benefits = append(benefits, "Vetted by conservative investor")
+		}
+		benefits = append(benefits, "Shared due diligence costs")
+		benefits = append(benefits, "Network access through lead investor")
+		
+		// Generate description
+		descriptions := []string{
+			fmt.Sprintf("%s is leading a syndicate round for %s", leadInvestor.Name, startup.Name),
+			fmt.Sprintf("Co-investment opportunity with %s on %s", leadInvestor.Firm, startup.Name),
+			fmt.Sprintf("%s invites you to join their deal on %s", leadInvestor.Name, startup.Name),
+		}
+		description := descriptions[rand.Intn(len(descriptions))]
+		
+		opportunity := SyndicateOpportunity{
+			CompanyName:      startup.Name,
+			StartupIndex:      startupIdx,
+			LeadInvestor:     leadInvestor.Name,
+			LeadInvestorFirm: leadInvestor.Firm,
+			TotalRoundSize:   totalRoundSize,
+			YourMaxShare:     yourMaxShare,
+			YourMinShare:     yourMinShare,
+			Valuation:        startup.Valuation,
+			Description:      description,
+			Benefits:         benefits,
+		}
+		
+		gs.SyndicateOpportunities = append(gs.SyndicateOpportunities, opportunity)
+	}
+}
+
+// MakeSyndicateInvestment allows player to co-invest via syndicate
+func (gs *GameState) MakeSyndicateInvestment(opportunityIndex int, amount int64) error {
+	if opportunityIndex < 0 || opportunityIndex >= len(gs.SyndicateOpportunities) {
+		return fmt.Errorf("invalid syndicate opportunity index")
+	}
+	
+	opp := gs.SyndicateOpportunities[opportunityIndex]
+	
+	if amount < opp.YourMinShare {
+		return fmt.Errorf("minimum investment is $%d", opp.YourMinShare)
+	}
+	
+	if amount > opp.YourMaxShare {
+		return fmt.Errorf("maximum investment is $%d", opp.YourMaxShare)
+	}
+	
+	if amount > gs.Portfolio.Cash {
+		return fmt.Errorf("insufficient funds (have $%d, need $%d)", gs.Portfolio.Cash, amount)
+	}
+	
+	// Check if already invested in this company
+	for _, inv := range gs.Portfolio.Investments {
+		if inv.CompanyName == opp.CompanyName {
+			return fmt.Errorf("you have already invested in %s", opp.CompanyName)
+		}
+	}
+	
+	startup := gs.AvailableStartups[opp.StartupIndex]
+	
+	// Calculate equity - syndicate rounds typically have better terms
+	// Player gets equity based on their share of the round
+	equityPercent := (float64(amount) / float64(opp.TotalRoundSize)) * 100.0
+	
+	// Syndicate bonus: slightly better terms (5% bonus equity)
+	equityPercent *= 1.05
+	
+	// Cap at 20% (standard max)
+	if equityPercent > 20.0 {
+		equityPercent = 20.0
+	}
+	
+	// Use Preferred Stock terms (standard for syndicates)
+	terms := InvestmentTerms{
+		Type:                "Preferred Stock",
+		HasProRataRights:    true,
+		HasInfoRights:       true,
+		HasBoardSeat:        amount >= 100000,
+		BoardSeatMultiplier: 1,
+		LiquidationPref:     1.0,
+		HasAntiDilution:     true,
+		ConversionDiscount:  0.0,
+	}
+	
+	investment := Investment{
+		CompanyName:      startup.Name,
+		AmountInvested:   amount,
+		EquityPercent:    equityPercent,
+		InitialEquity:    equityPercent,
+		InitialValuation: startup.Valuation,
+		CurrentValuation: startup.Valuation,
+		MonthsHeld:       0,
+		Category:         startup.Category,
+		NegativeNewsSent: false,
+		Rounds:           []FundingRound{},
+		Terms:            terms,
+		FollowOnThisTurn: false,
+	}
+	
+	gs.Portfolio.Investments = append(gs.Portfolio.Investments, investment)
+	gs.Portfolio.Cash -= amount
+	gs.updateNetWorth()
+	
+	// Remove this opportunity (can only invest once)
+	gs.SyndicateOpportunities = append(
+		gs.SyndicateOpportunities[:opportunityIndex],
+		gs.SyndicateOpportunities[opportunityIndex+1:]...,
+	)
+	
+	return nil
 }

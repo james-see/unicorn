@@ -131,6 +131,8 @@ func GetUnlockablesAtLevel(level int) []string {
 	switch level {
 	case 1:
 		unlocks = append(unlocks, "Easy & Medium difficulty available")
+	case 2:
+		unlocks = append(unlocks, "🤝 Investor Syndicates unlocked")
 	case 5:
 		unlocks = append(unlocks, "🔓 Hard difficulty unlocked")
 	case 10:
@@ -174,6 +176,7 @@ func GetRequiredLevelFor(feature string) int {
 		"prestige":       25,
 		"analytics":      10,
 		"achievement_chains": 15,
+		"syndicate_deals": 2,
 	}
 	
 	if level, exists := levelRequirements[feature]; exists {
