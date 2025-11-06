@@ -1,5 +1,86 @@
 # Changelog
 
+## Version 3.20.0 - Major Feature Update: Progression, Analytics & Enhanced Achievements (2025-11-06)
+
+### Major Features Added
+
+#### 💎 Player Progression System
+- **Level-Based Progression**: 50 levels with exponential XP requirements (200 * level^1.5)
+- **Experience Points**: Earn XP from games, achievements, difficulty bonuses, and successful exits
+- **Level Unlocks**: Progressive unlocking of difficulties (Hard at L5, Expert at L10, Nightmare at L15)
+- **Rank Titles**: From "Novice Investor" to "Titan of Industry"
+- **Visual Progress**: XP bars, level-up celebrations, and progression tracking in main menu
+- **Persistent Profiles**: Player profiles with level history and total XP earned
+
+#### 🏆 Achievement System Enhancements
+- **Achievement Chains**: Connected achievements with prerequisites (diversification, win streaks, investment count)
+- **Progress Tracking**: 15+ progressive achievements with visual progress bars (e.g., "Win 10 games: 4/10")
+- **Hidden Achievements**: Mystery achievements revealed only upon unlock (Phoenix, Perfect Month, Day Trader)
+- **New Achievements**: Added 18+ new achievements including:
+  - Diversification Chain (3 sectors → 5 sectors → all sectors)
+  - Win Streak Chain (3 → 5 → 10 consecutive wins)
+  - Games Played Milestones (10 → 50 → 100 → 500 games)
+  - Investment Expertise Chain (10 → 50 → 100 successful investments)
+- **Enhanced UI**: Filter by chains, view progress, see locked/available achievements
+
+#### 📊 Analytics Dashboard
+- **Performance Trends**: Automatic trend analysis for 7-day, 30-day, and all-time periods
+- **Difficulty Breakdown**: Per-difficulty statistics (games, win rate, avg net worth)
+- **Historical Performance**: Monthly reports showing games, wins, ROI, and best results
+- **Top Games Tracking**: Personal leaderboard of your best 5 games
+- **AI-Generated Insights**: Smart recommendations based on your performance patterns
+- **Global Comparisons**: Compare your stats to global averages with percentile rankings
+- **Visual Charts**: ASCII trend charts and performance heatmaps
+- **Player Comparison**: Side-by-side comparison of two players' statistics
+
+#### 🌍 Advanced Game Mechanics - Market Cycles
+- **Dynamic Market Cycles**: 5 cycle types (Bull, Bear, Normal, Recession, Boom)
+- **Economic Events**: 9+ event types including Interest Rate Hikes, Tech Booms, Credit Crunches
+- **Valuation Effects**: Market cycles affect startup valuations (0.6x - 1.5x multipliers)
+- **Funding Dynamics**: Market conditions impact funding availability (0.5x - 1.8x multipliers)
+- **Sector-Specific Impact**: Targeted events affect specific sectors (e.g., AI Investment Frenzy)
+- **Market Sentiment Indicators**: Real-time display of current market conditions
+
+### Technical Changes
+
+**New Files Created**:
+- `progression/progression.go` - Core progression system with XP calculations
+- `progression/unlocks.go` - Level-based unlock definitions
+- `ui/progression_ui.go` - Progression UI displays and level-up screens
+- `achievements/checker.go` - Achievement chain and progress tracking logic
+- `analytics/analytics.go` - Trend analysis and performance comparison engine
+- `ui/analytics_ui.go` - Comprehensive analytics dashboard UI
+- `game/market.go` - Market cycle and economic event system
+
+**Modified Files**:
+- `database/database.go` - Added 5 new tables (player_profiles, player_level_history, achievement_progress, game_history_detailed)
+- `achievements/achievements.go` - Extended Achievement struct with chains, progress tracking, and 18+ new achievements
+- `ui/achievements_ui.go` - Enhanced with chain displays, progress bars, and hidden achievements
+- `ui/main_menu.go` - Added Progression & Levels and Analytics Dashboard menu options
+- `main.go` - Integrated new menu options and progression display
+
+**Database Schema Changes**:
+- `player_profiles` table - Stores player level, XP, and progression data
+- `player_level_history` table - Tracks when players reached each level
+- `achievement_progress` table - Progressive achievement tracking with current/max progress
+- `game_history_detailed` table - Comprehensive game statistics for analytics
+
+**New Package Functions**:
+- Player progression: `GetPlayerProfile()`, `AddExperience()`, `GetLevelRequirement()`
+- Achievement chains: `CheckAchievementChain()`, `GetNextInChain()`, `GetProgressiveAchievements()`
+- Analytics: `GenerateTrendAnalysis()`, `CompareToGlobal()`, `GetMonthlyStats()`
+- Market cycles: `InitializeMarketCycle()`, `AdvanceMarketCycle()`, `ApplyMarketEffects()`
+
+### User Experience Improvements
+
+**Example Impact**:
+- Players now have clear progression goals with level-based unlocks
+- Achievement chains provide longer-term objectives and satisfying progression
+- Analytics dashboard offers deep insights into performance trends and improvement areas
+- Market cycles add strategic depth and variety to each playthrough
+
+---
+
 ## Version 3.19.2 - Code Quality Improvements (2025-11-06)
 
 ### Bug Fixes

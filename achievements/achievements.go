@@ -6,14 +6,18 @@ import (
 
 // Achievement represents an unlockable achievement
 type Achievement struct {
-	ID          string
-	Name        string
-	Description string
-	Icon        string
-	Category    string
-	Points      int
-	Rarity      string
-	Hidden      bool
+	ID                   string
+	Name                 string
+	Description          string
+	Icon                 string
+	Category             string
+	Points               int
+	Rarity               string
+	Hidden               bool
+	RequiredAchievements []string // Must unlock these first
+	ChainID              string   // Group related achievements
+	ProgressTracking     bool     // Can show progress
+	MaxProgress          int      // For progress tracking (e.g., "Win 10 games")
 }
 
 // PlayerAchievement tracks when a player unlocked an achievement
@@ -275,22 +279,29 @@ var AllAchievements = map[string]Achievement{
 		Rarity:      RarityEpic,
 	},
 	"win_streak_3": {
-		ID:          "win_streak_3",
-		Name:        "Hot Streak",
-		Description: "Win 3 games in a row",
-		Icon:        "🔥",
-		Category:    CategoryCareer,
-		Points:      20,
-		Rarity:      RarityRare,
+		ID:               "win_streak_3",
+		Name:             "Hot Streak",
+		Description:      "Win 3 games in a row",
+		Icon:             "🔥",
+		Category:         CategoryCareer,
+		Points:           20,
+		Rarity:           RarityRare,
+		ChainID:          "win_streak",
+		ProgressTracking: true,
+		MaxProgress:      3,
 	},
 	"win_streak_5": {
-		ID:          "win_streak_5",
-		Name:        "On Fire",
-		Description: "Win 5 games in a row",
-		Icon:        "⚡",
-		Category:    CategoryCareer,
-		Points:      40,
-		Rarity:      RarityEpic,
+		ID:                   "win_streak_5",
+		Name:                 "On Fire",
+		Description:          "Win 5 games in a row",
+		Icon:                 "⚡",
+		Category:             CategoryCareer,
+		Points:               40,
+		Rarity:               RarityEpic,
+		RequiredAchievements: []string{"win_streak_3"},
+		ChainID:              "win_streak",
+		ProgressTracking:     true,
+		MaxProgress:          5,
 	},
 	
 	// Challenge Achievements
@@ -506,6 +517,196 @@ var AllAchievements = map[string]Achievement{
 		Points:      60,
 		Rarity:      RarityLegendary,
 		Hidden:      true,
+	},
+	
+	// Diversification Chain
+	"diversified_starter": {
+		ID:                   "diversified_starter",
+		Name:                 "Diversification Starter",
+		Description:          "Invest in 3 different sectors",
+		Icon:                 "🌱",
+		Category:             CategoryStrategy,
+		Points:               10,
+		Rarity:               RarityCommon,
+		RequiredAchievements: []string{},
+		ChainID:              "diversification",
+		ProgressTracking:     false,
+	},
+	"portfolio_manager": {
+		ID:                   "portfolio_manager",
+		Name:                 "Portfolio Manager",
+		Description:          "Invest in 5 different sectors",
+		Icon:                 "📊",
+		Category:             CategoryStrategy,
+		Points:               25,
+		Rarity:               RarityRare,
+		RequiredAchievements: []string{"diversified_starter"},
+		ChainID:              "diversification",
+		ProgressTracking:     false,
+	},
+	"investment_conglomerate": {
+		ID:                   "investment_conglomerate",
+		Name:                 "Investment Conglomerate",
+		Description:          "Invest in all available sectors",
+		Icon:                 "🏢",
+		Category:             CategoryStrategy,
+		Points:               50,
+		Rarity:               RarityEpic,
+		RequiredAchievements: []string{"portfolio_manager"},
+		ChainID:              "diversification",
+		ProgressTracking:     false,
+	},
+	
+	// Win Streak Chain - Extended with win_streak_10
+	"win_streak_10": {
+		ID:                   "win_streak_10",
+		Name:                 "Unstoppable",
+		Description:          "Win 10 games in a row",
+		Icon:                 "🔥🔥🔥",
+		Category:             CategoryCareer,
+		Points:               75,
+		Rarity:               RarityLegendary,
+		RequiredAchievements: []string{"win_streak_5"},
+		ChainID:              "win_streak",
+		ProgressTracking:     true,
+		MaxProgress:          10,
+	},
+	
+	// Games Played Chain with Progress Tracking
+	"games_10": {
+		ID:               "games_10",
+		Name:             "Getting Started",
+		Description:      "Play 10 games",
+		Icon:             "🎮",
+		Category:         CategoryCareer,
+		Points:           10,
+		Rarity:           RarityCommon,
+		ChainID:          "games_played",
+		ProgressTracking: true,
+		MaxProgress:      10,
+	},
+	"games_50": {
+		ID:                   "games_50",
+		Name:                 "Dedicated Player",
+		Description:          "Play 50 games",
+		Icon:                 "🎯",
+		Category:             CategoryCareer,
+		Points:               25,
+		Rarity:               RarityRare,
+		RequiredAchievements: []string{"games_10"},
+		ChainID:              "games_played",
+		ProgressTracking:     true,
+		MaxProgress:          50,
+	},
+	"games_100": {
+		ID:                   "games_100",
+		Name:                 "Century Mark",
+		Description:          "Play 100 games",
+		Icon:                 "💯",
+		Category:             CategoryCareer,
+		Points:               50,
+		Rarity:               RarityEpic,
+		RequiredAchievements: []string{"games_50"},
+		ChainID:              "games_played",
+		ProgressTracking:     true,
+		MaxProgress:          100,
+	},
+	"games_500": {
+		ID:                   "games_500",
+		Name:                 "Veteran",
+		Description:          "Play 500 games",
+		Icon:                 "🏅",
+		Category:             CategoryCareer,
+		Points:               100,
+		Rarity:               RarityLegendary,
+		RequiredAchievements: []string{"games_100"},
+		ChainID:              "games_played",
+		ProgressTracking:     true,
+		MaxProgress:          500,
+	},
+	
+	// Hidden Mystery Achievements
+	"mystery_investor": {
+		ID:               "mystery_investor",
+		Name:             "Mystery Investor",
+		Description:      "Invest in all 30+ startups across multiple games",
+		Icon:             "🎭",
+		Category:         CategorySpecial,
+		Points:           100,
+		Rarity:           RarityLegendary,
+		Hidden:           true,
+		ProgressTracking: true,
+		MaxProgress:      30,
+	},
+	"perfect_month": {
+		ID:          "perfect_month",
+		Name:        "Perfect Month",
+		Description: "Have all portfolio companies increase in value in one turn",
+		Icon:        "✨",
+		Category:    CategorySpecial,
+		Points:      75,
+		Rarity:      RarityLegendary,
+		Hidden:      true,
+	},
+	"phoenix": {
+		ID:          "phoenix",
+		Name:        "Phoenix",
+		Description: "Win a game after having negative net worth",
+		Icon:        "🔥",
+		Category:    CategoryChallenge,
+		Points:      50,
+		Rarity:      RarityEpic,
+		Hidden:      true,
+	},
+	"day_trader": {
+		ID:          "day_trader",
+		Name:        "Day Trader",
+		Description: "Complete a game in under 5 minutes",
+		Icon:        "⚡",
+		Category:    CategoryChallenge,
+		Points:      30,
+		Rarity:      RarityRare,
+		Hidden:      true,
+	},
+	
+	// Investment Expertise Chain
+	"investment_novice": {
+		ID:               "investment_novice",
+		Name:             "Investment Novice",
+		Description:      "Make 10 successful investments",
+		Icon:             "📈",
+		Category:         CategoryPerformance,
+		Points:           10,
+		Rarity:           RarityCommon,
+		ChainID:          "investment_count",
+		ProgressTracking: true,
+		MaxProgress:      10,
+	},
+	"investment_expert": {
+		ID:                   "investment_expert",
+		Name:                 "Investment Expert",
+		Description:          "Make 50 successful investments",
+		Icon:                 "📊",
+		Category:             CategoryPerformance,
+		Points:               30,
+		Rarity:               RarityRare,
+		RequiredAchievements: []string{"investment_novice"},
+		ChainID:              "investment_count",
+		ProgressTracking:     true,
+		MaxProgress:          50,
+	},
+	"investment_master": {
+		ID:                   "investment_master",
+		Name:                 "Investment Master",
+		Description:          "Make 100 successful investments",
+		Icon:                 "💎",
+		Category:             CategoryPerformance,
+		Points:               75,
+		Rarity:               RarityLegendary,
+		RequiredAchievements: []string{"investment_expert"},
+		ChainID:              "investment_count",
+		ProgressTracking:     true,
+		MaxProgress:          100,
 	},
 }
 

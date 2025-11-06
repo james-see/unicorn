@@ -54,12 +54,19 @@ func initMenu() (username string) {
 		yellow.Printf("📊 Average Net Worth: $%s\n", ui.FormatCurrency(int64(stats.AverageNetWorth)))
 		yellow.Printf("🎯 Win Rate: %.1f%%\n", stats.WinRate)
 
+		// Get and display player level
+		_, err = database.GetPlayerProfile(text)
+		if err == nil {
+			fmt.Println()
+			ui.DisplayLevelProgress(text)
+		}
+
 		// Get achievement count
 		spinner2, _ := animations.StartSpinner("Loading achievements...")
 		achievementCount, _ := database.GetPlayerAchievementCount(text)
 		spinner2.Stop()
 		if achievementCount > 0 {
-			yellow.Printf("🏆 Achievements Unlocked: %d\n", achievementCount)
+			yellow.Printf("\n🏆 Achievements Unlocked: %d\n", achievementCount)
 		}
 
 		// Get and display active upgrades
@@ -190,8 +197,19 @@ func main() {
 		case "5":
 			ui.DisplayUpgradeMenu()
 		case "6":
-			ui.DisplayHelpGuide()
+			// Get username for progression display
+			fmt.Print("Enter your name: ")
+			reader := bufio.NewReader(os.Stdin)
+			username, _ := reader.ReadString('\n')
+			username = strings.TrimSpace(username)
+			if username != "" {
+				ui.DisplayProgressionStats(username)
+			}
 		case "7":
+			ui.AnalyticsMenu()
+		case "8":
+			ui.DisplayHelpGuide()
+		case "9":
 			animations.ShowInfoMessage("Thanks for playing! " + ascii.Star2)
 			return
 		default:

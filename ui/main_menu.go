@@ -37,8 +37,10 @@ func DisplayMainMenu() string {
 	yellow.Println("3. Player Statistics")
 	yellow.Println("4. Achievements")
 	yellow.Println("5. Upgrades")
-	yellow.Println("6. Help & Info")
-	yellow.Println("7. Quit")
+	yellow.Println("6. Progression & Levels")
+	yellow.Println("7. Analytics Dashboard")
+	yellow.Println("8. Help & Info")
+	yellow.Println("9. Quit")
 
 	fmt.Print("\nEnter your choice: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -100,37 +102,8 @@ func DisplayLeaderboards() {
 }
 
 func DisplayAchievementsMenu() {
-	clear.ClearIt()
-	cyan := color.New(color.FgCyan, color.Bold)
-
-	cyan.Print(ascii.AchievementsHeader)
-
-	fmt.Println("\n1. View My Achievements")
-	fmt.Println("2. Browse All Achievements")
-	fmt.Println("3. Leaderboard (Most Achievements)")
-	fmt.Println("4. Back to Main Menu")
-
-	fmt.Print("\nEnter your choice: ")
-	reader := bufio.NewReader(os.Stdin)
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
-
-	clear.ClearIt()
-
-	switch choice {
-	case "1":
-		ViewPlayerAchievements()
-	case "2":
-		BrowseAllAchievements()
-	case "3":
-		DisplayAchievementLeaderboard()
-	case "4":
-		return
-	}
-
-	fmt.Print("\nPress 'Enter' to continue...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
-	DisplayAchievementsMenu()
+	// Use enhanced achievement menu with new features
+	EnhancedAchievementMenu()
 }
 
 func DisplayUpgradeMenu() {

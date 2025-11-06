@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -70,12 +71,60 @@ func InitDB(dbPath string) error {
 		UNIQUE(player_name, upgrade_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS player_profiles (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		player_name TEXT UNIQUE NOT NULL,
+		level INTEGER DEFAULT 1,
+		experience_points INTEGER DEFAULT 0,
+		total_points_earned INTEGER DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_played DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS player_level_history (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		player_name TEXT NOT NULL,
+		level INTEGER NOT NULL,
+		reached_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS achievement_progress (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		player_name TEXT NOT NULL,
+		achievement_id TEXT NOT NULL,
+		current_progress INTEGER DEFAULT 0,
+		max_progress INTEGER NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(player_name, achievement_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS game_history_detailed (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		player_name TEXT NOT NULL,
+		game_mode TEXT NOT NULL,
+		difficulty TEXT NOT NULL,
+		final_net_worth INTEGER,
+		roi REAL,
+		successful_exits INTEGER,
+		turns_played INTEGER,
+		investments_made INTEGER,
+		best_investment_roi REAL,
+		worst_investment_roi REAL,
+		avg_investment_amount INTEGER,
+		total_invested INTEGER,
+		played_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_net_worth ON game_scores(final_net_worth DESC);
 	CREATE INDEX IF NOT EXISTS idx_roi ON game_scores(roi DESC);
 	CREATE INDEX IF NOT EXISTS idx_player ON game_scores(player_name);
 	CREATE INDEX IF NOT EXISTS idx_difficulty ON game_scores(difficulty);
 	CREATE INDEX IF NOT EXISTS idx_player_achievements ON player_achievements(player_name);
 	CREATE INDEX IF NOT EXISTS idx_player_upgrades ON player_upgrades(player_name);
+	CREATE INDEX IF NOT EXISTS idx_player_profiles ON player_profiles(player_name);
+	CREATE INDEX IF NOT EXISTS idx_level_history ON player_level_history(player_name);
+	CREATE INDEX IF NOT EXISTS idx_achievement_progress ON achievement_progress(player_name);
+	CREATE INDEX IF NOT EXISTS idx_game_history ON game_history_detailed(player_name, played_at DESC);
 	`
 
 	_, err = db.Exec(createTablesSQL)
@@ -523,4 +572,248 @@ func GetWinStreak(playerName string) (int, error) {
 	}
 	
 	return streak, nil
+}
+
+// PlayerProfile represents a player's progression data
+type PlayerProfile struct {
+	PlayerName         string
+	Level              int
+	ExperiencePoints   int
+	TotalPointsEarned  int
+	NextLevelXP        int
+	ProgressPercent    float64
+	CreatedAt          time.Time
+	LastPlayed         time.Time
+}
+
+// GetPlayerProfile retrieves or creates a player's profile
+func GetPlayerProfile(playerName string) (*PlayerProfile, error) {
+	// Try to get existing profile
+	query := `
+		SELECT player_name, level, experience_points, total_points_earned, created_at, last_played
+		FROM player_profiles
+		WHERE player_name = ?
+	`
+	
+	var profile PlayerProfile
+	err := db.QueryRow(query, playerName).Scan(
+		&profile.PlayerName,
+		&profile.Level,
+		&profile.ExperiencePoints,
+		&profile.TotalPointsEarned,
+		&profile.CreatedAt,
+		&profile.LastPlayed,
+	)
+	
+	if err == sql.ErrNoRows {
+		// Create new profile
+		insertQuery := `
+			INSERT INTO player_profiles (player_name, level, experience_points, total_points_earned)
+			VALUES (?, 1, 0, 0)
+		`
+		_, err := db.Exec(insertQuery, playerName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create player profile: %v", err)
+		}
+		
+		// Return new profile
+		profile = PlayerProfile{
+			PlayerName:         playerName,
+			Level:              1,
+			ExperiencePoints:   0,
+			TotalPointsEarned:  0,
+			CreatedAt:          time.Now(),
+			LastPlayed:         time.Now(),
+		}
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get player profile: %v", err)
+	}
+	
+	// Calculate next level requirements
+	profile.NextLevelXP = GetLevelRequirement(profile.Level + 1)
+	profile.ProgressPercent = float64(profile.ExperiencePoints) / float64(profile.NextLevelXP) * 100
+	
+	return &profile, nil
+}
+
+// GetLevelRequirement returns the XP needed to reach a specific level
+func GetLevelRequirement(level int) int {
+	// Level N requires: 200 * (N ^ 1.5) total XP
+	// This creates an exponential curve:
+	// Level 2: 200 * (2^1.5) ≈ 283 XP
+	// Level 3: 200 * (3^1.5) ≈ 519 XP  
+	// Level 5: 200 * (5^1.5) ≈ 1118 XP
+	// Level 10: 200 * (10^1.5) ≈ 6325 XP
+	if level <= 1 {
+		return 0
+	}
+	
+	return int(200 * math.Pow(float64(level), 1.5))
+}
+
+// AddExperience adds XP to a player and handles level ups
+func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel int, err error) {
+	// Get current profile
+	profile, err := GetPlayerProfile(playerName)
+	if err != nil {
+		return false, 0, err
+	}
+	
+	// Add XP
+	newXP := profile.ExperiencePoints + xpAmount
+	newTotal := profile.TotalPointsEarned + xpAmount
+	currentLevel := profile.Level
+	
+	// Check for level ups
+	for {
+		requiredXP := GetLevelRequirement(currentLevel + 1)
+		if newXP >= requiredXP {
+			currentLevel++
+			newXP -= requiredXP
+			leveledUp = true
+			
+			// Record level up in history
+			historyQuery := `
+				INSERT INTO player_level_history (player_name, level, reached_at)
+				VALUES (?, ?, CURRENT_TIMESTAMP)
+			`
+			_, err := db.Exec(historyQuery, playerName, currentLevel)
+			if err != nil {
+				return false, 0, fmt.Errorf("failed to record level history: %v", err)
+			}
+		} else {
+			break
+		}
+	}
+	
+	// Update profile
+	updateQuery := `
+		UPDATE player_profiles
+		SET level = ?, experience_points = ?, total_points_earned = ?, last_played = CURRENT_TIMESTAMP
+		WHERE player_name = ?
+	`
+	_, err = db.Exec(updateQuery, currentLevel, newXP, newTotal, playerName)
+	if err != nil {
+		return false, 0, fmt.Errorf("failed to update player profile: %v", err)
+	}
+	
+	return leveledUp, currentLevel, nil
+}
+
+// UpdateLastPlayed updates the last played timestamp for a player
+func UpdateLastPlayed(playerName string) error {
+	query := `
+		UPDATE player_profiles
+		SET last_played = CURRENT_TIMESTAMP
+		WHERE player_name = ?
+	`
+	_, err := db.Exec(query, playerName)
+	if err != nil {
+		return fmt.Errorf("failed to update last played: %v", err)
+	}
+	return nil
+}
+
+// UpdateAchievementProgress updates progress toward a progressive achievement
+func UpdateAchievementProgress(playerName, achievementID string, currentProgress, maxProgress int) error {
+	query := `
+		INSERT INTO achievement_progress (player_name, achievement_id, current_progress, max_progress, updated_at)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(player_name, achievement_id) 
+		DO UPDATE SET current_progress = ?, updated_at = CURRENT_TIMESTAMP
+	`
+	_, err := db.Exec(query, playerName, achievementID, currentProgress, maxProgress, currentProgress)
+	if err != nil {
+		return fmt.Errorf("failed to update achievement progress: %v", err)
+	}
+	return nil
+}
+
+// GetAchievementProgress gets the current progress for an achievement
+func GetAchievementProgress(playerName, achievementID string) (current, max int, err error) {
+	query := `
+		SELECT current_progress, max_progress
+		FROM achievement_progress
+		WHERE player_name = ? AND achievement_id = ?
+	`
+	err = db.QueryRow(query, playerName, achievementID).Scan(&current, &max)
+	if err == sql.ErrNoRows {
+		return 0, 0, nil // No progress yet
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get achievement progress: %v", err)
+	}
+	return current, max, nil
+}
+
+// ProgressInfo represents progress toward an achievement
+type ProgressInfo struct {
+	AchievementID   string
+	CurrentProgress int
+	MaxProgress     int
+	UpdatedAt       time.Time
+}
+
+// GetAllProgress gets all achievement progress for a player
+func GetAllProgress(playerName string) (map[string]ProgressInfo, error) {
+	query := `
+		SELECT achievement_id, current_progress, max_progress, updated_at
+		FROM achievement_progress
+		WHERE player_name = ?
+	`
+	
+	rows, err := db.Query(query, playerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query achievement progress: %v", err)
+	}
+	defer rows.Close()
+	
+	progress := make(map[string]ProgressInfo)
+	for rows.Next() {
+		var info ProgressInfo
+		if err := rows.Scan(&info.AchievementID, &info.CurrentProgress, &info.MaxProgress, &info.UpdatedAt); err != nil {
+			return nil, err
+		}
+		progress[info.AchievementID] = info
+	}
+	
+	return progress, nil
+}
+
+// GetTopScoresByPlayer returns top scores for a specific player
+func GetTopScoresByPlayer(playerName string, limit int) ([]GameScore, error) {
+	query := `
+		SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, played_at
+		FROM game_scores
+		WHERE player_name = ?
+		ORDER BY played_at DESC
+		LIMIT ?
+	`
+	
+	rows, err := db.Query(query, playerName, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query scores: %v", err)
+	}
+	defer rows.Close()
+	
+	var scores []GameScore
+	for rows.Next() {
+		var score GameScore
+		err := rows.Scan(
+			&score.ID,
+			&score.PlayerName,
+			&score.FinalNetWorth,
+			&score.ROI,
+			&score.SuccessfulExits,
+			&score.TurnsPlayed,
+			&score.Difficulty,
+			&score.PlayedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		scores = append(scores, score)
+	}
+	
+	return scores, nil
 }

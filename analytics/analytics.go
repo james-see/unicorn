@@ -3,280 +3,457 @@ package analytics
 import (
 	"fmt"
 	"sort"
-	"strings"
+	"time"
 
-	game "github.com/jamesacampbell/unicorn/game"
+	"github.com/jamesacampbell/unicorn/database"
 )
 
-// PortfolioAnalytics tracks detailed portfolio performance
-type PortfolioAnalytics struct {
-	TotalInvested       int64
-	CurrentValue        int64
-	TotalGainLoss       int64
-	PercentageChange    float64
-	BestPerformer       InvestmentPerformance
-	WorstPerformer      InvestmentPerformance
-	SectorBreakdown     map[string]SectorPerformance
-	InvestmentCount     int
-	AverageReturn       float64
-	PositiveInvestments int
-	NegativeInvestments int
+// PerformanceTrend represents performance over a time period
+type PerformanceTrend struct {
+	Period      string
+	GamesPlayed int
+	WinRate     float64
+	AvgROI      float64
+	AvgNetWorth int64
+	Trend       string // "Improving", "Declining", "Stable"
 }
 
-// InvestmentPerformance tracks individual investment metrics
-type InvestmentPerformance struct {
-	CompanyName      string
-	Category         string
-	AmountInvested   int64
-	CurrentValue     int64
-	GainLoss         int64
-	PercentageChange float64
+// ComparisonStats compares player to global averages
+type ComparisonStats struct {
+	YourAvg    float64
+	GlobalAvg  float64
+	Percentile int // Top X% of players
 }
 
-// SectorPerformance tracks performance by sector
+// MonthlyReport contains performance data for a specific month
+type MonthlyReport struct {
+	Month          string
+	Year           int
+	GamesPlayed    int
+	Wins           int
+	AvgROI         float64
+	BestNetWorth   int64
+	TotalInvested  int64
+}
+
+// SectorPerformance tracks ROI by sector
 type SectorPerformance struct {
 	SectorName      string
+	InvestmentCount int
+	AvgROI          float64
+	BestROI         float64
+	WorstROI        float64
 	TotalInvested   int64
-	CurrentValue    int64
-	GainLoss        int64
-	ROI             float64
-	CompanyCount    int
-	AverageROI      float64
 }
 
-// CalculateAnalytics generates comprehensive portfolio analytics
-func CalculateAnalytics(gs *game.GameState) *PortfolioAnalytics {
-	analytics := &PortfolioAnalytics{
-		SectorBreakdown: make(map[string]SectorPerformance),
+// TrendReport contains comprehensive trend analysis
+type TrendReport struct {
+	Last7Days   PerformanceTrend
+	Last30Days  PerformanceTrend
+	AllTime     PerformanceTrend
+	TrendVector string // Overall trend direction
+	Insights    []string
+}
+
+// GenerateTrendAnalysis generates trend analysis for a player
+func GenerateTrendAnalysis(playerName string, daysBack int) (*TrendReport, error) {
+	// Get game history
+	scores, err := database.GetTopScoresByPlayer(playerName, 1000)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game history: %v", err)
 	}
 	
-	var performances []InvestmentPerformance
-	sectorData := make(map[string]*SectorPerformance)
+	if len(scores) == 0 {
+		return &TrendReport{
+			TrendVector: "Insufficient Data",
+			Insights:    []string{"Play more games to see trends!"},
+		}, nil
+	}
 	
-	// Analyze each investment
-	for _, inv := range gs.Portfolio.Investments {
-		value := int64((inv.EquityPercent / 100.0) * float64(inv.CurrentValuation))
-		gainLoss := value - inv.AmountInvested
-		percentChange := (float64(gainLoss) / float64(inv.AmountInvested)) * 100.0
-		
-		perf := InvestmentPerformance{
-			CompanyName:      inv.CompanyName,
-			AmountInvested:   inv.AmountInvested,
-			CurrentValue:     value,
-			GainLoss:         gainLoss,
-			PercentageChange: percentChange,
+	now := time.Now()
+	
+	// Calculate trends for different periods
+	last7Days := calculatePeriodTrend(scores, now, 7)
+	last30Days := calculatePeriodTrend(scores, now, 30)
+	allTime := calculatePeriodTrend(scores, now, 36500) // ~100 years
+	
+	// Determine overall trend vector
+	trendVector := determineTrendVector(last7Days, last30Days, allTime)
+	
+	// Generate insights
+	insights := generateInsights(last7Days, last30Days, allTime, scores)
+	
+	return &TrendReport{
+		Last7Days:   last7Days,
+		Last30Days:  last30Days,
+		AllTime:     allTime,
+		TrendVector: trendVector,
+		Insights:    insights,
+	}, nil
+}
+
+// calculatePeriodTrend calculates performance trend for a specific period
+func calculatePeriodTrend(scores []database.GameScore, endDate time.Time, daysBack int) PerformanceTrend {
+	startDate := endDate.AddDate(0, 0, -daysBack)
+	
+	periodScores := []database.GameScore{}
+	for _, score := range scores {
+		if score.PlayedAt.After(startDate) && score.PlayedAt.Before(endDate) {
+			periodScores = append(periodScores, score)
 		}
+	}
+	
+	if len(periodScores) == 0 {
+		return PerformanceTrend{
+			Period:      getPeriodName(daysBack),
+			GamesPlayed: 0,
+			Trend:       "No Data",
+		}
+	}
+	
+	// Calculate stats
+	totalROI := 0.0
+	totalNetWorth := int64(0)
+	wins := 0
+	
+	for _, score := range periodScores {
+		totalROI += score.ROI
+		totalNetWorth += score.FinalNetWorth
+		if score.ROI > 0 {
+			wins++
+		}
+	}
+	
+	avgROI := totalROI / float64(len(periodScores))
+	avgNetWorth := totalNetWorth / int64(len(periodScores))
+	winRate := float64(wins) / float64(len(periodScores)) * 100
+	
+	// Determine trend (compare first half vs second half)
+	trend := "Stable"
+	if len(periodScores) >= 4 {
+		midPoint := len(periodScores) / 2
+		firstHalfAvg := 0.0
+		secondHalfAvg := 0.0
 		
-		// Find the company to get its category
-		for _, startup := range gs.AvailableStartups {
-			if startup.Name == inv.CompanyName {
-				perf.Category = startup.Category
-				break
+		for i := 0; i < midPoint; i++ {
+			firstHalfAvg += periodScores[i].ROI
+		}
+		firstHalfAvg /= float64(midPoint)
+		
+		for i := midPoint; i < len(periodScores); i++ {
+			secondHalfAvg += periodScores[i].ROI
+		}
+		secondHalfAvg /= float64(len(periodScores) - midPoint)
+		
+		improvement := (secondHalfAvg - firstHalfAvg) / (firstHalfAvg + 0.01) // Avoid div by zero
+		
+		if improvement > 0.15 {
+			trend = "Improving"
+		} else if improvement < -0.15 {
+			trend = "Declining"
+		}
+	}
+	
+	return PerformanceTrend{
+		Period:      getPeriodName(daysBack),
+		GamesPlayed: len(periodScores),
+		WinRate:     winRate,
+		AvgROI:      avgROI,
+		AvgNetWorth: avgNetWorth,
+		Trend:       trend,
+	}
+}
+
+// determineTrendVector determines overall trend direction
+func determineTrendVector(last7, last30, allTime PerformanceTrend) string {
+	if last7.GamesPlayed == 0 && last30.GamesPlayed == 0 {
+		return "Insufficient Data"
+	}
+	
+	// Weight recent trends more heavily
+	if last7.GamesPlayed >= 3 {
+		if last7.Trend == "Improving" {
+			return "📈 Strong Upward Trend"
+		} else if last7.Trend == "Declining" {
+			return "📉 Recent Decline"
+		}
+	}
+	
+	if last30.Trend == "Improving" {
+		return "↗ Improving"
+	} else if last30.Trend == "Declining" {
+		return "↘ Declining"
+	}
+	
+	return "→ Stable"
+}
+
+// generateInsights generates actionable insights from trends
+func generateInsights(last7, last30, allTime PerformanceTrend, allScores []database.GameScore) []string {
+	insights := []string{}
+	
+	// Win rate insights
+	if last30.WinRate > allTime.WinRate+10 {
+		insights = append(insights, fmt.Sprintf("✨ You're performing %.0f%% better than your all-time average!", 
+			last30.WinRate-allTime.WinRate))
+	} else if last30.WinRate < allTime.WinRate-10 {
+		insights = append(insights, fmt.Sprintf("⚠️ Your recent win rate is %.0f%% below your average", 
+			allTime.WinRate-last30.WinRate))
+	}
+	
+	// ROI insights
+	if last30.AvgROI > allTime.AvgROI*1.2 {
+		insights = append(insights, "💰 Your ROI is significantly above your average - great job!")
+	}
+	
+	// Consistency insights
+	if len(allScores) >= 10 {
+		// Calculate consistency (lower std deviation = more consistent)
+		stdDev := calculateStdDev(allScores)
+		if stdDev < 0.5 {
+			insights = append(insights, "🎯 You're very consistent across games")
+		} else if stdDev > 2.0 {
+			insights = append(insights, "📊 Your performance varies significantly - try to find what works")
+		}
+	}
+	
+	// Game volume insights
+	if last7.GamesPlayed > last30.GamesPlayed/2 {
+		insights = append(insights, "🔥 You've been playing a lot lately - stay focused!")
+	}
+	
+	// Best performance insights
+	if len(allScores) > 0 {
+		bestROI := allScores[0].ROI
+		for _, score := range allScores {
+			if score.ROI > bestROI {
+				bestROI = score.ROI
 			}
 		}
 		
-		performances = append(performances, perf)
-		
-		analytics.TotalInvested += inv.AmountInvested
-		analytics.CurrentValue += value
-		analytics.InvestmentCount++
-		
-		if gainLoss > 0 {
-			analytics.PositiveInvestments++
-		} else if gainLoss < 0 {
-			analytics.NegativeInvestments++
-		}
-		
-		// Track sector performance
-		if perf.Category != "" {
-			if _, exists := sectorData[perf.Category]; !exists {
-				sectorData[perf.Category] = &SectorPerformance{
-					SectorName: perf.Category,
-				}
-			}
-			
-			sector := sectorData[perf.Category]
-			sector.TotalInvested += inv.AmountInvested
-			sector.CurrentValue += value
-			sector.GainLoss += gainLoss
-			sector.CompanyCount++
+		if bestROI > 5.0 {
+			insights = append(insights, fmt.Sprintf("🏆 Your best ROI is %.1fx - try to replicate that success!", bestROI))
 		}
 	}
 	
-	// Calculate totals
-	analytics.TotalGainLoss = analytics.CurrentValue - analytics.TotalInvested
-	if analytics.TotalInvested > 0 {
-		analytics.PercentageChange = (float64(analytics.TotalGainLoss) / float64(analytics.TotalInvested)) * 100.0
-		analytics.AverageReturn = analytics.PercentageChange / float64(analytics.InvestmentCount)
+	if len(insights) == 0 {
+		insights = append(insights, "Keep playing to generate more insights!")
 	}
 	
-	// Find best and worst performers
-	if len(performances) > 0 {
-		sort.Slice(performances, func(i, j int) bool {
-			return performances[i].PercentageChange > performances[j].PercentageChange
-		})
-		analytics.BestPerformer = performances[0]
-		analytics.WorstPerformer = performances[len(performances)-1]
-	}
-	
-	// Calculate sector ROI
-	for sectorName, sector := range sectorData {
-		if sector.TotalInvested > 0 {
-			sector.ROI = (float64(sector.GainLoss) / float64(sector.TotalInvested)) * 100.0
-			sector.AverageROI = sector.ROI / float64(sector.CompanyCount)
-		}
-		analytics.SectorBreakdown[sectorName] = *sector
-	}
-	
-	return analytics
+	return insights
 }
 
-// GetTopSectors returns sectors sorted by performance
-func GetTopSectors(analytics *PortfolioAnalytics) []SectorPerformance {
-	var sectors []SectorPerformance
-	for _, sector := range analytics.SectorBreakdown {
-		sectors = append(sectors, sector)
+// CompareToGlobal compares player stats to global averages
+func CompareToGlobal(playerStats database.PlayerStats) (ComparisonStats, error) {
+	// Get global stats (top 100 players as sample)
+	allScores, err := database.GetTopScoresByNetWorth(100, "all")
+	if err != nil {
+		return ComparisonStats{}, err
 	}
 	
-	sort.Slice(sectors, func(i, j int) bool {
-		return sectors[i].ROI > sectors[j].ROI
+	if len(allScores) == 0 {
+		return ComparisonStats{
+			YourAvg:    playerStats.AverageNetWorth,
+			GlobalAvg:  0,
+			Percentile: 100,
+		}, nil
+	}
+	
+	// Calculate global average net worth
+	globalTotal := int64(0)
+	for _, score := range allScores {
+		globalTotal += score.FinalNetWorth
+	}
+	globalAvg := float64(globalTotal) / float64(len(allScores))
+	
+	// Calculate percentile (simplified)
+	betterThan := 0
+	for _, score := range allScores {
+		if playerStats.BestNetWorth > score.FinalNetWorth {
+			betterThan++
+		}
+	}
+	percentile := (betterThan * 100) / len(allScores)
+	
+	return ComparisonStats{
+		YourAvg:    playerStats.AverageNetWorth,
+		GlobalAvg:  globalAvg,
+		Percentile: 100 - percentile, // Top X%
+	}, nil
+}
+
+// CalculateTrend determines if a set of values is improving/declining
+func CalculateTrend(dataPoints []float64) string {
+	if len(dataPoints) < 3 {
+		return "Stable"
+	}
+	
+	// Simple linear regression to determine trend
+	n := float64(len(dataPoints))
+	sumX := 0.0
+	sumY := 0.0
+	sumXY := 0.0
+	sumX2 := 0.0
+	
+	for i, y := range dataPoints {
+		x := float64(i)
+		sumX += x
+		sumY += y
+		sumXY += x * y
+		sumX2 += x * x
+	}
+	
+	// Slope of regression line
+	slope := (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX)
+	
+	if slope > 0.1 {
+		return "Improving"
+	} else if slope < -0.1 {
+		return "Declining"
+	}
+	
+	return "Stable"
+}
+
+// Helper functions
+
+func getPeriodName(days int) string {
+	if days <= 7 {
+		return "Last 7 Days"
+	} else if days <= 30 {
+		return "Last 30 Days"
+	}
+	return "All Time"
+}
+
+func calculateStdDev(scores []database.GameScore) float64 {
+	if len(scores) == 0 {
+		return 0
+	}
+	
+	// Calculate mean
+	sum := 0.0
+	for _, score := range scores {
+		sum += score.ROI
+	}
+	mean := sum / float64(len(scores))
+	
+	// Calculate variance
+	variance := 0.0
+	for _, score := range scores {
+		diff := score.ROI - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(scores))
+	
+	// Standard deviation is square root of variance
+	// Simplified calculation
+	return variance
+}
+
+// GetMonthlyStats returns performance for a specific month
+func GetMonthlyStats(playerName string, year, month int) (*MonthlyReport, error) {
+	scores, err := database.GetTopScoresByPlayer(playerName, 1000)
+	if err != nil {
+		return nil, err
+	}
+	
+	var monthScores []database.GameScore
+	for _, score := range scores {
+		if score.PlayedAt.Year() == year && int(score.PlayedAt.Month()) == month {
+			monthScores = append(monthScores, score)
+		}
+	}
+	
+	if len(monthScores) == 0 {
+		return &MonthlyReport{
+			Month:       time.Month(month).String(),
+			Year:        year,
+			GamesPlayed: 0,
+		}, nil
+	}
+	
+	totalROI := 0.0
+	bestNetWorth := int64(0)
+	wins := 0
+	
+	for _, score := range monthScores {
+		totalROI += score.ROI
+		if score.FinalNetWorth > bestNetWorth {
+			bestNetWorth = score.FinalNetWorth
+		}
+		if score.ROI > 0 {
+			wins++
+		}
+		// Note: TotalInvested not available in GameScore, would need detailed history
+	}
+	
+	return &MonthlyReport{
+		Month:        time.Month(month).String(),
+		Year:         year,
+		GamesPlayed:  len(monthScores),
+		Wins:         wins,
+		AvgROI:       totalROI / float64(len(monthScores)),
+		BestNetWorth: bestNetWorth,
+	}, nil
+}
+
+// GetTopInvestments returns best performing investments (placeholder - would need detailed game history)
+func GetTopInvestments(playerName string, limit int) ([]InvestmentSummary, error) {
+	// This would require the game_history_detailed table to be populated
+	// For now, return empty slice
+	return []InvestmentSummary{}, nil
+}
+
+// InvestmentSummary represents a summary of an investment
+type InvestmentSummary struct {
+	CompanyName string
+	ROI         float64
+	ExitValue   int64
+	GameDate    time.Time
+}
+
+// GetRecentGamesAnalysis provides quick analysis of recent games
+func GetRecentGamesAnalysis(playerName string, count int) (map[string]interface{}, error) {
+	scores, err := database.GetTopScoresByPlayer(playerName, count)
+	if err != nil {
+		return nil, err
+	}
+	
+	if len(scores) == 0 {
+		return map[string]interface{}{
+			"games_played": 0,
+			"message":      "No games played yet",
+		}, nil
+	}
+	
+	// Sort by played_at descending
+	sort.Slice(scores, func(i, j int) bool {
+		return scores[i].PlayedAt.After(scores[j].PlayedAt)
 	})
 	
-	return sectors
-}
-
-// GenerateASCIIChart creates a simple ASCII bar chart
-func GenerateASCIIChart(values map[string]float64, width int) string {
-	if len(values) == 0 {
-		return "No data"
+	// Take most recent
+	if len(scores) > count {
+		scores = scores[:count]
 	}
 	
-	// Find max value for scaling
-	maxVal := 0.0
-	for _, v := range values {
-		if v > maxVal {
-			maxVal = v
+	avgROI := 0.0
+	avgNetWorth := int64(0)
+	wins := 0
+	
+	for _, score := range scores {
+		avgROI += score.ROI
+		avgNetWorth += score.FinalNetWorth
+		if score.ROI > 0 {
+			wins++
 		}
 	}
 	
-	if maxVal == 0 {
-		maxVal = 1 // Avoid division by zero
-	}
-	
-	// Sort keys
-	var keys []string
-	for k := range values {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	
-	var chart strings.Builder
-	for _, key := range keys {
-		value := values[key]
-		barLength := int((value / maxVal) * float64(width))
-		if barLength < 0 {
-			barLength = 0
-		}
-		
-		bar := strings.Repeat("=", barLength)
-		chart.WriteString(fmt.Sprintf("%-15s %s %.1f%%\n", key, bar, value))
-	}
-	
-	return chart.String()
-}
-
-// GetPortfolioSummary returns a formatted summary
-func GetPortfolioSummary(analytics *PortfolioAnalytics) string {
-	var summary strings.Builder
-	
-	summary.WriteString("\n?? PORTFOLIO ANALYTICS\n")
-	summary.WriteString(strings.Repeat("=", 50) + "\n\n")
-	
-	summary.WriteString(fmt.Sprintf("Total Invested:     $%s\n", formatMoney(analytics.TotalInvested)))
-	summary.WriteString(fmt.Sprintf("Current Value:      $%s\n", formatMoney(analytics.CurrentValue)))
-	
-	if analytics.TotalGainLoss >= 0 {
-		summary.WriteString(fmt.Sprintf("Total Gain:         +$%s (%.1f%%)\n", 
-			formatMoney(analytics.TotalGainLoss), analytics.PercentageChange))
-	} else {
-		summary.WriteString(fmt.Sprintf("Total Loss:         -$%s (%.1f%%)\n", 
-			formatMoney(-analytics.TotalGainLoss), analytics.PercentageChange))
-	}
-	
-	summary.WriteString(fmt.Sprintf("\nInvestments:        %d total\n", analytics.InvestmentCount))
-	summary.WriteString(fmt.Sprintf("Positive:           %d (%.0f%%)\n", 
-		analytics.PositiveInvestments, 
-		float64(analytics.PositiveInvestments)/float64(analytics.InvestmentCount)*100))
-	summary.WriteString(fmt.Sprintf("Negative:           %d (%.0f%%)\n", 
-		analytics.NegativeInvestments,
-		float64(analytics.NegativeInvestments)/float64(analytics.InvestmentCount)*100))
-	
-	if analytics.BestPerformer.CompanyName != "" {
-		summary.WriteString(fmt.Sprintf("\n?? Best:             %s (%.1f%%)\n", 
-			analytics.BestPerformer.CompanyName, analytics.BestPerformer.PercentageChange))
-	}
-	
-	if analytics.WorstPerformer.CompanyName != "" {
-		summary.WriteString(fmt.Sprintf("?? Worst:            %s (%.1f%%)\n", 
-			analytics.WorstPerformer.CompanyName, analytics.WorstPerformer.PercentageChange))
-	}
-	
-	return summary.String()
-}
-
-// GetSectorBreakdown returns formatted sector analysis
-func GetSectorBreakdown(analytics *PortfolioAnalytics) string {
-	var breakdown strings.Builder
-	
-	breakdown.WriteString("\n?? SECTOR BREAKDOWN\n")
-	breakdown.WriteString(strings.Repeat("=", 50) + "\n\n")
-	
-	sectors := GetTopSectors(analytics)
-	
-	if len(sectors) == 0 {
-		breakdown.WriteString("No sector data available\n")
-		return breakdown.String()
-	}
-	
-	for i, sector := range sectors {
-		breakdown.WriteString(fmt.Sprintf("%d. %s\n", i+1, sector.SectorName))
-		breakdown.WriteString(fmt.Sprintf("   Companies: %d | ROI: %.1f%%\n", 
-			sector.CompanyCount, sector.ROI))
-		breakdown.WriteString(fmt.Sprintf("   Invested: $%s ? Value: $%s\n\n", 
-			formatMoney(sector.TotalInvested), formatMoney(sector.CurrentValue)))
-	}
-	
-	return breakdown.String()
-}
-
-// Helper function to format money
-func formatMoney(amount int64) string {
-	abs := amount
-	if abs < 0 {
-		abs = -abs
-	}
-	
-	s := fmt.Sprintf("%d", abs)
-	
-	// Add commas
-	n := len(s)
-	if n <= 3 {
-		if amount < 0 {
-			return "-" + s
-		}
-		return s
-	}
-	
-	result := ""
-	for i, digit := range s {
-		if i > 0 && (n-i)%3 == 0 {
-			result += ","
-		}
-		result += string(digit)
-	}
-	
-	if amount < 0 {
-		return "-" + result
-	}
-	return result
+	return map[string]interface{}{
+		"games_played":   len(scores),
+		"avg_roi":        avgROI / float64(len(scores)),
+		"avg_net_worth":  avgNetWorth / int64(len(scores)),
+		"win_rate":       float64(wins) / float64(len(scores)) * 100,
+		"most_recent":    scores[0].PlayedAt,
+	}, nil
 }

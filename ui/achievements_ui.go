@@ -297,3 +297,303 @@ func DisplayAchievementLeaderboard() {
 
 	color.Yellow("\nThis feature will show players with the most achievements!")
 }
+
+// DisplayAchievementChains shows all achievement chains with progress
+func DisplayAchievementChains(playerName string) {
+	clear.ClearIt()
+	
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	gray := color.New(color.FgHiBlack)
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                    ACHIEVEMENT CHAINS")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	// Get all chains
+	chains := achievements.GetAllChains()
+	
+	if len(chains) == 0 {
+		color.Yellow("\nNo achievement chains available yet!")
+		return
+	}
+	
+	// Display each chain
+	for _, chainID := range chains {
+		unlocked, total := achievements.GetChainProgress(playerName, chainID)
+		chainAchievements := achievements.GetAchievementsByChain(chainID)
+		
+		fmt.Println()
+		yellow.Printf("▶ %s Chain: ", strings.Title(strings.ReplaceAll(chainID, "_", " ")))
+		green.Printf("%d/%d ", unlocked, total)
+		
+		// Progress bar
+		progressBar := formatProgressBar(unlocked, total, 20)
+		fmt.Printf("%s\n", progressBar)
+		
+		// Display achievements in chain
+		playerAchievements, _ := database.GetPlayerAchievements(playerName)
+		unlockedMap := make(map[string]bool)
+		for _, id := range playerAchievements {
+			unlockedMap[id] = true
+		}
+		
+		for i, achv := range chainAchievements {
+			prefix := "   "
+			if i > 0 {
+				prefix = "   ↓ "
+			}
+			
+			if unlockedMap[achv.ID] {
+				green.Printf("%s✓ %s %s", prefix, achv.Icon, achv.Name)
+				fmt.Printf(" (%d pts)\n", achv.Points)
+			} else if achievements.CheckAchievementChain(playerName, achv.ID) {
+				yellow.Printf("%s○ %s %s", prefix, achv.Icon, achv.Name)
+				fmt.Printf(" (%d pts) - Available\n", achv.Points)
+			} else {
+				gray.Printf("%s● %s %s", prefix, achv.Icon, achv.Name)
+				fmt.Printf(" (%d pts) - Locked\n", achv.Points)
+			}
+			
+			// Show progress for progressive achievements
+			if achv.ProgressTracking {
+				current, max, err := database.GetAchievementProgress(playerName, achv.ID)
+				if err == nil && max > 0 {
+					progBar := formatProgressBar(current, max, 15)
+					fmt.Printf("        Progress: %s %d/%d\n", progBar, current, max)
+				}
+			}
+		}
+	}
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+// DisplayHiddenAchievements shows hidden achievements (only if unlocked)
+func DisplayHiddenAchievements(playerName string) {
+	clear.ClearIt()
+	
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	magenta := color.New(color.FgMagenta, color.Bold)
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                    HIDDEN ACHIEVEMENTS")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	hidden := achievements.GetHiddenAchievements(playerName)
+	
+	if len(hidden) == 0 {
+		yellow.Println("\nYou haven't unlocked any hidden achievements yet!")
+		yellow.Println("Keep playing to discover secret challenges...")
+		
+		// Count total hidden achievements
+		totalHidden := 0
+		for _, achv := range achievements.AllAchievements {
+			if achv.Hidden {
+				totalHidden++
+			}
+		}
+		
+		fmt.Printf("\nHidden Achievements Available: %d\n", totalHidden)
+	} else {
+		fmt.Printf("\n%s You've discovered %d secret achievement(s)!\n", ascii.Star, len(hidden))
+		fmt.Println()
+		
+		// Display unlocked hidden achievements
+		for _, achv := range hidden {
+			rarityColor := getRarityColor(achv.Rarity)
+			rarityColor.Printf("   %s %s\n", achv.Icon, achv.Name)
+			fmt.Printf("      %s\n", achv.Description)
+			magenta.Printf("      %s • %d pts\n", achv.Rarity, achv.Points)
+			fmt.Println()
+		}
+	}
+	
+	cyan.Println(strings.Repeat("=", 70))
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+// DisplayProgressiveAchievements shows achievements with progress tracking
+func DisplayProgressiveAchievements(playerName string) {
+	clear.ClearIt()
+	
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                  PROGRESSIVE ACHIEVEMENTS")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	progressiveAchievements := achievements.GetProgressiveAchievements()
+	
+	if len(progressiveAchievements) == 0 {
+		color.Yellow("\nNo progressive achievements available!")
+		return
+	}
+	
+	// Get player's unlocked achievements
+	playerAchievements, _ := database.GetPlayerAchievements(playerName)
+	unlockedMap := make(map[string]bool)
+	for _, id := range playerAchievements {
+		unlockedMap[id] = true
+	}
+	
+	// Separate into unlocked and in-progress
+	fmt.Println("\n📈 IN PROGRESS:")
+	inProgressCount := 0
+	
+	for _, achv := range progressiveAchievements {
+		if !unlockedMap[achv.ID] {
+			current, max, err := database.GetAchievementProgress(playerName, achv.ID)
+			if err == nil && current > 0 {
+				yellow.Printf("\n   %s %s\n", achv.Icon, achv.Name)
+				fmt.Printf("      %s\n", achv.Description)
+				
+				progBar := formatProgressBar(current, max, 30)
+				fmt.Printf("      %s ", progBar)
+				green.Printf("%d/%d ", current, max)
+				fmt.Printf("(%.1f%%)\n", float64(current)/float64(max)*100)
+				fmt.Printf("      %s • %d pts\n", achv.Rarity, achv.Points)
+				
+				inProgressCount++
+			}
+		}
+	}
+	
+	if inProgressCount == 0 {
+		fmt.Println("   No achievements in progress yet!")
+	}
+	
+	// Show completed progressive achievements
+	fmt.Println("\n✓ COMPLETED:")
+	completedCount := 0
+	
+	for _, achv := range progressiveAchievements {
+		if unlockedMap[achv.ID] {
+			green.Printf("\n   %s %s\n", achv.Icon, achv.Name)
+			fmt.Printf("      %s\n", achv.Description)
+			progBar := formatProgressBar(achv.MaxProgress, achv.MaxProgress, 30)
+			fmt.Printf("      %s ", progBar)
+			green.Printf("%d/%d ", achv.MaxProgress, achv.MaxProgress)
+			fmt.Printf("(100%%)\n")
+			completedCount++
+		}
+	}
+	
+	if completedCount == 0 {
+		fmt.Println("   No progressive achievements completed yet!")
+	}
+	
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+// Helper function to format a progress bar
+func formatProgressBar(current, max, width int) string {
+	if max == 0 {
+		return "[" + strings.Repeat("□", width) + "]"
+	}
+	
+	progress := float64(current) / float64(max)
+	filled := int(progress * float64(width))
+	
+	if filled > width {
+		filled = width
+	}
+	
+	bar := "["
+	for i := 0; i < width; i++ {
+		if i < filled {
+			bar += "■"
+		} else {
+			bar += "□"
+		}
+	}
+	bar += "]"
+	
+	return bar
+}
+
+// Helper function to get color for rarity
+func getRarityColor(rarity string) *color.Color {
+	switch rarity {
+	case achievements.RarityCommon:
+		return color.New(color.FgWhite)
+	case achievements.RarityRare:
+		return color.New(color.FgCyan)
+	case achievements.RarityEpic:
+		return color.New(color.FgMagenta)
+	case achievements.RarityLegendary:
+		return color.New(color.FgYellow, color.Bold)
+	default:
+		return color.New(color.FgWhite)
+	}
+}
+
+// EnhancedAchievementMenu provides options for viewing achievements with new features
+func EnhancedAchievementMenu() {
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	
+	for {
+		clear.ClearIt()
+		
+		cyan.Println("\n" + strings.Repeat("=", 60))
+		cyan.Println("                ACHIEVEMENTS MENU")
+		cyan.Println(strings.Repeat("=", 60))
+		
+		yellow.Println("\n1. View All Achievements")
+		yellow.Println("2. View Achievement Chains")
+		yellow.Println("3. View Progressive Achievements")
+		yellow.Println("4. View Hidden Achievements")
+		yellow.Println("5. Browse All")
+		yellow.Println("6. Back to Main Menu")
+		
+		fmt.Print("\nEnter your choice: ")
+		reader := bufio.NewReader(os.Stdin)
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+		
+		if choice == "6" {
+			return
+		}
+		
+		if choice == "5" {
+			BrowseAllAchievements()
+			continue
+		}
+		
+		// Get player name for other options
+		fmt.Print("\nEnter your name: ")
+		playerName, _ := reader.ReadString('\n')
+		playerName = strings.TrimSpace(playerName)
+		
+		if playerName == "" {
+			color.Red("Invalid player name!")
+			continue
+		}
+		
+		switch choice {
+		case "1":
+			ViewPlayerAchievements()
+		case "2":
+			DisplayAchievementChains(playerName)
+		case "3":
+			DisplayProgressiveAchievements(playerName)
+		case "4":
+			DisplayHiddenAchievements(playerName)
+		default:
+			color.Red("Invalid choice!")
+		}
+	}
+}
