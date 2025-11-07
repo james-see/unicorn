@@ -94,12 +94,12 @@ func GetRelationshipLevel(score float64) string {
 
 // GetRelationshipEmoji returns an emoji representing relationship health
 func GetRelationshipEmoji(score float64) string {
-	if score >= 80 {
-		return "😊" // High relationship
-	} else if score >= 50 {
-		return "😐" // Medium relationship
+	if score >= 70 {
+		return "😊" // Good relationship (70-100)
+	} else if score >= 40 {
+		return "😐" // Acceptable relationship (40-69)
 	}
-	return "😟" // Low relationship
+	return "😟" // Poor relationship (<40)
 }
 
 // RelationshipEvent represents an event affecting founder relationships
