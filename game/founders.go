@@ -150,7 +150,7 @@ func GenerateRelationshipEvent(inv *Investment, currentTurn int) *RelationshipEv
 		CompanyName:    inv.CompanyName,
 		FounderName:    inv.FounderName,
 		EventType:      event.eventType,
-		Description:    inv.FounderName + " " + event.description,
+		Description:    inv.FounderName + " (" + inv.CompanyName + ") " + event.description,
 		ScoreChange:    event.scoreChange,
 		RequiresAction: event.eventType == "neutral", // Neutral events are opportunities
 	}

@@ -744,8 +744,15 @@ func PlayTurn(gs *game.GameState, autoMode bool) {
 				dilutionInfo = fmt.Sprintf(" (was %.2f%%, %d rounds)", inv.InitialEquity, len(inv.Rounds))
 			}
 
-			fmt.Printf("   %s: $%s invested, %.2f%% equity%s\n",
-				inv.CompanyName, FormatMoney(inv.AmountInvested), inv.EquityPercent, dilutionInfo)
+			// Show founder and relationship if available
+			founderInfo := ""
+			if inv.FounderName != "" {
+				emoji := game.GetRelationshipEmoji(inv.RelationshipScore)
+				founderInfo = fmt.Sprintf(" [Founder: %s %s]", inv.FounderName, emoji)
+			}
+			
+			fmt.Printf("   %s: $%s invested, %.2f%% equity%s%s\n",
+				inv.CompanyName, FormatMoney(inv.AmountInvested), inv.EquityPercent, dilutionInfo, founderInfo)
 			fmt.Printf("      Current Value: $%s ", FormatMoney(value))
 			profitColor.Printf("(%s$%s)\n", profitSign, FormatMoney(abs(profit)))
 
@@ -791,7 +798,15 @@ func PlayTurn(gs *game.GameState, autoMode bool) {
 						profitColor = color.New(color.FgRed)
 						profitSign = ""
 					}
-					fmt.Printf("   %s: $%s → $%s ", inv.CompanyName, FormatMoney(inv.AmountInvested), FormatMoney(value))
+					
+					// Show founder and relationship if available
+					founderInfo := ""
+					if inv.FounderName != "" {
+						emoji := game.GetRelationshipEmoji(inv.RelationshipScore)
+						founderInfo = fmt.Sprintf(" [%s %s]", inv.FounderName, emoji)
+					}
+					
+					fmt.Printf("   %s: $%s → $%s%s ", inv.CompanyName, FormatMoney(inv.AmountInvested), FormatMoney(value), founderInfo)
 					profitColor.Printf("(%s$%s)\n", profitSign, FormatMoney(abs(profit)))
 				}
 			}
