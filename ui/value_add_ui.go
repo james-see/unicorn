@@ -29,13 +29,28 @@ func ShowValueAddMenu(gs *game.GameState, autoMode bool) {
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
 
+	// Count actions already taken this turn
+	actionsThisTurn := 0
+	for _, action := range gs.ActiveValueAddActions {
+		if action.AppliedTurn == gs.Portfolio.Turn {
+			actionsThisTurn++
+		}
+	}
+
+	// Don't show menu if already at limit
+	if actionsThisTurn >= 2 {
+		return
+	}
+
 	fmt.Println()
 	cyan.Println(strings.Repeat("=", 70))
 	cyan.Println("              💼 VALUE-ADD OPPORTUNITIES")
 	cyan.Println(strings.Repeat("=", 70))
 
 	yellow.Println("\nYou can provide operational support to your portfolio companies.")
-	fmt.Printf("You have 2 attention points this turn. Each action costs 1 point.\n\n")
+	remainingPoints := 2 - actionsThisTurn
+	fmt.Printf("You have %d attention point%s remaining this turn. Each action costs 1 point.\n\n",
+		remainingPoints, map[bool]string{true: "", false: "s"}[remainingPoints == 1])
 
 	// Show available actions
 	actionTypes := game.GetAvailableValueAddTypes()
@@ -135,8 +150,16 @@ func ShowValueAddMenu(gs *game.GameState, autoMode bool) {
 	fmt.Print("\nPress Enter to continue...")
 	reader.ReadBytes('\n')
 
-	// Allow second action if they want
-	if len(gs.GetValueAddOpportunities()) > 0 {
+	// Recount actions this turn (it increased by 1 after this action)
+	actionsNow := 0
+	for _, action := range gs.ActiveValueAddActions {
+		if action.AppliedTurn == gs.Portfolio.Turn {
+			actionsNow++
+		}
+	}
+
+	// Allow another action if under the limit and opportunities remain
+	if actionsNow < 2 && len(gs.GetValueAddOpportunities()) > 0 {
 		fmt.Print("\nProvide another value-add action? (y/n): ")
 		input, _ = reader.ReadString('\n')
 		input = strings.ToLower(strings.TrimSpace(input))
@@ -144,6 +167,8 @@ func ShowValueAddMenu(gs *game.GameState, autoMode bool) {
 		if input == "y" || input == "yes" {
 			ShowValueAddMenu(gs, autoMode)
 		}
+	} else if actionsNow >= 2 {
+		yellow.Println("\n✓ Maximum 2 value-add actions per turn reached")
 	}
 }
 
