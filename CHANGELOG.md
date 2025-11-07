@@ -1,5 +1,271 @@
 # Changelog
 
+## Version 3.30.0 - VC Reputation & Value-Add System (2025-11-07)
+
+### 🌟 MAJOR NEW SYSTEM: VC Reputation & Operational Excellence
+
+A comprehensive new gameplay system that adds relationship management, strategic depth, and career progression to VC Mode. This system combines reputation tracking, founder relationships, operational value-add, due diligence, deal flow quality, and secondary market mechanics.
+
+#### 🏆 Reputation System
+- **Career-Long Reputation**: Track your VC reputation across all games
+- **Three Components**:
+  - **Performance Score** (0-100): Based on past fund returns and ROI
+  - **Founder Score** (0-100): Quality of relationships with portfolio founders
+  - **Market Score** (0-100): Achievement points and win streaks
+- **Aggregate Reputation**: Weighted average (40% performance, 30% founder, 30% market)
+- **Reputation Levels**: 7 tiers from "Emerging VC" to "Legendary VC"
+- **Persistent Database**: Reputation tracked in new `vc_reputation` table
+- **Visual Progress**: See reputation scores, bars, and levels
+
+#### 🤝 Founder Relationship System
+- **Every Investment Has a Founder**: Generated names from pool of 100+ real tech founder names
+- **Relationship Scores** (0-100): Track quality of relationship with each founder
+- **Initial Relationships**: 40-85 range based on:
+  - Investment terms (founder-friendly = higher)
+  - Due diligence performed (+8 points)
+  - Investment amount (larger = +3-5 points)
+- **Relationship Events**: 10% chance per turn for events affecting relationships
+  - Positive events: Founder thanks you, mentions you in press (+3-7 points)
+  - Negative events: Feels micromanaged, board disagreements (-3-6 points)
+  - Neutral events: Asks for help, introduction requests (opportunities)
+- **Relationship Impact**:
+  - **High (80+)**: Better exits (+0-15% value), founder referrals, insider info
+  - **Low (<50)**: Worse exits (-0-10% value), risk of conflicts
+  - **Very Low (<30)**: 5% chance of board removal per turn
+- **Relationship Emojis**: 😊 (80+), 😐 (50-79), 😟 (<50)
+
+#### 💼 Operational Value-Add System (Manual Mode Only)
+- **Five Action Types**:
+  1. **Recruiting Support** ($20k): Help hire executives, +2-5% valuation, +5-10 relationship
+  2. **Sales Introductions** ($15k): Connect with customers, +1-4% valuation, +3-8 relationship
+  3. **Technical Advisory** ($25k): Architecture advice, +3-7% valuation, -5% risk, +5-12 relationship
+  4. **Board Leadership** ($10k): Active board role, +4-10 relationship (requires board seat)
+  5. **Marketing Guidance** ($15k): GTM strategy, +2-4% valuation, +5-10 relationship
+- **Attention Points**: Maximum 2 value-add actions per turn
+- **Requirements**: Board seat OR 5%+ equity to provide value-add
+- **Duration**: Effects spread over 2-4 turns depending on action type
+- **Sustained Benefits**: Valuation boosts apply monthly over duration
+
+#### 🔍 Due Diligence System (Manual Mode Only)
+- **Four DD Levels**:
+  - **No DD** (FREE): Invest immediately
+  - **Quick DD** ($5k, 1 day): Reveals risk score and growth potential
+  - **Standard DD** ($15k, 3 days): +founder quality, 2 hidden metrics
+  - **Deep DD** ($30k, 7 weeks): Full disclosure, -10-20% risk
+- **DD Findings**: Random discoveries during due diligence
+  - **Red Flags** (15-20% chance): Founder conflicts, tech debt, legal issues, burn rate problems
+  - **Green Flags** (15-20% chance): Strong founders, great unit economics, defensible IP
+  - **Neutral Findings**: Standard background, normal metrics
+- **Finding Categories**: Founder, Financial, Technical, Legal, Market
+- **Investment Blocking**: 3+ red flags with critical issues triggers warning
+- **Relationship Bonus**: DD improves initial relationship (+3-10 points based on depth)
+- **Applied to Company**: Findings adjust risk and growth scores
+
+#### 💰 Secondary Market System (Manual Mode Only)
+- **Stake Sales**: Sell portions of portfolio to AI VCs before exit
+- **Eligibility**: Investments held 12+ months
+- **Offer Generation**: 10% chance per eligible investment per turn
+- **Pricing**: 70-90% of current valuation (secondary market discount)
+  - Strong performers: 85% of value
+  - Good performers: 80% of value
+  - Struggling: 70% of value
+- **AI Buyers**: Offers come from AI VCs based on their strategies
+  - Aggressive buyers: Pay 5% more
+  - Conservative buyers: Pay 3% less
+- **Transaction Fee**: 20% (built into discount)
+- **Offer Duration**: 3 turns to accept or decline
+- **AI Recommendations**: System provides accept/hold recommendations based on ROI and hold time
+- **Use Cases**: Realize gains early, cut losses, portfolio rebalancing
+
+#### 🎯 Deal Flow Quality Tiers
+- **Tier 1 - Hot Deals** (70+ reputation):
+  - 25% of deal flow
+  - Lower risk (0.2-0.4), higher growth (0.7-0.9)
+  - 10-30% valuation premium
+  - Access to best startups
+- **Tier 2 - Standard Deals** (40-69 reputation):
+  - 75% of deal flow
+  - Medium risk (0.4-0.6), medium growth (0.5-0.7)
+  - Standard valuations
+- **Tier 3 - Struggling Deals** (<40 reputation):
+  - 60% of deal flow
+  - Higher risk (0.6-0.8), lower growth (0.3-0.5)
+  - 10-30% valuation discount
+  - Limited to weaker opportunities
+
+#### 📊 Reputation Bonuses
+**Based on aggregate reputation score:**
+- **80+ (Top-Tier)**:
+  - +15% deal quality bonus
+  - +10 initial founder relationship points
+  - 1.10x exit value multiplier
+  - +20% board influence
+  - +10% network effect on valuations
+- **70-79 (Established)**:
+  - +12% deal quality bonus
+  - +8 founder relationship points
+  - 1.08x exit multiplier
+  - +15% board influence
+  - +8% network effect
+- **60-69 (Rising)**:
+  - +8% deal quality bonus
+  - +5 founder relationship points
+  - 1.05x exit multiplier
+  - +10% board influence
+  - +5% network effect
+- **50-59 (Competent)**:
+  - +4% deal quality bonus
+  - +3 founder relationship points
+  - 1.02x exit multiplier
+  - +5% board influence
+  - +2% network effect
+
+### ⚙️ Automated vs Manual Mode
+
+**Manual Mode (RECOMMENDED)** - Full Features:
+- Due diligence before investments
+- Operational value-add actions after each turn
+- Secondary market offer review
+- Active founder relationship management
+- Strategic decision-making
+
+**Automated Mode** - Simplified Gameplay:
+- No interactive features
+- Skips DD (direct investment)
+- No value-add actions
+- Auto-declines secondary offers
+- Passive relationship evolution only
+- Reputation still affects deal flow quality
+
+**Mode Selection Updated**: Clear indication of which features are available in each mode
+
+### 🗄️ Database Changes
+- **New Table**: `vc_reputation`
+  - `player_name` (PRIMARY KEY)
+  - `performance_score` (REAL DEFAULT 50.0)
+  - `founder_score` (REAL DEFAULT 50.0)
+  - `market_score` (REAL DEFAULT 50.0)
+  - `total_games_played` (INTEGER DEFAULT 0)
+  - `successful_exits` (INTEGER DEFAULT 0)
+  - `avg_roi_last_5` (REAL DEFAULT 0.0)
+  - `last_updated` (DATETIME)
+- **New Functions**:
+  - `GetVCReputation(playerName)` - Load reputation
+  - `SaveVCReputation(rep)` - Save/update reputation
+
+### 📁 New Files Created
+
+**Core Game Logic**:
+- `game/reputation.go` - Reputation system calculations
+- `game/founders.go` - Founder relationships and events
+- `game/value_add.go` - Value-add action mechanics
+- `game/due_diligence.go` - DD system and findings
+- `game/secondary_market.go` - Secondary market offers
+- `game/deal_flow.go` - Reputation-based deal quality
+
+**UI Files**:
+- `ui/reputation_ui.go` - Reputation display
+- `ui/value_add_ui.go` - Value-add menus
+- `ui/dd_ui.go` - Due diligence flow
+- `ui/secondary_market_ui.go` - Secondary market UI
+
+**Documentation**:
+- `REPUTATION_SYSTEM_INTEGRATION.md` - Complete integration guide
+
+### 📝 Modified Files
+- `game/game.go` - Added reputation fields to Investment and GameState
+- `database/database.go` - Added vc_reputation table and functions
+- `ui/vc_ui.go` - Updated mode selection with feature descriptions
+
+### 🎮 Gameplay Impact
+
+**Strategic Depth**:
+- Long-term career progression across games
+- Relationship management adds human element
+- Operational involvement beyond just capital
+- Due diligence reduces information asymmetry
+- Secondary market provides liquidity options
+
+**Balance**:
+- Reputation builds slowly (3-5 games to reach Tier 1)
+- Value-add ROI: 6-12 turns to break even
+- DD success rate: 15-30% chance of significant finding
+- Secondary market friction: 20-30% total discount
+- Founder relationships: Up to 15% impact on exits
+
+**Replayability**:
+- Different strategies for building reputation
+- Founder relationship dynamics vary each game
+- DD findings change investment decisions
+- Secondary market timing strategy
+- Choice between growth and relationships
+
+### 🎯 Design Philosophy
+
+1. **Optional Complexity**: Systems are optional - players can ignore and play standard mode
+2. **Manual Mode Exclusive**: Interactive features only in Manual Mode to respect player choice
+3. **Meaningful Choices**: Each decision has trade-offs (cost vs benefit)
+4. **Career Progression**: Reputation persists across games for long-term progression
+5. **Realistic Mechanics**: Based on real VC practices (value-add, DD, secondary sales)
+6. **Relationship Focus**: Human element through founder relationships
+7. **Information Asymmetry**: DD reduces uncertainty but costs money and time
+
+### 📊 Technical Implementation
+
+**Type Safety**:
+- All new types properly defined
+- Clear interfaces between systems
+- Error handling throughout
+
+**Game Loop Integration**:
+- Reputation loads at game start
+- DD phase before investment
+- Relationship events during turn
+- Value-add after turn (manual mode)
+- Secondary offers processed each turn
+- Reputation updates at game end
+
+**Database**:
+- Efficient queries with indexed player_name
+- Upsert pattern for reputation saves
+- Graceful handling of new players
+
+### 🚀 Future Enhancements
+
+**Potential Additions**:
+- Multiplayer reputation comparison
+- Reputation leaderboards
+- More value-add action types
+- Dynamic DD costs based on company size
+- Founder reputation tracking
+- Cross-game founder referrals
+- Reputation decay over time
+- Industry-specific reputation scores
+- Multi-fund career mode
+- LP relationship system
+
+### 💡 User Experience
+
+**Visual Indicators**:
+- Reputation bars and scores
+- Relationship emojis (😊/😐/😟)
+- Deal quality tier displays
+- Clear mode selection with feature lists
+- Finding types color-coded (red/green/neutral)
+
+**Feedback**:
+- Relationship change notifications
+- Value-add effect messages
+- DD finding reveals
+- Reputation updates at game end
+- Secondary offer recommendations
+
+**Documentation**:
+- Integration guide for developers
+- In-game tooltips
+- Feature explanations in mode selection
+- Balance notes included
+
 ## Version 3.29.0 - Randomized AI Competitors Display (2025-11-06)
 
 ### Bug Fixes

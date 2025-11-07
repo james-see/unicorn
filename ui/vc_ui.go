@@ -36,13 +36,27 @@ func FormatCurrency(amount int64) string {
 func AskForAutomatedMode() bool {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	magenta := color.New(color.FgMagenta)
 
-	cyan.Println("\n" + strings.Repeat("=", 60))
-	cyan.Println("                 GAME MODE SELECTION")
-	cyan.Println(strings.Repeat("=", 60))
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                    GAME MODE SELECTION")
+	cyan.Println(strings.Repeat("=", 70))
 
-	yellow.Println("\n1. Manual Mode (Press Enter each turn)")
+	fmt.Println()
+	green.Println("1. Manual Mode (Press Enter each turn) [RECOMMENDED]")
+	fmt.Println("   → Full access to all features:")
+	magenta.Println("     • Operational value-add actions")
+	magenta.Println("     • Due diligence before investing")
+	magenta.Println("     • Secondary market stake sales")
+	magenta.Println("     • Active founder relationship management")
+	fmt.Println("   → Strategic decision-making between turns")
+
+	fmt.Println()
 	yellow.Println("2. Automated Mode (1 second per turn)")
+	fmt.Println("   → Simplified gameplay - no interactive features")
+	fmt.Println("   → Reputation affects deal quality only")
+	fmt.Println("   → Best for quick games or testing")
 
 	fmt.Print("\nEnter your choice (1-2, default 1): ")
 	reader := bufio.NewReader(os.Stdin)
@@ -629,6 +643,38 @@ func PlayTurn(gs *game.GameState, autoMode bool) {
 	}
 
 	messages := gs.ProcessTurn()
+	
+	// Process active value-add actions
+	valueAddMsgs := gs.ProcessActiveValueAddActions()
+	messages = append(messages, valueAddMsgs...)
+	
+	// Generate and process relationship events
+	for i := range gs.Portfolio.Investments {
+		inv := &gs.Portfolio.Investments[i]
+		if inv.FounderName != "" {
+			event := game.GenerateRelationshipEvent(inv, gs.Portfolio.Turn)
+			if event != nil {
+				inv.RelationshipScore = game.ApplyRelationshipChange(
+					inv.RelationshipScore, 
+					event.ScoreChange)
+				messages = append(messages, event.Description)
+				
+				// Check for board removal due to poor relationship
+				if inv.Terms.HasBoardSeat && game.CanBeFiredFromBoard(inv.RelationshipScore) {
+					inv.Terms.HasBoardSeat = false
+					messages = append(messages, fmt.Sprintf("⚠️  Poor relationship with %s led to board removal!", inv.FounderName))
+				}
+			}
+		}
+	}
+	
+	// Generate secondary market offers
+	newOffers := gs.GenerateSecondaryOffers()
+	gs.SecondaryMarketOffers = append(gs.SecondaryMarketOffers, newOffers...)
+	
+	// Process offer expirations
+	expiredMsgs := gs.ProcessSecondaryOfferExpirations()
+	messages = append(messages, expiredMsgs...)
 
 	// Check for pending board votes AFTER processing turn
 	// Board votes are created during ProcessTurn for acquisitions/down rounds
@@ -753,6 +799,15 @@ func PlayTurn(gs *game.GameState, autoMode bool) {
 		}
 	}
 
+	// Show interactive features (Manual Mode only)
+	if !autoMode {
+		// Value-add opportunities
+		ShowValueAddMenu(gs, autoMode)
+		
+		// Secondary market offers
+		ShowSecondaryMarketOffers(gs, autoMode)
+	}
+	
 	// Always pause for exit events, even in auto mode
 	if hasExitEvent {
 		magenta := color.New(color.FgMagenta, color.Bold)
@@ -1102,7 +1157,7 @@ func handleSyndicateInvestment(gs *game.GameState) {
 	}
 }
 
-func investmentPhase(gs *game.GameState, playerLevel int) {
+func investmentPhase(gs *game.GameState, playerLevel int, autoMode bool) {
 	clear.ClearIt()
 	green := color.New(color.FgGreen, color.Bold)
 	cyan := color.New(color.FgCyan, color.Bold)
@@ -1284,6 +1339,13 @@ func investmentPhase(gs *game.GameState, playerLevel int) {
 			continue
 		}
 
+		// Perform due diligence (Manual Mode only)
+		ddLevel := ShowDueDiligenceMenu(gs, &gs.AvailableStartups[companyNum-1], amount, autoMode)
+		if ddLevel == "cancelled" {
+			color.Yellow("Investment cancelled after due diligence")
+			continue
+		}
+		
 		// Show term options for investments $50k+
 		var selectedTerms game.InvestmentTerms
 		if amount >= 50000 {
@@ -1305,6 +1367,26 @@ func investmentPhase(gs *game.GameState, playerLevel int) {
 		if err != nil {
 			color.Red("Error: %v", err)
 		} else {
+			// Initialize founder relationship for new investment
+			if len(gs.Portfolio.Investments) > 0 {
+				lastInv := &gs.Portfolio.Investments[len(gs.Portfolio.Investments)-1]
+				lastInv.FounderName = game.GenerateFounderName()
+				lastInv.RelationshipScore = game.CalculateInitialRelationship(
+					selectedTerms, 
+					ddLevel != "none", 
+					amount)
+				lastInv.DDLevel = ddLevel
+				lastInv.HasDueDiligence = ddLevel != "none"
+				lastInv.LastInteraction = gs.Portfolio.Turn
+				lastInv.ValueAddProvided = 0
+				
+				// Apply reputation bonus
+				if gs.PlayerReputation != nil {
+					bonus := game.GetReputationBonus(gs.PlayerReputation)
+					game.ApplyReputationBonusToInvestment(lastInv, bonus)
+				}
+			}
+			
 			color.Green("%s Investment successful!", ascii.Check)
 			fmt.Printf("Cash remaining: $%s\n", FormatMoney(gs.Portfolio.Cash))
 			fmt.Printf("Terms: %s\n", selectedTerms.Type)
@@ -1359,11 +1441,40 @@ func PlayVCMode(username string) {
 		playerUpgrades = []string{}
 	}
 
+	// Load player reputation
+	dbRep, err := database.GetVCReputation(username)
+	if err != nil {
+		// New player - create default reputation
+		dbRep = &database.VCReputation{
+			PlayerName:       username,
+			PerformanceScore: 50.0,
+			FounderScore:     50.0,
+			MarketScore:      50.0,
+			TotalGamesPlayed: 0,
+			SuccessfulExits:  0,
+			AvgROILast5:      0.0,
+		}
+	}
+
 	// Initialize game first (so we can get randomized AI players)
 	gs := game.NewGame(username, firmName, difficulty, playerUpgrades)
+	
+	// Set player reputation in game state
+	gs.PlayerReputation = &game.VCReputation{
+		PlayerName:       dbRep.PlayerName,
+		PerformanceScore: dbRep.PerformanceScore,
+		FounderScore:     dbRep.FounderScore,
+		MarketScore:      dbRep.MarketScore,
+		TotalGamesPlayed: dbRep.TotalGamesPlayed,
+		SuccessfulExits:  dbRep.SuccessfulExits,
+		AvgROILast5:      dbRep.AvgROILast5,
+	}
 
 	// Display welcome and rules (with upgrades and randomized AI players)
 	DisplayWelcome(username, difficulty, playerUpgrades, gs.AIPlayers)
+	
+	// Show reputation summary
+	DisplayReputationSummary(gs.PlayerReputation)
 
 	// Get player level to check for syndicate unlock
 	profile, err := database.GetPlayerProfile(username)
@@ -1378,7 +1489,7 @@ func PlayVCMode(username string) {
 	}
 
 	// Investment phase at start
-	investmentPhase(gs, playerLevel)
+	investmentPhase(gs, playerLevel, autoMode)
 
 	// Main game loop
 	for !gs.IsGameOver() {
@@ -1412,9 +1523,141 @@ func PlayVCMode(username string) {
 
 	// Check for achievements
 	CheckAndUnlockAchievements(gs)
+	
+	// Update reputation based on game performance
+	updatePlayerReputation(gs, username, roi, successfulExits)
 
 	fmt.Print("\nPress 'Enter' to return to main menu...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func updatePlayerReputation(gs *game.GameState, username string, roi float64, successfulExits int) {
+	if gs.PlayerReputation == nil {
+		return // Safety check
+	}
+	
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+	
+	// Calculate average founder relationship
+	totalRelationship := 0.0
+	count := 0
+	for _, inv := range gs.Portfolio.Investments {
+		if inv.FounderName != "" {
+			totalRelationship += inv.RelationshipScore
+			count++
+		}
+	}
+	avgFounderRelationship := 50.0
+	if count > 0 {
+		avgFounderRelationship = totalRelationship / float64(count)
+	}
+	
+	// Get achievement points (approximate from career level)
+	profile, _ := database.GetPlayerProfile(username)
+	achievementPoints := profile.Level * 50 // Rough estimate
+	
+	// Calculate win streak (simple: this game was a win if ROI > 0)
+	winStreak := 0
+	if roi > 0 {
+		winStreak = 1 // Simplified for now
+	}
+	
+	// Save current reputation for comparison
+	oldRep := *gs.PlayerReputation
+	
+	// Update reputation
+	hadSuccessfulExit := successfulExits > 0
+	updatedRep := game.UpdateReputationAfterGame(
+		gs.PlayerReputation,
+		roi,
+		hadSuccessfulExit,
+		achievementPoints,
+		winStreak)
+	
+	// Update founder score
+	updatedRep.UpdateFounderScore(avgFounderRelationship)
+	
+	// Save to database
+	dbRep := &database.VCReputation{
+		PlayerName:       updatedRep.PlayerName,
+		PerformanceScore: updatedRep.PerformanceScore,
+		FounderScore:     updatedRep.FounderScore,
+		MarketScore:      updatedRep.MarketScore,
+		TotalGamesPlayed: updatedRep.TotalGamesPlayed,
+		SuccessfulExits:  updatedRep.SuccessfulExits,
+		AvgROILast5:      updatedRep.AvgROILast5,
+	}
+	
+	err := database.SaveVCReputation(dbRep)
+	if err != nil {
+		color.Yellow("\nWarning: Could not save reputation: %v", err)
+		return
+	}
+	
+	// Display reputation changes
+	fmt.Println()
+	cyan.Println(strings.Repeat("=", 70))
+	cyan.Println("                    REPUTATION UPDATE")
+	cyan.Println(strings.Repeat("=", 70))
+	
+	fmt.Println()
+	fmt.Printf("Performance: %.1f → ", oldRep.PerformanceScore)
+	if updatedRep.PerformanceScore > oldRep.PerformanceScore {
+		green.Printf("%.1f (+%.1f)\n", updatedRep.PerformanceScore, 
+			updatedRep.PerformanceScore-oldRep.PerformanceScore)
+	} else if updatedRep.PerformanceScore < oldRep.PerformanceScore {
+		color.Red("%.1f (%.1f)\n", updatedRep.PerformanceScore,
+			updatedRep.PerformanceScore-oldRep.PerformanceScore)
+	} else {
+		fmt.Printf("%.1f (no change)\n", updatedRep.PerformanceScore)
+	}
+	
+	fmt.Printf("Founder:     %.1f → ", oldRep.FounderScore)
+	if updatedRep.FounderScore > oldRep.FounderScore {
+		green.Printf("%.1f (+%.1f)\n", updatedRep.FounderScore,
+			updatedRep.FounderScore-oldRep.FounderScore)
+	} else if updatedRep.FounderScore < oldRep.FounderScore {
+		color.Red("%.1f (%.1f)\n", updatedRep.FounderScore,
+			updatedRep.FounderScore-oldRep.FounderScore)
+	} else {
+		fmt.Printf("%.1f (no change)\n", updatedRep.FounderScore)
+	}
+	
+	fmt.Printf("Market:      %.1f → ", oldRep.MarketScore)
+	if updatedRep.MarketScore > oldRep.MarketScore {
+		green.Printf("%.1f (+%.1f)\n", updatedRep.MarketScore,
+			updatedRep.MarketScore-oldRep.MarketScore)
+	} else if updatedRep.MarketScore < oldRep.MarketScore {
+		color.Red("%.1f (%.1f)\n", updatedRep.MarketScore,
+			updatedRep.MarketScore-oldRep.MarketScore)
+	} else {
+		fmt.Printf("%.1f (no change)\n", updatedRep.MarketScore)
+	}
+	
+	oldAggregate := oldRep.GetAggregateReputation()
+	newAggregate := updatedRep.GetAggregateReputation()
+	
+	fmt.Println()
+	fmt.Printf("Overall:     %.1f → ", oldAggregate)
+	if newAggregate > oldAggregate {
+		green.Printf("%.1f (%s)\n", newAggregate, updatedRep.GetReputationLevel())
+	} else if newAggregate < oldAggregate {
+		yellow.Printf("%.1f (%s)\n", newAggregate, updatedRep.GetReputationLevel())
+	} else {
+		fmt.Printf("%.1f (%s)\n", newAggregate, updatedRep.GetReputationLevel())
+	}
+	
+	// Show tier change if any
+	oldTier := oldRep.GetDealQualityTier()
+	newTier := updatedRep.GetDealQualityTier()
+	if oldTier != newTier {
+		fmt.Println()
+		green.Printf("🎉 Deal Flow Quality: %s → %s\n", oldTier, newTier)
+	}
+	
+	cyan.Println(strings.Repeat("=", 70))
 }
 
 func FormatMoney(amount int64) string {

@@ -99,6 +99,17 @@ func InitDB(dbPath string) error {
 		UNIQUE(player_name, achievement_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS vc_reputation (
+		player_name TEXT PRIMARY KEY,
+		performance_score REAL DEFAULT 50.0,
+		founder_score REAL DEFAULT 50.0,
+		market_score REAL DEFAULT 50.0,
+		total_games_played INTEGER DEFAULT 0,
+		successful_exits INTEGER DEFAULT 0,
+		avg_roi_last_5 REAL DEFAULT 0.0,
+		last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE TABLE IF NOT EXISTS game_history_detailed (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		player_name TEXT NOT NULL,
@@ -334,7 +345,7 @@ func GetPlayerStatsByMode(playerName string, gameMode string) (*PlayerStats, err
 	} else {
 		return nil, fmt.Errorf("invalid game mode: %s", gameMode)
 	}
-	
+
 	query := fmt.Sprintf(`
 		SELECT 
 			COUNT(*) as total_games,
@@ -426,12 +437,12 @@ func UnlockAchievement(playerName, achievementID string) error {
 		INSERT OR IGNORE INTO player_achievements (player_name, achievement_id, unlocked_at)
 		VALUES (?, ?, ?)
 	`
-	
+
 	_, err := db.Exec(query, playerName, achievementID, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to unlock achievement: %v", err)
 	}
-	
+
 	return nil
 }
 
@@ -443,13 +454,13 @@ func GetPlayerAchievements(playerName string) ([]string, error) {
 		WHERE player_name = ?
 		ORDER BY unlocked_at ASC
 	`
-	
+
 	rows, err := db.Query(query, playerName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query achievements: %v", err)
 	}
 	defer rows.Close()
-	
+
 	var achievements []string
 	for rows.Next() {
 		var achievementID string
@@ -458,7 +469,7 @@ func GetPlayerAchievements(playerName string) ([]string, error) {
 		}
 		achievements = append(achievements, achievementID)
 	}
-	
+
 	return achievements, nil
 }
 
@@ -470,12 +481,12 @@ func GetPlayerAchievementCount(playerName string) (int, error) {
 		FROM player_achievements
 		WHERE player_name = ?
 	`
-	
+
 	err := db.QueryRow(query, playerName).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get achievement count: %v", err)
 	}
-	
+
 	return count, nil
 }
 
@@ -485,7 +496,7 @@ func GetPlayerAchievementPoints(playerName string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	// Calculate actual points from achievement definitions
 	// Note: This requires importing achievements package, but we'll do it differently
 	// For now, return count * 10 as placeholder - will be fixed when we integrate
@@ -494,14 +505,14 @@ func GetPlayerAchievementPoints(playerName string) (int, error) {
 
 // AchievementLeaderboardEntry represents a player's achievement stats for leaderboard
 type AchievementLeaderboardEntry struct {
-	PlayerName        string
-	AchievementCount  int
-	TotalPoints       int
-	CareerLevel       int
-	CareerTitle       string
-	RareCount         int
-	EpicCount         int
-	LegendaryCount    int
+	PlayerName       string
+	AchievementCount int
+	TotalPoints      int
+	CareerLevel      int
+	CareerTitle      string
+	RareCount        int
+	EpicCount        int
+	LegendaryCount   int
 }
 
 // GetAchievementLeaderboard returns top players by achievement count and points
@@ -512,13 +523,13 @@ func GetAchievementLeaderboard(limit int) ([]AchievementLeaderboardEntry, error)
 		FROM player_achievements
 		ORDER BY player_name
 	`
-	
+
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query players: %v", err)
 	}
 	defer rows.Close()
-	
+
 	var players []string
 	for rows.Next() {
 		var playerName string
@@ -527,30 +538,30 @@ func GetAchievementLeaderboard(limit int) ([]AchievementLeaderboardEntry, error)
 		}
 		players = append(players, playerName)
 	}
-	
-		// Build leaderboard entries
-		leaderboard := []AchievementLeaderboardEntry{}
-		for _, playerName := range players {
-			achievements, err := GetPlayerAchievements(playerName)
-			if err != nil {
-				continue
-			}
-			
-			entry := AchievementLeaderboardEntry{
-				PlayerName:       playerName,
-				AchievementCount: len(achievements),
-				TotalPoints:      0, // Will be calculated in UI layer
-			}
-			
-			// Get career level from profile
-			profile, err := GetPlayerProfile(playerName)
-			if err == nil {
-				entry.CareerLevel = profile.Level
-			}
-			
-			leaderboard = append(leaderboard, entry)
+
+	// Build leaderboard entries
+	leaderboard := []AchievementLeaderboardEntry{}
+	for _, playerName := range players {
+		achievements, err := GetPlayerAchievements(playerName)
+		if err != nil {
+			continue
 		}
-	
+
+		entry := AchievementLeaderboardEntry{
+			PlayerName:       playerName,
+			AchievementCount: len(achievements),
+			TotalPoints:      0, // Will be calculated in UI layer
+		}
+
+		// Get career level from profile
+		profile, err := GetPlayerProfile(playerName)
+		if err == nil {
+			entry.CareerLevel = profile.Level
+		}
+
+		leaderboard = append(leaderboard, entry)
+	}
+
 	// Sort by achievement count (descending), then by points
 	// Simple bubble sort for small datasets
 	for i := 0; i < len(leaderboard); i++ {
@@ -562,12 +573,12 @@ func GetAchievementLeaderboard(limit int) ([]AchievementLeaderboardEntry, error)
 			}
 		}
 	}
-	
+
 	// Limit results
 	if limit > 0 && limit < len(leaderboard) {
 		leaderboard = leaderboard[:limit]
 	}
-	
+
 	return leaderboard, nil
 }
 
@@ -579,12 +590,12 @@ func PurchaseUpgrade(playerName, upgradeID string) error {
 		INSERT OR IGNORE INTO player_upgrades (player_name, upgrade_id, purchased_at)
 		VALUES (?, ?, ?)
 	`
-	
+
 	_, err := db.Exec(query, playerName, upgradeID, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to purchase upgrade: %v", err)
 	}
-	
+
 	return nil
 }
 
@@ -596,13 +607,13 @@ func GetPlayerUpgrades(playerName string) ([]string, error) {
 		WHERE player_name = ?
 		ORDER BY purchased_at ASC
 	`
-	
+
 	rows, err := db.Query(query, playerName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query upgrades: %v", err)
 	}
 	defer rows.Close()
-	
+
 	var upgrades []string
 	for rows.Next() {
 		var upgradeID string
@@ -611,7 +622,7 @@ func GetPlayerUpgrades(playerName string) ([]string, error) {
 		}
 		upgrades = append(upgrades, upgradeID)
 	}
-	
+
 	return upgrades, nil
 }
 
@@ -622,13 +633,13 @@ func HasUpgrade(playerName, upgradeID string) (bool, error) {
 		FROM player_upgrades
 		WHERE player_name = ? AND upgrade_id = ?
 	`
-	
+
 	var count int
 	err := db.QueryRow(query, playerName, upgradeID).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check upgrade: %v", err)
 	}
-	
+
 	return count > 0, nil
 }
 
@@ -641,41 +652,41 @@ func GetWinStreak(playerName string) (int, error) {
 		ORDER BY played_at DESC
 		LIMIT 10
 	`
-	
+
 	rows, err := db.Query(query, playerName)
 	if err != nil {
 		return 0, err
 	}
 	defer rows.Close()
-	
+
 	streak := 0
 	for rows.Next() {
 		var roi float64
 		if err := rows.Scan(&roi); err != nil {
 			return 0, err
 		}
-		
+
 		if roi > 0 {
 			streak++
 		} else {
 			break
 		}
 	}
-	
+
 	return streak, nil
 }
 
 // PlayerProfile represents a player's progression data
 type PlayerProfile struct {
-	PlayerName         string
-	Level              int
-	ExperiencePoints   int
-	TotalPointsEarned  int
-	LevelUpPoints      int // Points earned from leveling up
-	NextLevelXP        int
-	ProgressPercent    float64
-	CreatedAt          time.Time
-	LastPlayed         time.Time
+	PlayerName        string
+	Level             int
+	ExperiencePoints  int
+	TotalPointsEarned int
+	LevelUpPoints     int // Points earned from leveling up
+	NextLevelXP       int
+	ProgressPercent   float64
+	CreatedAt         time.Time
+	LastPlayed        time.Time
 }
 
 // GetPlayerProfile retrieves or creates a player's profile
@@ -686,7 +697,7 @@ func GetPlayerProfile(playerName string) (*PlayerProfile, error) {
 		FROM player_profiles
 		WHERE player_name = ?
 	`
-	
+
 	var profile PlayerProfile
 	err := db.QueryRow(query, playerName).Scan(
 		&profile.PlayerName,
@@ -697,7 +708,7 @@ func GetPlayerProfile(playerName string) (*PlayerProfile, error) {
 		&profile.CreatedAt,
 		&profile.LastPlayed,
 	)
-	
+
 	if err == sql.ErrNoRows {
 		// Create new profile
 		insertQuery := `
@@ -708,25 +719,25 @@ func GetPlayerProfile(playerName string) (*PlayerProfile, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create player profile: %v", err)
 		}
-		
+
 		// Return new profile
 		profile = PlayerProfile{
-			PlayerName:         playerName,
-			Level:              1,
-			ExperiencePoints:   0,
-			TotalPointsEarned:  0,
-			LevelUpPoints:      0,
-			CreatedAt:          time.Now(),
-			LastPlayed:         time.Now(),
+			PlayerName:        playerName,
+			Level:             1,
+			ExperiencePoints:  0,
+			TotalPointsEarned: 0,
+			LevelUpPoints:     0,
+			CreatedAt:         time.Now(),
+			LastPlayed:        time.Now(),
 		}
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get player profile: %v", err)
 	}
-	
+
 	// Calculate next level requirements
 	profile.NextLevelXP = GetLevelRequirement(profile.Level + 1)
 	profile.ProgressPercent = float64(profile.ExperiencePoints) / float64(profile.NextLevelXP) * 100
-	
+
 	return &profile, nil
 }
 
@@ -735,13 +746,13 @@ func GetLevelRequirement(level int) int {
 	// Level N requires: 200 * (N ^ 1.5) total XP
 	// This creates an exponential curve:
 	// Level 2: 200 * (2^1.5) ≈ 283 XP
-	// Level 3: 200 * (3^1.5) ≈ 519 XP  
+	// Level 3: 200 * (3^1.5) ≈ 519 XP
 	// Level 5: 200 * (5^1.5) ≈ 1118 XP
 	// Level 10: 200 * (10^1.5) ≈ 6325 XP
 	if level <= 1 {
 		return 0
 	}
-	
+
 	return int(200 * math.Pow(float64(level), 1.5))
 }
 
@@ -753,13 +764,13 @@ func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel in
 	if err != nil {
 		return false, 0, 0, err
 	}
-	
+
 	// Add XP
 	newXP := profile.ExperiencePoints + xpAmount
 	newTotal := profile.TotalPointsEarned + xpAmount
 	currentLevel := profile.Level
 	totalPointsEarned := 0
-	
+
 	// Check for level ups
 	for {
 		requiredXP := GetLevelRequirement(currentLevel + 1)
@@ -767,11 +778,11 @@ func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel in
 			currentLevel++
 			newXP -= requiredXP
 			leveledUp = true
-			
+
 			// Award points for leveling up: 10 * newLevel
 			levelUpPoints := 10 * currentLevel
 			totalPointsEarned += levelUpPoints
-			
+
 			// Record level up in history
 			historyQuery := `
 				INSERT INTO player_level_history (player_name, level, reached_at)
@@ -785,10 +796,10 @@ func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel in
 			break
 		}
 	}
-	
+
 	// Calculate new level_up_points total
 	newLevelUpPoints := profile.LevelUpPoints + totalPointsEarned
-	
+
 	// Update profile
 	updateQuery := `
 		UPDATE player_profiles
@@ -799,7 +810,7 @@ func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel in
 	if err != nil {
 		return false, 0, 0, fmt.Errorf("failed to update player profile: %v", err)
 	}
-	
+
 	return leveledUp, currentLevel, totalPointsEarned, nil
 }
 
@@ -810,7 +821,7 @@ func GetTotalPlayerPoints(playerName string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	// Return level-up points (achievement points are calculated in UI)
 	return profile.LevelUpPoints, nil
 }
@@ -876,13 +887,13 @@ func GetAllProgress(playerName string) (map[string]ProgressInfo, error) {
 		FROM achievement_progress
 		WHERE player_name = ?
 	`
-	
+
 	rows, err := db.Query(query, playerName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query achievement progress: %v", err)
 	}
 	defer rows.Close()
-	
+
 	progress := make(map[string]ProgressInfo)
 	for rows.Next() {
 		var info ProgressInfo
@@ -891,7 +902,7 @@ func GetAllProgress(playerName string) (map[string]ProgressInfo, error) {
 		}
 		progress[info.AchievementID] = info
 	}
-	
+
 	return progress, nil
 }
 
@@ -904,13 +915,13 @@ func GetTopScoresByPlayer(playerName string, limit int) ([]GameScore, error) {
 		ORDER BY played_at DESC
 		LIMIT ?
 	`
-	
+
 	rows, err := db.Query(query, playerName, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query scores: %v", err)
 	}
 	defer rows.Close()
-	
+
 	var scores []GameScore
 	for rows.Next() {
 		var score GameScore
@@ -929,6 +940,98 @@ func GetTopScoresByPlayer(playerName string, limit int) ([]GameScore, error) {
 		}
 		scores = append(scores, score)
 	}
-	
+
 	return scores, nil
+}
+
+// VCReputation represents a player's reputation in the VC ecosystem
+type VCReputation struct {
+	PlayerName       string
+	PerformanceScore float64
+	FounderScore     float64
+	MarketScore      float64
+	TotalGamesPlayed int
+	SuccessfulExits  int
+	AvgROILast5      float64
+	LastUpdated      time.Time
+}
+
+// GetVCReputation retrieves a player's VC reputation
+func GetVCReputation(playerName string) (*VCReputation, error) {
+	query := `
+		SELECT player_name, performance_score, founder_score, market_score,
+		       total_games_played, successful_exits, avg_roi_last_5, last_updated
+		FROM vc_reputation
+		WHERE player_name = ?
+	`
+
+	var rep VCReputation
+	var lastUpdatedStr string
+	err := db.QueryRow(query, playerName).Scan(
+		&rep.PlayerName,
+		&rep.PerformanceScore,
+		&rep.FounderScore,
+		&rep.MarketScore,
+		&rep.TotalGamesPlayed,
+		&rep.SuccessfulExits,
+		&rep.AvgROILast5,
+		&lastUpdatedStr,
+	)
+
+	if err == sql.ErrNoRows {
+		// Return default reputation for new player
+		return &VCReputation{
+			PlayerName:       playerName,
+			PerformanceScore: 50.0,
+			FounderScore:     50.0,
+			MarketScore:      50.0,
+			TotalGamesPlayed: 0,
+			SuccessfulExits:  0,
+			AvgROILast5:      0.0,
+			LastUpdated:      time.Now(),
+		}, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reputation: %v", err)
+	}
+
+	// Parse the timestamp
+	rep.LastUpdated, _ = time.Parse("2006-01-02 15:04:05", lastUpdatedStr)
+
+	return &rep, nil
+}
+
+// SaveVCReputation saves or updates a player's VC reputation
+func SaveVCReputation(rep *VCReputation) error {
+	query := `
+		INSERT INTO vc_reputation (
+			player_name, performance_score, founder_score, market_score,
+			total_games_played, successful_exits, avg_roi_last_5, last_updated
+		) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(player_name) DO UPDATE SET
+			performance_score = excluded.performance_score,
+			founder_score = excluded.founder_score,
+			market_score = excluded.market_score,
+			total_games_played = excluded.total_games_played,
+			successful_exits = excluded.successful_exits,
+			avg_roi_last_5 = excluded.avg_roi_last_5,
+			last_updated = CURRENT_TIMESTAMP
+	`
+
+	_, err := db.Exec(query,
+		rep.PlayerName,
+		rep.PerformanceScore,
+		rep.FounderScore,
+		rep.MarketScore,
+		rep.TotalGamesPlayed,
+		rep.SuccessfulExits,
+		rep.AvgROILast5,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to save reputation: %v", err)
+	}
+
+	return nil
 }
