@@ -57,7 +57,50 @@ func AskForAutomatedMode() bool {
 	return choice == "2"
 }
 
-func DisplayWelcome(username string, difficulty game.Difficulty, playerUpgrades []string) {
+func formatStrategyName(strategy string) string {
+	switch strategy {
+	case "conservative":
+		return "Conservative"
+	case "aggressive":
+		return "Aggressive"
+	case "balanced":
+		return "Balanced"
+	case "deep_tech":
+		return "Deep Tech"
+	case "consumer_focused":
+		return "Consumer Focused"
+	case "enterprise_focused":
+		return "Enterprise Focused"
+	case "early_stage":
+		return "Early Stage"
+	case "growth_stage":
+		return "Growth Stage"
+	case "mega_fund":
+		return "Mega Fund"
+	case "seed_focused":
+		return "Seed Focused"
+	default:
+		// Capitalize first letter and replace underscores with spaces
+		if len(strategy) == 0 {
+			return strategy
+		}
+		result := strings.ToUpper(string(strategy[0]))
+		for i := 1; i < len(strategy); i++ {
+			if strategy[i] == '_' {
+				result += " "
+				if i+1 < len(strategy) {
+					result += strings.ToUpper(string(strategy[i+1]))
+					i++ // Skip the next character since we already capitalized it
+				}
+			} else {
+				result += string(strategy[i])
+			}
+		}
+		return result
+	}
+}
+
+func DisplayWelcome(username string, difficulty game.Difficulty, playerUpgrades []string, aiPlayers []game.AIPlayer) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow)
 	magenta := color.New(color.FgMagenta, color.Bold)
@@ -92,9 +135,10 @@ func DisplayWelcome(username string, difficulty game.Difficulty, playerUpgrades 
 	fmt.Println("You can invest more from your available cash + follow-on reserve when companies raise Series rounds!")
 
 	magenta.Println("\n?? COMPETING AGAINST:")
-	fmt.Println("   ? CARL (Sterling & Cooper) - Conservative")
-	fmt.Println("   ? Sarah Chen (Accel Partners) - Aggressive")
-	fmt.Println("   ? Marcus Williams (Sequoia Capital) - Balanced")
+	for _, aiPlayer := range aiPlayers {
+		strategyName := formatStrategyName(aiPlayer.Strategy)
+		fmt.Printf("   ? %s (%s) - %s\n", aiPlayer.Name, aiPlayer.Firm, strategyName)
+	}
 
 	fmt.Print("\nPress 'Enter' to see available startups...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
@@ -1315,11 +1359,11 @@ func PlayVCMode(username string) {
 		playerUpgrades = []string{}
 	}
 
-	// Display welcome and rules (with upgrades)
-	DisplayWelcome(username, difficulty, playerUpgrades)
-
-	// Initialize game
+	// Initialize game first (so we can get randomized AI players)
 	gs := game.NewGame(username, firmName, difficulty, playerUpgrades)
+
+	// Display welcome and rules (with upgrades and randomized AI players)
+	DisplayWelcome(username, difficulty, playerUpgrades, gs.AIPlayers)
 
 	// Get player level to check for syndicate unlock
 	profile, err := database.GetPlayerProfile(username)

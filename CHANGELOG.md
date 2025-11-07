@@ -1,5 +1,26 @@
 # Changelog
 
+## Version 3.29.0 - Randomized AI Competitors Display (2025-11-06)
+
+### Bug Fixes
+
+#### 🎲 Randomized AI Competitors
+- **Fixed Hardcoded Competitors**: Welcome screen now displays actual randomized AI players instead of always showing the same three competitors
+- **Dynamic Display**: Each game now shows 3-5 randomly selected competitors from the full pool of 12 AI players
+- **Strategy Formatting**: Added proper formatting for all strategy types (Conservative, Aggressive, Deep Tech, Mega Fund, etc.)
+- **Implementation**: Updated `DisplayWelcome()` to accept and display actual AI players from game state
+- **Flow Fix**: Moved `DisplayWelcome()` call to after game initialization so it can access randomized players
+
+### User Experience Improvements
+- **Variety**: Players now see different competitors each game, increasing replayability
+- **Accurate Information**: Welcome screen accurately reflects who you're competing against in that specific game
+- **Better Strategy Visibility**: All strategy types are now properly formatted and displayed
+
+### Technical Changes
+- **Function Signature**: Updated `DisplayWelcome()` to accept `aiPlayers []game.AIPlayer` parameter
+- **Helper Function**: Added `formatStrategyName()` to properly format strategy names for display
+- **Call Order**: Moved game initialization before welcome display in `PlayVCMode()`
+
 ## Version 3.28.0 - Game End Screen Flow Fix & Level-Up Points System (2025-11-06)
 
 ### Major Features Added
