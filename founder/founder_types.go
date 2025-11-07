@@ -161,6 +161,29 @@ type FounderState struct {
 	MonthReachedProfitability int      // -1 if never profitable, otherwise the month when profitability was reached
 	PlayerUpgrades            []string // Player's purchased upgrades
 	HiresCount                int      // Track number of hires for Quick Hire upgrade
+
+	// PHASE 1: Strategic features
+	ProductRoadmap      *ProductRoadmap
+	SalesPipeline       *SalesPipeline
+	PricingStrategy     *PricingStrategy
+	ActiveExperiment    *PricingExperiment
+	CustomerSegments    []CustomerSegment
+	VerticalFocuses     []VerticalFocus
+	SelectedICP         string // Selected segment focus
+	SelectedVertical    string // Selected industry vertical
+
+	// PHASE 2: Growth & intelligence features
+	ContentProgram    *ContentProgram
+	CSPlaybooks       []CSPlaybook
+	CustomerHealthMap map[int]CustomerHealth // CustomerID -> Health
+	CompetitiveIntel  *CompetitiveIntel
+
+	// PHASE 3: Polish & realism features
+	TechnicalDebt      *TechnicalDebt
+	PRProgram          *PRProgram
+	InvestorUpdates    []InvestorUpdate
+	BoardRequests      []BoardRequest
+	PendingBoardRequest *BoardRequest
 }
 
 // Customer represents an individual customer deal
@@ -342,5 +365,277 @@ type MonthlyHighlight struct {
 	Type    string // "win" or "concern"
 	Message string
 	Icon    string
+}
+
+// ============================================================================
+// PHASE 1 FEATURES: Product Roadmap, Sales Pipeline, Pricing, Segments
+// ============================================================================
+
+// ProductFeature represents a feature that can be built
+type ProductFeature struct {
+	Name                string
+	Category            string // "Integration", "Security", "Analytics", etc.
+	EngineerMonths      int
+	Cost                int64
+	ChurnReduction      float64
+	CloseRateIncrease   float64
+	DealSizeIncrease    float64
+	MarketAppealScore   int
+	Status              string // "backlog", "in_progress", "completed"
+	MonthStarted        int
+	MonthCompleted      int
+	DevelopmentProgress int // 0-100%
+	AllocatedEngineers  int // Engineers currently working on this
+}
+
+// ProductRoadmap represents the product development pipeline
+type ProductRoadmap struct {
+	Features          []ProductFeature
+	AvailableFeatures []ProductFeature // Template of possible features
+	CompletedCount    int
+	InProgressCount   int
+}
+
+// Deal represents a sales opportunity
+type Deal struct {
+	ID              int
+	CompanyName     string
+	DealSize        int64
+	Stage           string // "lead", "qualified", "demo", "negotiation", "closed_won", "closed_lost"
+	CloseProbability float64
+	DaysInStage     int
+	RequiredActions []string
+	AssignedSalesRep string
+	MonthCreated    int
+	LostReason      string // if closed_lost
+	Segment         string // "Enterprise", "Mid-Market", "SMB", "Startup"
+	Vertical        string // Industry vertical
+}
+
+// SalesPipeline represents the sales funnel and metrics
+type SalesPipeline struct {
+	ActiveDeals       []Deal
+	ClosedDeals       []Deal
+	LeadsPerMonth     int
+	ConversionRates   map[string]float64 // stage -> conversion rate
+	AverageDealSize   int64
+	AverageSalesCycle int // days
+	WinRate           float64
+	TotalDealsCreated int
+	NextDealID        int
+}
+
+// PricingStrategy represents the company's pricing model
+type PricingStrategy struct {
+	Model         string           // "freemium", "trial", "annual_upfront", "usage_based", "tiered"
+	CurrentTier   map[string]int64 // "starter" -> $99, "pro" -> $299, "enterprise" -> $999
+	IsAnnual      bool
+	Discount      float64 // annual discount %
+	ChangeHistory []PricingChange
+}
+
+// PricingChange represents a historical pricing change
+type PricingChange struct {
+	Month       int
+	FromModel   string
+	ToModel     string
+	Reason      string
+	Impact      string
+}
+
+// PricingExperiment represents an A/B pricing test
+type PricingExperiment struct {
+	Name          string
+	Cost          int64
+	StartMonth    int
+	Duration      int
+	TestStrategy  PricingStrategy
+	Results       PricingResults
+	IsComplete    bool
+}
+
+// PricingResults represents experiment outcomes
+type PricingResults struct {
+	ConversionRateChange float64
+	AvgDealSizeChange    int64
+	ChurnRateChange      float64
+	Confidence           float64 // 0-1
+}
+
+// CustomerSegment represents a market segment
+type CustomerSegment struct {
+	Name                string // "Enterprise", "Mid-Market", "SMB", "Startup"
+	AvgDealSize         int64
+	ChurnRate           float64
+	SalesCycle          int // months
+	CAC                 int64
+	FeatureRequirements []string
+	Volume              int // current customers in this segment
+}
+
+// VerticalFocus represents industry specialization
+type VerticalFocus struct {
+	Industry         string // "FinTech", "HealthTech", "Retail", "Manufacturing"
+	ICPMatch         float64 // 0-1, how well targeted
+	MarketSize       int
+	Competition      string
+	SpecializedSales int // sales reps trained for this vertical
+	CACReduction     float64 // benefit of specialization
+	IsActive         bool
+}
+
+// ============================================================================
+// PHASE 2 FEATURES: Content Marketing, CS Playbooks, Competitive Intel
+// ============================================================================
+
+// ContentProgram represents content marketing efforts
+type ContentProgram struct {
+	MonthlyBudget   int64
+	ContentTypes    map[string]bool // "blog", "seo", "webinars", "ebooks", "case_studies"
+	OrganicTraffic  int
+	InboundLeads    int
+	ContentQuality  float64 // 0-1
+	SEOScore        int     // 0-100
+	MonthsActive    int
+	TotalInvestment int64
+	CumulativeLeads int
+	LaunchedMonth   int
+}
+
+// CSPlaybook represents a customer success program
+type CSPlaybook struct {
+	Name           string // "Onboarding", "Health Monitoring", "Upsell", "Renewal", "Churn Prevention"
+	CSHeadcount    int
+	MonthlyBudget  int64
+	ToolCosts      int64
+	ChurnReduction float64
+	UpsellRate     float64
+	NPSScore       int // 0-100
+	Active         bool
+	LaunchedMonth  int
+}
+
+// CustomerHealth represents individual customer health tracking
+type CustomerHealth struct {
+	CustomerID      int
+	HealthScore     float64 // 0-100
+	Risk            string  // "healthy", "at_risk", "critical"
+	Interventions   []string
+	UpsellPotential bool
+	LastTouchpoint  int // months ago
+}
+
+// CompetitiveIntel represents intelligence gathering
+type CompetitiveIntel struct {
+	HasAnalyst      bool
+	MonthlyBudget   int64
+	IntelReports    []IntelReport
+	BattleCards     []BattleCard
+	WinLossInsights map[string]int // reason -> count
+	AnalystSalary   int64
+	LaunchedMonth   int
+}
+
+// IntelReport represents a competitor analysis report
+type IntelReport struct {
+	CompetitorName string
+	Pricing        map[string]int64
+	Features       []string
+	Funding        string
+	TeamSize       int
+	RecentMoves    []string
+	ThreatLevel    string
+	Cost           int64
+	Month          int
+}
+
+// BattleCard represents competitive positioning
+type BattleCard struct {
+	CompetitorName  string
+	OurAdvantages   []string
+	TheirAdvantages []string
+	ResponseTactics []string
+	WinRateBonus    float64 // bonus to close rate when used
+	CreatedMonth    int
+}
+
+// ============================================================================
+// PHASE 3 FEATURES: Tech Debt, PR, Enhanced Investor Relations
+// ============================================================================
+
+// TechnicalDebt represents accumulated technical debt
+type TechnicalDebt struct {
+	CurrentLevel       int     // 0-100
+	VelocityImpact     float64 // multiplier on engineer productivity
+	BugFrequency       float64 // increases churn
+	SecurityRisks      int
+	ScalingProblems    bool
+	EngineerMorale     float64 // affects attrition
+	RefactoringCosts   int64
+	MonthsSinceRefactor int
+}
+
+// PRProgram represents PR and media relations
+type PRProgram struct {
+	HasPRFirm       bool
+	MonthlyRetainer int64
+	Campaigns       []PRCampaign
+	MediaCoverage   []MediaCoverage
+	BrandScore      int // 0-100
+	LaunchedMonth   int
+}
+
+// PRCampaign represents a PR initiative
+type PRCampaign struct {
+	Type         string // "product_launch", "funding", "thought_leadership", "crisis_response"
+	Cost         int64
+	Duration     int
+	TargetMedia  []string
+	StartMonth   int
+	Success      bool
+	Impact       PRImpact
+}
+
+// MediaCoverage represents a press mention
+type MediaCoverage struct {
+	Outlet    string // "TechCrunch", "WSJ", "Trade Publication", "Podcast"
+	Type      string // "positive", "negative", "neutral"
+	Reach     int
+	CACImpact float64
+	Month     int
+}
+
+// PRImpact represents effects of PR
+type PRImpact struct {
+	CACReduction   float64
+	BrandBoost     int
+	InboundLeads   int
+	DurationMonths int
+}
+
+// InvestorUpdate represents monthly investor communication
+type InvestorUpdate struct {
+	Month        int
+	Metrics      map[string]string // what you chose to share
+	Transparency string            // "full", "optimistic", "selective"
+	BoardResponse string
+}
+
+// BoardRequest represents asking the board for help
+type BoardRequest struct {
+	Type        string // "customer_intro", "recruiting_help", "strategic_advice", "fundraising_prep"
+	Description string
+	Month       int
+	Result      BoardHelp
+	Completed   bool
+}
+
+// BoardHelp represents value provided by the board
+type BoardHelp struct {
+	Type           string
+	Benefit        string
+	CACImpact      float64
+	LeadsGenerated int
+	IntrosMade     []string
 }
 

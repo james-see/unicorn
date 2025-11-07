@@ -730,8 +730,15 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		}
 		fmt.Println("10. Expand to New Market")
 		fmt.Println("11. Execute Pivot/Strategy Change")
+		fmt.Println("11a. Manage Product Roadmap 🔨")
+		if fs.Customers >= 50 {
+			fmt.Println("11b. Select Customer Segment & Vertical 🎯")
+		}
+		if len(fs.FundingRounds) > 0 || fs.MRR >= 100000 {
+			fmt.Println("11c. Manage Pricing Strategy 💰")
+		}
 		if fs.AffiliateProgram != nil {
-			fmt.Println("11b. End Affiliate Program")
+			fmt.Println("11d. End Affiliate Program")
 		}
 		
 		// Strategic opportunities (numbered sequentially)
@@ -747,6 +754,10 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		nextOption++
 		fmt.Printf("%d. View Customer Deals\n", nextOption)
 		nextOption++
+		if fs.SalesPipeline != nil && len(fs.SalesPipeline.ActiveDeals) > 0 {
+			fmt.Printf("%d. View Sales Pipeline 📊\n", nextOption)
+			nextOption++
+		}
 		if fs.Customers > 0 {
 			fmt.Printf("%d. Solicit Customer Feedback\n", nextOption)
 			nextOption++
@@ -778,8 +789,35 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
 
-		// Check for "11b" to end affiliate program before parsing as integer
-		if choice == "11b" && fs.AffiliateProgram != nil {
+		// Check for "11a" to manage product roadmap before parsing as integer
+		if choice == "11a" {
+			shouldContinue := handleProductRoadmap(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11b" to manage customer segments before parsing as integer
+		if choice == "11b" && fs.Customers >= 50 {
+			shouldContinue := handleCustomerSegments(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11c" to manage pricing strategy before parsing as integer
+		if choice == "11c" && (len(fs.FundingRounds) > 0 || fs.MRR >= 100000) {
+			shouldContinue := handlePricingStrategy(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11d" to end affiliate program before parsing as integer
+		if choice == "11d" && fs.AffiliateProgram != nil {
 			shouldContinue := handleEndAffiliateProgram(fs)
 			if shouldContinue {
 				continue
@@ -803,20 +841,22 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		// Handle view options first (they don't advance the turn)
 		if choiceNum >= viewOptionStart && choiceNum < nextOption {
 			viewIndex := choiceNum - viewOptionStart
+			hasPipeline := fs.SalesPipeline != nil && len(fs.SalesPipeline.ActiveDeals) > 0
+
 			if viewIndex == 0 {
 				handleViewTeamRoster(fs)
 			} else if viewIndex == 1 {
 				handleViewCustomerDeals(fs)
-			} else if viewIndex == 2 && fs.Customers > 0 {
+			} else if viewIndex == 2 && hasPipeline {
+				handleViewSalesPipeline(fs)
+			} else if (viewIndex == 2 && !hasPipeline && fs.Customers > 0) || (viewIndex == 3 && hasPipeline && fs.Customers > 0) {
 				// Solicit Feedback - this is an action that can cancel
 				shouldContinue := handleSolicitFeedback(fs)
 				if shouldContinue {
 					continue
 				}
 				break
-			} else if viewIndex == 2 && fs.Customers <= 0 {
-				handleViewFinancials(fs)
-			} else if viewIndex == 3 && fs.Customers > 0 {
+			} else if (viewIndex == 2 && !hasPipeline && fs.Customers <= 0) || (viewIndex == 3 && hasPipeline && fs.Customers <= 0) || (viewIndex == 4 && hasPipeline && fs.Customers > 0) || (viewIndex == 3 && !hasPipeline && fs.Customers > 0) {
 				handleViewFinancials(fs)
 			} else {
 				fmt.Println("\nInvalid choice, skipping...")
@@ -3178,6 +3218,67 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 	playerStats, _ := db.GetPlayerStats(fs.FounderName)
 	winStreak, _ := db.GetWinStreak(fs.FounderName)
 	
+	// Calculate Phase 1 stats
+	featuresCompleted := 0
+	enterpriseFeatures := 0
+	if fs.ProductRoadmap != nil {
+		featuresCompleted = fs.ProductRoadmap.CompletedCount
+		// Count enterprise features (SSO, Advanced Analytics, Security Suite)
+		for _, f := range fs.GetCompletedFeatures() {
+			if f.Category == "Security" || f.Category == "Analytics" {
+				enterpriseFeatures++
+			}
+		}
+	}
+
+	enterpriseCustomers := 0
+	if len(fs.CustomerSegments) > 0 {
+		for _, seg := range fs.CustomerSegments {
+			if seg.Name == "Enterprise" {
+				enterpriseCustomers = seg.Volume
+			}
+		}
+	}
+
+	verticalConcentration := fs.GetSegmentConcentration()
+
+	pricingExperiments := 0
+	if fs.PricingStrategy != nil {
+		for _, change := range fs.PricingStrategy.ChangeHistory {
+			if strings.Contains(change.Reason, "Applied experiment") {
+				pricingExperiments++
+			}
+		}
+	}
+
+	premiumPricing := fs.AvgDealSize > 50000 && fs.MonthlyGrowthRate > 0.05
+
+	lowTouchCustomers := 0
+	if len(fs.CustomerSegments) > 0 {
+		for _, seg := range fs.CustomerSegments {
+			if seg.Name == "SMB" || seg.Name == "Startup" {
+				lowTouchCustomers += seg.Volume
+			}
+		}
+	}
+
+	dealsClosedWon := 0
+	highProbClose := false
+	maxPipelineSize := 0
+	if fs.SalesPipeline != nil {
+		for _, deal := range fs.SalesPipeline.ClosedDeals {
+			if deal.Stage == "closed_won" {
+				dealsClosedWon++
+				if deal.CloseProbability >= 0.90 {
+					highProbClose = true
+				}
+			}
+		}
+		if len(fs.SalesPipeline.ActiveDeals) > maxPipelineSize {
+			maxPipelineSize = len(fs.SalesPipeline.ActiveDeals)
+		}
+	}
+
 	// Build game stats for achievement checking
 	gameStats := achievements.GameStats{
 		GameMode:             "founder",
@@ -3197,6 +3298,24 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 		ExitValuation:        fs.ExitValuation,
 		MonthsToProfitability: fs.MonthReachedProfitability,
 		RanOutOfCash:         fs.Cash <= 0 && !fs.HasExited, // Ran out of cash and didn't exit = lost
+		
+		// Phase 1 stats
+		FeaturesCompleted:          featuresCompleted,
+		InnovationLeader:           false, // TODO: Track if feature completed before competitor
+		EnterpriseFeatures:         enterpriseFeatures,
+		CustomerLossDuringRoadmap:  false, // TODO: Track if customers were lost during roadmap execution
+		EnterpriseCustomers:        enterpriseCustomers,
+		VerticalConcentration:      verticalConcentration,
+		PricingExperimentsCompleted: pricingExperiments,
+		PremiumPricingSuccess:      premiumPricing,
+		LowTouchCustomers:          lowTouchCustomers,
+		DealsClosedWon:             dealsClosedWon,
+		HighProbabilityClose:       highProbClose,
+		MaxPipelineSize:            maxPipelineSize,
+		
+		// Phase 2-3 stats (add more as needed)
+		CustomerChurnRate:          fs.CustomerChurnRate,
+		
 		TotalGames:           playerStats.TotalGames,
 		TotalWins:            int(playerStats.WinRate * float64(playerStats.TotalGames) / 100.0),
 		WinStreak:            winStreak,
@@ -3948,4 +4067,993 @@ func handleStrategicOpportunity(fs *founder.FounderState) bool {
 		color.Red("\nInvalid choice")
 		return true
 	}
+}
+
+// handleProductRoadmap manages the product roadmap and feature development
+func handleProductRoadmap(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+	reader := bufio.NewReader(os.Stdin)
+
+	// Initialize roadmap if needed
+	if fs.ProductRoadmap == nil {
+		fs.InitializeProductRoadmap()
+	}
+
+	for {
+		clear.ClearIt()
+		cyan.Println("\n" + strings.Repeat("=", 70))
+		cyan.Println("                    PRODUCT ROADMAP 🔨")
+		cyan.Println(strings.Repeat("=", 70))
+
+		// Display roadmap stats
+		fmt.Println("\n📊 ROADMAP OVERVIEW")
+		fmt.Println(strings.Repeat("─", 70))
+		fmt.Printf("✅ Completed Features: %d\n", fs.ProductRoadmap.CompletedCount)
+		fmt.Printf("🔨 In Progress: %d\n", fs.ProductRoadmap.InProgressCount)
+		
+		allocatedEngineers := fs.GetAllocatedEngineers()
+		availableEngineers := len(fs.Team.Engineers) - allocatedEngineers
+		fmt.Printf("👷 Engineers Available: %d (total: %d)\n", availableEngineers, len(fs.Team.Engineers))
+
+		// Display completed features
+		completed := fs.GetCompletedFeatures()
+		if len(completed) > 0 {
+			green.Println("\n✅ COMPLETED FEATURES:")
+			fmt.Println(strings.Repeat("─", 70))
+			for _, f := range completed {
+				green.Printf("  • %s (%s)\n", f.Name, f.Category)
+				fmt.Printf("    Benefits: Churn -%.1f%%, Close Rate +%.0f%%, Deal Size +%.0f%%\n",
+					f.ChurnReduction*100, f.CloseRateIncrease*100, f.DealSizeIncrease*100)
+			}
+		}
+
+		// Display in-progress features with ASCII progress bars
+		inProgress := fs.GetInProgressFeatures()
+		if len(inProgress) > 0 {
+			yellow.Println("\n🔨 IN PROGRESS:")
+			fmt.Println(strings.Repeat("─", 70))
+			for _, f := range inProgress {
+				progressBar := createProgressBar(f.DevelopmentProgress, 30)
+				yellow.Printf("  • %s (%s)\n", f.Name, f.Category)
+				fmt.Printf("    Progress: %s %d%%\n", progressBar, f.DevelopmentProgress)
+				fmt.Printf("    Engineers: %d allocated | %d/%d months\n",
+					f.AllocatedEngineers, f.EngineerMonths, f.EngineerMonths)
+			}
+		}
+
+		// Display available features
+		available := fs.GetAvailableFeaturesToStart()
+		if len(available) > 0 {
+			cyan.Println("\n💡 AVAILABLE FEATURES TO BUILD:")
+			fmt.Println(strings.Repeat("─", 70))
+			for i, f := range available {
+				fmt.Printf("%d. %s (%s)\n", i+1, f.Name, f.Category)
+				fmt.Printf("   Cost: $%s | Time: %d engineer-months | Appeal: %d/100\n",
+					formatFounderCurrency(f.Cost), f.EngineerMonths, f.MarketAppealScore)
+				fmt.Printf("   Benefits: Churn -%.1f%%, Close Rate +%.0f%%, Deal Size +%.0f%%\n",
+					f.ChurnReduction*100, f.CloseRateIncrease*100, f.DealSizeIncrease*100)
+				if i < len(available)-1 {
+					fmt.Println()
+				}
+			}
+		}
+
+		// Menu
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		fmt.Println("OPTIONS:")
+		if len(available) > 0 && availableEngineers > 0 {
+			fmt.Println("1. Start New Feature")
+		}
+		if len(inProgress) > 0 {
+			fmt.Println("2. Reallocate Engineers")
+			fmt.Println("3. Cancel Feature")
+		}
+		fmt.Println("0. Back to Monthly Menu")
+
+		fmt.Print("\nChoice: ")
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+
+		switch choice {
+		case "1":
+			if len(available) == 0 || availableEngineers == 0 {
+				color.Red("\nNo features available or no engineers free!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			// Select feature
+			fmt.Print("\nSelect feature (1-" + fmt.Sprintf("%d", len(available)) + "): ")
+			featureChoice, _ := reader.ReadString('\n')
+			featureChoice = strings.TrimSpace(featureChoice)
+			featureNum, err := strconv.Atoi(featureChoice)
+			if err != nil || featureNum < 1 || featureNum > len(available) {
+				color.Red("\nInvalid choice!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			selectedFeature := available[featureNum-1]
+
+			// Allocate engineers
+			fmt.Printf("\nAllocate engineers (1-%d available): ", availableEngineers)
+			engChoice, _ := reader.ReadString('\n')
+			engChoice = strings.TrimSpace(engChoice)
+			engNum, err := strconv.Atoi(engChoice)
+			if err != nil || engNum < 1 || engNum > availableEngineers {
+				color.Red("\nInvalid number of engineers!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			// Start the feature
+			err = fs.StartFeature(selectedFeature.Name, engNum)
+			if err != nil {
+				color.Red("\n✗ Error: %v", err)
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			green.Printf("\n✓ Started %s with %d engineers!", selectedFeature.Name, engNum)
+			fmt.Printf("\n   Cost: $%s paid\n", formatFounderCurrency(selectedFeature.Cost))
+			estimatedMonths := int(float64(selectedFeature.EngineerMonths) / float64(engNum))
+			fmt.Printf("   Estimated completion: ~%d months\n", estimatedMonths)
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "2":
+			if len(inProgress) == 0 {
+				color.Red("\nNo features in progress!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			// Select feature
+			fmt.Println("\nFEATURES IN PROGRESS:")
+			for i, f := range inProgress {
+				fmt.Printf("%d. %s (currently %d engineers)\n", i+1, f.Name, f.AllocatedEngineers)
+			}
+			fmt.Print("\nSelect feature (1-" + fmt.Sprintf("%d", len(inProgress)) + "): ")
+			featureChoice, _ := reader.ReadString('\n')
+			featureChoice = strings.TrimSpace(featureChoice)
+			featureNum, err := strconv.Atoi(featureChoice)
+			if err != nil || featureNum < 1 || featureNum > len(inProgress) {
+				color.Red("\nInvalid choice!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			selectedFeature := inProgress[featureNum-1]
+			maxAvailable := availableEngineers + selectedFeature.AllocatedEngineers
+
+			fmt.Printf("\nCurrent allocation: %d engineers\n", selectedFeature.AllocatedEngineers)
+			fmt.Printf("Reallocate engineers (0-%d available, 0 to pause): ", maxAvailable)
+			engChoice, _ := reader.ReadString('\n')
+			engChoice = strings.TrimSpace(engChoice)
+			engNum, err := strconv.Atoi(engChoice)
+			if err != nil || engNum < 0 || engNum > maxAvailable {
+				color.Red("\nInvalid number of engineers!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			err = fs.ReallocateEngineers(selectedFeature.Name, engNum)
+			if err != nil {
+				color.Red("\n✗ Error: %v", err)
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			if engNum == 0 {
+				yellow.Printf("\n⏸ Paused %s (no engineers allocated)\n", selectedFeature.Name)
+			} else {
+				green.Printf("\n✓ Reallocated %d engineers to %s\n", engNum, selectedFeature.Name)
+			}
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "3":
+			if len(inProgress) == 0 {
+				color.Red("\nNo features in progress!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			// Select feature to cancel
+			fmt.Println("\nFEATURES IN PROGRESS:")
+			for i, f := range inProgress {
+				fmt.Printf("%d. %s (%d%% complete)\n", i+1, f.Name, f.DevelopmentProgress)
+			}
+			fmt.Print("\nSelect feature to cancel (1-" + fmt.Sprintf("%d", len(inProgress)) + "): ")
+			featureChoice, _ := reader.ReadString('\n')
+			featureChoice = strings.TrimSpace(featureChoice)
+			featureNum, err := strconv.Atoi(featureChoice)
+			if err != nil || featureNum < 1 || featureNum > len(inProgress) {
+				color.Red("\nInvalid choice!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			selectedFeature := inProgress[featureNum-1]
+
+			// Confirm cancellation
+			color.Yellow("\n⚠️  Cancel %s? You will forfeit all progress and costs!", selectedFeature.Name)
+			fmt.Print("\nConfirm (yes/no): ")
+			confirm, _ := reader.ReadString('\n')
+			confirm = strings.TrimSpace(strings.ToLower(confirm))
+			if confirm != "yes" && confirm != "y" {
+				fmt.Println("\nCancellation aborted")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			err = fs.CancelFeature(selectedFeature.Name)
+			if err != nil {
+				color.Red("\n✗ Error: %v", err)
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			color.Yellow("\n✓ Cancelled %s. Engineers are now available for other features.\n", selectedFeature.Name)
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "0":
+			return true // Return to monthly menu without advancing turn
+
+		default:
+			color.Red("\nInvalid choice!")
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+		}
+	}
+}
+
+// createProgressBar creates an ASCII progress bar
+func createProgressBar(progress int, width int) string {
+	filled := int(float64(progress) / 100.0 * float64(width))
+	if filled > width {
+		filled = width
+	}
+	bar := "["
+	for i := 0; i < width; i++ {
+		if i < filled {
+			bar += "█"
+		} else {
+			bar += "░"
+		}
+	}
+	bar += "]"
+	return bar
+}
+
+// handleCustomerSegments manages ICP and vertical focus
+func handleCustomerSegments(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+	reader := bufio.NewReader(os.Stdin)
+
+	// Initialize segments if needed
+	if len(fs.CustomerSegments) == 0 {
+		fs.InitializeSegments()
+	}
+	if len(fs.VerticalFocuses) == 0 {
+		fs.InitializeVerticals()
+	}
+
+	for {
+		clear.ClearIt()
+		cyan.Println("\n" + strings.Repeat("=", 70))
+		cyan.Println("           CUSTOMER SEGMENTATION & VERTICAL TARGETING 🎯")
+		cyan.Println(strings.Repeat("=", 70))
+
+		// Calculate benefits
+		cacReduction, closeRateBonus, dealSizeBonus := fs.GetICPBenefits()
+
+		// Display current focus
+		fmt.Println("\n📊 CURRENT FOCUS")
+		fmt.Println(strings.Repeat("─", 70))
+		if fs.SelectedICP != "" {
+			green.Printf("ICP Segment: %s\n", fs.SelectedICP)
+		} else {
+			fmt.Println("ICP Segment: None (unfocused)")
+		}
+		if fs.SelectedVertical != "" {
+			green.Printf("Industry Vertical: %s", fs.SelectedVertical)
+			// Show ICP match progress
+			for _, v := range fs.VerticalFocuses {
+				if v.Industry == fs.SelectedVertical && v.IsActive {
+					matchBar := createProgressBar(int(v.ICPMatch*100), 20)
+					fmt.Printf(" %s %.0f%%\n", matchBar, v.ICPMatch*100)
+					break
+				}
+			}
+		} else {
+			fmt.Println("Industry Vertical: None (unfocused)")
+		}
+
+		// Show benefits
+		if cacReduction > 0 {
+			fmt.Println("\n💡 FOCUS BENEFITS:")
+			fmt.Printf("  • CAC Reduction: -%.0f%%\n", cacReduction*100)
+			fmt.Printf("  • Close Rate Bonus: +%.0f%%\n", closeRateBonus*100)
+			fmt.Printf("  • Deal Size Bonus: +%.0f%%\n", dealSizeBonus*100)
+		}
+
+		// Update and display segment distribution
+		fs.UpdateSegmentVolumes()
+		fmt.Println("\n📈 CUSTOMER SEGMENTS")
+		fmt.Println(strings.Repeat("─", 70))
+		for _, seg := range fs.CustomerSegments {
+			percentage := 0.0
+			if fs.Customers > 0 {
+				percentage = float64(seg.Volume) / float64(fs.Customers) * 100
+			}
+			
+			icon := "  "
+			if seg.Name == fs.SelectedICP {
+				icon = "🎯"
+			}
+			
+			fmt.Printf("%s %s: %d customers (%.1f%%)\n", icon, seg.Name, seg.Volume, percentage)
+			fmt.Printf("   Deal Size: $%s/mo | Churn: %.0f%% | CAC: $%s\n",
+				formatFounderCurrency(seg.AvgDealSize), seg.ChurnRate*100, formatFounderCurrency(seg.CAC))
+		}
+
+		// Display verticals
+		fmt.Println("\n🌍 INDUSTRY VERTICALS")
+		fmt.Println(strings.Repeat("─", 70))
+		for i, v := range fs.VerticalFocuses {
+			icon := "  "
+			if v.Industry == fs.SelectedVertical {
+				icon = "🎯"
+			}
+			
+			fmt.Printf("%d. %s %s\n", i+1, icon, v.Industry)
+			fmt.Printf("   Market Size: %d | Competition: %s", v.MarketSize, v.Competition)
+			if v.IsActive {
+				green.Printf(" | Focus: %.0f%%", v.ICPMatch*100)
+			}
+			fmt.Println()
+		}
+
+		// Menu
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		fmt.Println("OPTIONS:")
+		if fs.SelectedICP == "" {
+			fmt.Println("1. Select ICP Segment Focus")
+		} else {
+			fmt.Println("1. Change ICP Segment Focus")
+		}
+		if fs.SelectedVertical == "" {
+			fmt.Println("2. Select Industry Vertical Focus")
+		} else {
+			fmt.Println("2. Change Industry Vertical Focus")
+		}
+		fmt.Println("0. Back to Monthly Menu")
+
+		fmt.Print("\nChoice: ")
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+
+		switch choice {
+		case "1":
+			// Select/change ICP
+			fmt.Println("\nSELECT CUSTOMER SEGMENT:")
+			for i, seg := range fs.CustomerSegments {
+				fmt.Printf("%d. %s\n", i+1, seg.Name)
+				fmt.Printf("   Avg Deal: $%s/mo | Churn: %.0f%% | Sales Cycle: %d months\n",
+					formatFounderCurrency(seg.AvgDealSize), seg.ChurnRate*100, seg.SalesCycle)
+			}
+
+			fmt.Print("\nSelect segment (1-" + fmt.Sprintf("%d", len(fs.CustomerSegments)) + "): ")
+			segChoice, _ := reader.ReadString('\n')
+			segChoice = strings.TrimSpace(segChoice)
+			segNum, err := strconv.Atoi(segChoice)
+			if err != nil || segNum < 1 || segNum > len(fs.CustomerSegments) {
+				color.Red("\nInvalid choice!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			selectedSegment := fs.CustomerSegments[segNum-1].Name
+
+			// Change or select
+			if fs.SelectedICP == "" {
+				err = fs.SelectICP(selectedSegment)
+				if err != nil {
+					color.Red("\n✗ Error: %v", err)
+					fmt.Print("\nPress 'Enter' to continue...")
+					bufio.NewReader(os.Stdin).ReadBytes('\n')
+					continue
+				}
+				green.Printf("\n✓ Focused on %s segment!\n", selectedSegment)
+				fmt.Println("   Benefits: -20% CAC, +15% close rate, +10% deal size")
+			} else {
+				yellow.Printf("\n⚠️  Changing from %s to %s will cause customer churn (10-20%%)!\n", fs.SelectedICP, selectedSegment)
+				fmt.Print("\nConfirm (yes/no): ")
+				confirm, _ := reader.ReadString('\n')
+				confirm = strings.TrimSpace(strings.ToLower(confirm))
+				if confirm != "yes" && confirm != "y" {
+					fmt.Println("\nChange cancelled")
+					fmt.Print("\nPress 'Enter' to continue...")
+					bufio.NewReader(os.Stdin).ReadBytes('\n')
+					continue
+				}
+
+				err = fs.ChangeICP(selectedSegment)
+				if err != nil {
+					color.Red("\n✗ Error: %v", err)
+					fmt.Print("\nPress 'Enter' to continue...")
+					bufio.NewReader(os.Stdin).ReadBytes('\n')
+					continue
+				}
+				yellow.Printf("\n✓ Pivoted to %s segment (some customers churned)\n", selectedSegment)
+			}
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "2":
+			// Select/change vertical
+			fmt.Println("\nSELECT INDUSTRY VERTICAL:")
+			for i, v := range fs.VerticalFocuses {
+				fmt.Printf("%d. %s\n", i+1, v.Industry)
+				fmt.Printf("   Market Size: %d | Competition: %s\n", v.MarketSize, v.Competition)
+			}
+
+			fmt.Print("\nSelect vertical (1-" + fmt.Sprintf("%d", len(fs.VerticalFocuses)) + "): ")
+			vertChoice, _ := reader.ReadString('\n')
+			vertChoice = strings.TrimSpace(vertChoice)
+			vertNum, err := strconv.Atoi(vertChoice)
+			if err != nil || vertNum < 1 || vertNum > len(fs.VerticalFocuses) {
+				color.Red("\nInvalid choice!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			selectedVertical := fs.VerticalFocuses[vertNum-1].Industry
+
+			// Change or select
+			if fs.SelectedVertical == "" {
+				err = fs.SelectVertical(selectedVertical)
+				if err != nil {
+					color.Red("\n✗ Error: %v", err)
+					fmt.Print("\nPress 'Enter' to continue...")
+					bufio.NewReader(os.Stdin).ReadBytes('\n')
+					continue
+				}
+				green.Printf("\n✓ Focused on %s vertical!\n", selectedVertical)
+				fmt.Println("   Focus will improve over time (max 15% additional benefits)")
+			} else {
+				err = fs.ChangeVertical(selectedVertical)
+				if err != nil {
+					color.Red("\n✗ Error: %v", err)
+					fmt.Print("\nPress 'Enter' to continue...")
+					bufio.NewReader(os.Stdin).ReadBytes('\n')
+					continue
+				}
+				yellow.Printf("\n✓ Pivoted to %s vertical (focus reset to 0%%)\n", selectedVertical)
+			}
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "0":
+			return true // Return to monthly menu without advancing turn
+
+		default:
+			color.Red("\nInvalid choice!")
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+		}
+	}
+}
+
+// handlePricingStrategy manages pricing models and experiments
+func handlePricingStrategy(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+	reader := bufio.NewReader(os.Stdin)
+
+	// Initialize pricing if needed
+	if fs.PricingStrategy == nil {
+		fs.InitializePricingStrategy()
+	}
+
+	for {
+		clear.ClearIt()
+		cyan.Println("\n" + strings.Repeat("=", 70))
+		cyan.Println("                  PRICING STRATEGY & PACKAGING 💰")
+		cyan.Println(strings.Repeat("=", 70))
+
+		// Display current pricing model
+		fmt.Println("\n📊 CURRENT PRICING MODEL")
+		fmt.Println(strings.Repeat("─", 70))
+		green.Printf("Model: %s", fs.PricingStrategy.Model)
+		if fs.PricingStrategy.IsAnnual {
+			fmt.Printf(" (Annual with %.0f%% discount)", fs.PricingStrategy.Discount*100)
+		}
+		fmt.Println()
+		fmt.Println("\nDescription:", founder.GetPricingModelDescription(fs.PricingStrategy.Model))
+		
+		fmt.Println("\nCurrent Tiers:")
+		for tier, price := range fs.PricingStrategy.CurrentTier {
+			fmt.Printf("  • %s: $%s/month\n", tier, formatFounderCurrency(price))
+		}
+
+		fmt.Printf("\nAvg Deal Size: $%s/month\n", formatFounderCurrency(fs.AvgDealSize))
+		fmt.Printf("Current Churn Rate: %.1f%%\n", fs.CustomerChurnRate*100)
+
+		// Display active experiment
+		if fs.ActiveExperiment != nil && !fs.ActiveExperiment.IsComplete {
+			yellow.Println("\n🧪 ACTIVE EXPERIMENT")
+			fmt.Println(strings.Repeat("─", 70))
+			fmt.Printf("Name: %s\n", fs.ActiveExperiment.Name)
+			fmt.Printf("Testing: %s model\n", fs.ActiveExperiment.TestStrategy.Model)
+			monthsLeft := fs.ActiveExperiment.Duration - (fs.Turn - fs.ActiveExperiment.StartMonth)
+			fmt.Printf("Progress: %d/%d months (%d months remaining)\n",
+				fs.Turn-fs.ActiveExperiment.StartMonth, fs.ActiveExperiment.Duration, monthsLeft)
+		}
+
+		// Display completed experiment results
+		if fs.ActiveExperiment != nil && fs.ActiveExperiment.IsComplete {
+			green.Println("\n✅ EXPERIMENT RESULTS AVAILABLE")
+			fmt.Println(strings.Repeat("─", 70))
+			fmt.Printf("Experiment: %s\n", fs.ActiveExperiment.Name)
+			fmt.Printf("Tested: %s model\n", fs.ActiveExperiment.TestStrategy.Model)
+			results := fs.ActiveExperiment.Results
+			fmt.Printf("\nResults:\n")
+			fmt.Printf("  • Conversion Rate: %+.1f%%\n", results.ConversionRateChange*100)
+			fmt.Printf("  • Avg Deal Size: %+$%s\n", formatFounderCurrency(results.AvgDealSizeChange))
+			fmt.Printf("  • Churn Rate: %+.1f%%\n", results.ChurnRateChange*100)
+			fmt.Printf("  • Statistical Confidence: %.0f%%\n", results.Confidence*100)
+		}
+
+		// Display recent pricing changes
+		if len(fs.PricingStrategy.ChangeHistory) > 0 {
+			fmt.Println("\n📈 RECENT PRICING CHANGES")
+			fmt.Println(strings.Repeat("─", 70))
+			start := len(fs.PricingStrategy.ChangeHistory) - 3
+			if start < 0 {
+				start = 0
+			}
+			for i := start; i < len(fs.PricingStrategy.ChangeHistory); i++ {
+				change := fs.PricingStrategy.ChangeHistory[i]
+				fmt.Printf("Month %d: %s → %s (%s)\n", change.Month, change.FromModel, change.ToModel, change.Reason)
+				fmt.Printf("  Impact: %s\n", change.Impact)
+			}
+		}
+
+		// Menu
+		fmt.Println("\n" + strings.Repeat("─", 70))
+		fmt.Println("OPTIONS:")
+		fmt.Println("1. Change Pricing Model")
+		fmt.Println("2. Increase Prices")
+		fmt.Println("3. Decrease Prices")
+		if fs.ActiveExperiment == nil || fs.ActiveExperiment.IsComplete {
+			fmt.Println("4. Run Pricing Experiment (A/B Test)")
+		}
+		if fs.ActiveExperiment != nil && fs.ActiveExperiment.IsComplete {
+			fmt.Println("5. Apply Experiment Results")
+		}
+		fmt.Println("0. Back to Monthly Menu")
+
+		fmt.Print("\nChoice: ")
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+
+		switch choice {
+		case "1":
+			// Change pricing model
+			fmt.Println("\nAVAILABLE PRICING MODELS:")
+			models := []string{"freemium", "trial", "annual_upfront", "usage_based", "tiered"}
+			for i, model := range models {
+				fmt.Printf("%d. %s\n", i+1, model)
+				fmt.Printf("   %s\n", founder.GetPricingModelDescription(model))
+			}
+
+			fmt.Print("\nSelect model (1-" + fmt.Sprintf("%d", len(models)) + "): ")
+			modelChoice, _ := reader.ReadString('\n')
+			modelChoice = strings.TrimSpace(modelChoice)
+			modelNum, err := strconv.Atoi(modelChoice)
+			if err != nil || modelNum < 1 || modelNum > len(models) {
+				color.Red("\nInvalid choice!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			selectedModel := models[modelNum-1]
+
+			// Ask about annual billing
+			fmt.Print("\nOffer annual billing? (yes/no): ")
+			annualChoice, _ := reader.ReadString('\n')
+			annualChoice = strings.TrimSpace(strings.ToLower(annualChoice))
+			isAnnual := annualChoice == "yes" || annualChoice == "y"
+
+			discount := 0.0
+			if isAnnual {
+				fmt.Print("Annual discount (0-20%): ")
+				discountStr, _ := reader.ReadString('\n')
+				discountStr = strings.TrimSpace(discountStr)
+				discountNum, err := strconv.ParseFloat(discountStr, 64)
+				if err == nil && discountNum >= 0 && discountNum <= 20 {
+					discount = discountNum / 100.0
+				}
+			}
+
+			err = fs.ChangePricingModel(selectedModel, isAnnual, discount)
+			if err != nil {
+				color.Red("\n✗ Error: %v", err)
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			green.Printf("\n✓ Changed to %s model!\n", selectedModel)
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "2":
+			// Increase prices
+			fmt.Print("\nIncrease prices by what percentage? (1-50%): ")
+			percentStr, _ := reader.ReadString('\n')
+			percentStr = strings.TrimSpace(percentStr)
+			percentNum, err := strconv.ParseFloat(percentStr, 64)
+			if err != nil || percentNum < 1 || percentNum > 50 {
+				color.Red("\nInvalid percentage!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			percentage := percentNum / 100.0
+
+			yellow.Printf("\n⚠️  Increasing prices by %.0f%% will:\n", percentage*100)
+			fmt.Printf("  • Increase MRR by ~%.0f%%\n", percentage*100)
+			fmt.Printf("  • Increase churn risk by %.1f%%\n", (0.03+percentage*0.05)*100)
+			fmt.Print("\nConfirm (yes/no): ")
+			confirm, _ := reader.ReadString('\n')
+			confirm = strings.TrimSpace(strings.ToLower(confirm))
+			if confirm != "yes" && confirm != "y" {
+				fmt.Println("\nPrice increase cancelled")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			err = fs.IncreasePrices(percentage)
+			if err != nil {
+				color.Red("\n✗ Error: %v", err)
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			green.Printf("\n✓ Prices increased by %.0f%%!\n", percentage*100)
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "3":
+			// Decrease prices
+			fmt.Print("\nDecrease prices by what percentage? (1-50%): ")
+			percentStr, _ := reader.ReadString('\n')
+			percentStr = strings.TrimSpace(percentStr)
+			percentNum, err := strconv.ParseFloat(percentStr, 64)
+			if err != nil || percentNum < 1 || percentNum > 50 {
+				color.Red("\nInvalid percentage!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			percentage := percentNum / 100.0
+
+			yellow.Printf("\n⚠️  Decreasing prices by %.0f%% will:\n", percentage*100)
+			fmt.Printf("  • Decrease MRR by ~%.0f%%\n", percentage*100)
+			fmt.Printf("  • Reduce churn risk by %.1f%%\n", (percentage*0.03)*100)
+			fmt.Print("\nConfirm (yes/no): ")
+			confirm, _ := reader.ReadString('\n')
+			confirm = strings.TrimSpace(strings.ToLower(confirm))
+			if confirm != "yes" && confirm != "y" {
+				fmt.Println("\nPrice decrease cancelled")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			err = fs.DecreasePrices(percentage)
+			if err != nil {
+				color.Red("\n✗ Error: %v", err)
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			green.Printf("\n✓ Prices decreased by %.0f%%!\n", percentage*100)
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "4":
+			if fs.ActiveExperiment != nil && !fs.ActiveExperiment.IsComplete {
+				color.Red("\nAlready running an experiment!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			// Run pricing experiment
+			fmt.Print("\nExperiment name: ")
+			name, _ := reader.ReadString('\n')
+			name = strings.TrimSpace(name)
+
+			fmt.Println("\nSelect model to test:")
+			models := []string{"freemium", "trial", "annual_upfront", "usage_based", "tiered"}
+			for i, model := range models {
+				fmt.Printf("%d. %s\n", i+1, model)
+			}
+			fmt.Print("\nChoice (1-" + fmt.Sprintf("%d", len(models)) + "): ")
+			modelChoice, _ := reader.ReadString('\n')
+			modelChoice = strings.TrimSpace(modelChoice)
+			modelNum, err := strconv.Atoi(modelChoice)
+			if err != nil || modelNum < 1 || modelNum > len(models) {
+				color.Red("\nInvalid choice!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+			testModel := models[modelNum-1]
+
+			// Cost and duration
+			cost := int64(20000 + rand.Intn(30000)) // $20-50k
+			duration := 2 + rand.Intn(2)            // 2-3 months
+
+			fmt.Printf("\nExperiment cost: $%s\n", formatFounderCurrency(cost))
+			fmt.Printf("Duration: %d months\n", duration)
+			fmt.Print("\nStart experiment? (yes/no): ")
+			confirm, _ := reader.ReadString('\n')
+			confirm = strings.TrimSpace(strings.ToLower(confirm))
+			if confirm != "yes" && confirm != "y" {
+				fmt.Println("\nExperiment cancelled")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			err = fs.StartPricingExperiment(name, testModel, false, 0.0, cost, duration)
+			if err != nil {
+				color.Red("\n✗ Error: %v", err)
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			green.Printf("\n✓ Started experiment '%s'! Results in %d months\n", name, duration)
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "5":
+			if fs.ActiveExperiment == nil || !fs.ActiveExperiment.IsComplete {
+				color.Red("\nNo completed experiment to apply!")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			// Show results summary
+			results := fs.ActiveExperiment.Results
+			yellow.Println("\n⚠️  Applying experiment results will:")
+			fmt.Printf("  • Change model from %s to %s\n", fs.PricingStrategy.Model, fs.ActiveExperiment.TestStrategy.Model)
+			fmt.Printf("  • Conversion rate: %+.1f%%\n", results.ConversionRateChange*100)
+			fmt.Printf("  • Deal size: %+$%s\n", formatFounderCurrency(results.AvgDealSizeChange))
+			fmt.Printf("  • Churn rate: %+.1f%%\n", results.ChurnRateChange*100)
+			fmt.Print("\nApply results? (yes/no): ")
+			confirm, _ := reader.ReadString('\n')
+			confirm = strings.TrimSpace(strings.ToLower(confirm))
+			if confirm != "yes" && confirm != "y" {
+				fmt.Println("\nApplication cancelled")
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			err := fs.ApplyExperimentResults()
+			if err != nil {
+				color.Red("\n✗ Error: %v", err)
+				fmt.Print("\nPress 'Enter' to continue...")
+				bufio.NewReader(os.Stdin).ReadBytes('\n')
+				continue
+			}
+
+			green.Println("\n✓ Experiment results applied!")
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+		case "0":
+			return true // Return to monthly menu
+
+		default:
+			color.Red("\nInvalid choice!")
+			fmt.Print("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+		}
+	}
+}
+
+// handleViewSalesPipeline displays the sales pipeline and deal funnel
+func handleViewSalesPipeline(fs *founder.FounderState) {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                      SALES PIPELINE 📊")
+	cyan.Println(strings.Repeat("=", 70))
+
+	if fs.SalesPipeline == nil {
+		fmt.Println("\nNo sales pipeline data available yet.")
+		fmt.Print("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return
+	}
+
+	// Get pipeline metrics
+	metrics := fs.GetPipelineMetrics()
+	
+	// Display overview
+	fmt.Println("\n📈 PIPELINE OVERVIEW")
+	fmt.Println(strings.Repeat("─", 70))
+	fmt.Printf("Active Deals: %d\n", metrics["activeDeals"])
+	fmt.Printf("Pipeline Value: $%s/month\n", formatFounderCurrency(metrics["pipelineValue"].(int64)))
+	fmt.Printf("Weighted Value: $%s/month (probability-adjusted)\n", formatFounderCurrency(metrics["weightedValue"].(int64)))
+	fmt.Printf("Win Rate: %.1f%%\n", metrics["winRate"].(float64)*100)
+	fmt.Printf("New Leads/Month: %d\n", metrics["leadsPerMonth"])
+
+	// Display funnel
+	fmt.Println("\n🎯 SALES FUNNEL")
+	fmt.Println(strings.Repeat("─", 70))
+	stageCounts := metrics["stageCounts"].(map[string]int)
+	
+	stages := []string{"lead", "qualified", "demo", "negotiation"}
+	stageNames := map[string]string{
+		"lead":        "📞 Leads",
+		"qualified":   "✅ Qualified",
+		"demo":        "🎭 Demo",
+		"negotiation": "🤝 Negotiation",
+	}
+
+	for _, stage := range stages {
+		count := stageCounts[stage]
+		icon := stageNames[stage]
+		fmt.Printf("%s: %d deals\n", icon, count)
+		
+		// Show ASCII bar
+		barWidth := count
+		if barWidth > 40 {
+			barWidth = 40
+		}
+		bar := strings.Repeat("█", barWidth)
+		if count > 0 {
+			fmt.Printf("  %s\n", bar)
+		}
+	}
+
+	// Display top deals
+	fmt.Println("\n🏆 TOP OPPORTUNITIES")
+	fmt.Println(strings.Repeat("─", 70))
+	
+	// Get all deals and sort by value * probability
+	type dealScore struct {
+		deal  founder.Deal
+		score float64
+	}
+	
+	var scoredDeals []dealScore
+	for _, deal := range fs.SalesPipeline.ActiveDeals {
+		score := float64(deal.DealSize) * deal.CloseProbability
+		scoredDeals = append(scoredDeals, dealScore{deal, score})
+	}
+	
+	// Sort by score (bubble sort for simplicity)
+	for i := 0; i < len(scoredDeals); i++ {
+		for j := i + 1; j < len(scoredDeals); j++ {
+			if scoredDeals[j].score > scoredDeals[i].score {
+				scoredDeals[i], scoredDeals[j] = scoredDeals[j], scoredDeals[i]
+			}
+		}
+	}
+	
+	// Show top 5
+	displayCount := 5
+	if len(scoredDeals) < 5 {
+		displayCount = len(scoredDeals)
+	}
+	
+	for i := 0; i < displayCount; i++ {
+		deal := scoredDeals[i].deal
+		probBar := createProgressBar(int(deal.CloseProbability*100), 20)
+		
+		fmt.Printf("\n%d. %s - $%s/mo (%s)\n",
+			i+1, deal.CompanyName, formatFounderCurrency(deal.DealSize), deal.Segment)
+		fmt.Printf("   Stage: %s | Probability: %s %.0f%%\n",
+			deal.Stage, probBar, deal.CloseProbability*100)
+		fmt.Printf("   Rep: %s | Days in stage: %d\n", deal.AssignedSalesRep, deal.DaysInStage)
+	}
+
+	// Display win/loss analysis
+	if len(fs.SalesPipeline.ClosedDeals) > 0 {
+		fmt.Println("\n📉 WIN/LOSS ANALYSIS")
+		fmt.Println(strings.Repeat("─", 70))
+		
+		wonCount := 0
+		lostCount := 0
+		for _, deal := range fs.SalesPipeline.ClosedDeals {
+			if deal.Stage == "closed_won" {
+				wonCount++
+			} else if deal.Stage == "closed_lost" {
+				lostCount++
+			}
+		}
+		
+		green.Printf("Won: %d deals\n", wonCount)
+		yellow.Printf("Lost: %d deals\n", lostCount)
+		
+		// Show top lost reasons
+		lostReasons := fs.GetWinLossReasons()
+		if len(lostReasons) > 0 {
+			fmt.Println("\nTop reasons for losses:")
+			
+			// Convert to slice and sort
+			type reasonCount struct {
+				reason string
+				count  int
+			}
+			var reasons []reasonCount
+			for reason, count := range lostReasons {
+				reasons = append(reasons, reasonCount{reason, count})
+			}
+			
+			// Sort by count
+			for i := 0; i < len(reasons); i++ {
+				for j := i + 1; j < len(reasons); j++ {
+					if reasons[j].count > reasons[i].count {
+						reasons[i], reasons[j] = reasons[j], reasons[i]
+					}
+				}
+			}
+			
+			// Show top 3
+			displayCount := 3
+			if len(reasons) < 3 {
+				displayCount = len(reasons)
+			}
+			for i := 0; i < displayCount; i++ {
+				fmt.Printf("  • %s: %d times\n", reasons[i].reason, reasons[i].count)
+			}
+		}
+	}
+
+	fmt.Print("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }

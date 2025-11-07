@@ -62,6 +62,30 @@ type GameStats struct {
 	ExitValuation         int64
 	MonthsToProfitability int
 	RanOutOfCash          bool // True if founder ran out of cash (lost)
+
+	// Phase 1 feature stats
+	FeaturesCompleted          int
+	InnovationLeader           bool
+	EnterpriseFeatures         int
+	CustomerLossDuringRoadmap  bool
+	EnterpriseCustomers        int
+	VerticalConcentration      float64
+	PricingExperimentsCompleted int
+	PremiumPricingSuccess      bool
+	LowTouchCustomers          int
+	DealsClosedWon             int
+	HighProbabilityClose       bool
+	MaxPipelineSize            int
+
+	// Phase 2-3 feature stats
+	ContentLeads             int
+	SEOScore                 int
+	MaxNPS                   int
+	CustomerChurnRate        float64
+	IntelReportsCommissioned int
+	TechDebtKeptLow          bool
+	MajorMediaMentions       int
+	BoardPressureKeptLow     bool
 	
 	// Career stats
 	TotalGames      int
@@ -518,6 +542,188 @@ var AllAchievements = map[string]Achievement{
 		Rarity:      RarityLegendary,
 		Hidden:      true,
 	},
+
+	// Phase 1: Product Roadmap Achievements
+	"feature_factory": {
+		ID:          "feature_factory",
+		Name:        "Feature Factory",
+		Description: "Complete 10 product features",
+		Icon:        "🔨",
+		Category:    CategoryStrategy,
+		Points:      30,
+		Rarity:      RarityRare,
+	},
+	"innovation_leader": {
+		ID:          "innovation_leader",
+		Name:        "Innovation Leader",
+		Description: "Complete a feature before any competitor",
+		Icon:        "🚀",
+		Category:    CategoryStrategy,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+	"perfect_roadmap": {
+		ID:          "perfect_roadmap",
+		Name:        "Perfect Roadmap",
+		Description: "Complete all enterprise features with no customer losses",
+		Icon:        "🎯",
+		Category:    CategoryChallenge,
+		Points:      50,
+		Rarity:      RarityLegendary,
+		Hidden:      true,
+	},
+
+	// Phase 1: Customer Segmentation Achievements
+	"enterprise_champion": {
+		ID:          "enterprise_champion",
+		Name:        "Enterprise Champion",
+		Description: "Acquire 100+ enterprise customers",
+		Icon:        "👔",
+		Category:    CategoryWealth,
+		Points:      35,
+		Rarity:      RarityEpic,
+	},
+	"vertical_domination": {
+		ID:          "vertical_domination",
+		Name:        "Vertical Domination",
+		Description: "Have 80% of customers in one vertical",
+		Icon:        "🎯",
+		Category:    CategoryStrategy,
+		Points:      45,
+		Rarity:      RarityEpic,
+	},
+
+	// Phase 1: Pricing Strategy Achievements
+	"pricing_wizard": {
+		ID:          "pricing_wizard",
+		Name:        "Pricing Wizard",
+		Description: "Run 3 successful pricing experiments",
+		Icon:        "🧪",
+		Category:    CategoryStrategy,
+		Points:      30,
+		Rarity:      RarityRare,
+	},
+	"premium_positioning": {
+		ID:          "premium_positioning",
+		Name:        "Premium Positioning",
+		Description: "Charge 2x market rate and maintain growth",
+		Icon:        "💎",
+		Category:    CategoryWealth,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+	"volume_play": {
+		ID:          "volume_play",
+		Name:        "Volume Play",
+		Description: "Have 500+ customers on low-touch plan",
+		Icon:        "📊",
+		Category:    CategoryPerformance,
+		Points:      35,
+		Rarity:      RarityRare,
+	},
+
+	// Phase 1: Sales Pipeline Achievements
+	"sales_machine": {
+		ID:          "sales_machine",
+		Name:        "Sales Machine",
+		Description: "Close 50 deals in one game",
+		Icon:        "🤝",
+		Category:    CategoryPerformance,
+		Points:      30,
+		Rarity:      RarityRare,
+	},
+	"perfect_close": {
+		ID:          "perfect_close",
+		Name:        "Perfect Close",
+		Description: "Close a deal with 90%+ probability",
+		Icon:        "💯",
+		Category:    CategoryPerformance,
+		Points:      25,
+		Rarity:      RarityRare,
+	},
+	"pipeline_master": {
+		ID:          "pipeline_master",
+		Name:        "Pipeline Master",
+		Description: "Maintain 100+ deals in pipeline simultaneously",
+		Icon:        "📈",
+		Category:    CategoryStrategy,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+
+	// Phase 2-3 Achievements
+	"content_machine": {
+		ID:          "content_machine",
+		Name:        "Content Machine",
+		Description: "Generate 1000+ inbound leads from content",
+		Icon:        "📝",
+		Category:    CategoryStrategy,
+		Points:      35,
+		Rarity:      RarityRare,
+	},
+	"seo_master": {
+		ID:          "seo_master",
+		Name:        "SEO Master",
+		Description: "Achieve SEO score of 90+",
+		Icon:        "🔍",
+		Category:    CategoryStrategy,
+		Points:      30,
+		Rarity:      RarityRare,
+	},
+	"customer_champion": {
+		ID:          "customer_champion",
+		Name:        "Customer Champion",
+		Description: "Achieve NPS of 70+",
+		Icon:        "⭐",
+		Category:    CategoryPerformance,
+		Points:      35,
+		Rarity:      RarityEpic,
+	},
+	"churn_slayer": {
+		ID:          "churn_slayer",
+		Name:        "Churn Slayer",
+		Description: "Reduce churn below 2%",
+		Icon:        "🛡️",
+		Category:    CategoryPerformance,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+	"know_thy_enemy": {
+		ID:          "know_thy_enemy",
+		Name:        "Know Thy Enemy",
+		Description: "Commission 10 competitive intel reports",
+		Icon:        "🔬",
+		Category:    CategoryStrategy,
+		Points:      30,
+		Rarity:      RarityRare,
+	},
+	"technical_excellence": {
+		ID:          "technical_excellence",
+		Name:        "Technical Excellence",
+		Description: "Keep tech debt below 20 for 12 months",
+		Icon:        "⚙️",
+		Category:    CategoryChallenge,
+		Points:      45,
+		Rarity:      RarityEpic,
+	},
+	"media_darling": {
+		ID:          "media_darling",
+		Name:        "Media Darling",
+		Description: "Featured in 5+ major outlets",
+		Icon:        "📰",
+		Category:    CategoryStrategy,
+		Points:      35,
+		Rarity:      RarityEpic,
+	},
+	"board_whisperer": {
+		ID:          "board_whisperer",
+		Name:        "Board Whisperer",
+		Description: "Maintain board pressure below 30 for 12 months",
+		Icon:        "🤝",
+		Category:    CategoryStrategy,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
 	
 	// Diversification Chain
 	"diversified_starter": {
@@ -891,6 +1097,57 @@ func checkAchievement(id string, stats GameStats) bool {
 		return stats.GameMode == "founder" && stats.Customers >= 10000
 	case "bootstrapped":
 		return stats.GameMode == "founder" && stats.FinalMRR >= 100000 && stats.FundingRoundsRaised == 0
+	
+	// Phase 1: Product Roadmap
+	case "feature_factory":
+		// Note: Need to add FeaturesCompleted to GameStats
+		return stats.GameMode == "founder" && stats.FeaturesCompleted >= 10
+	case "innovation_leader":
+		// Note: Track if any feature completed before competitors launched same
+		return stats.GameMode == "founder" && stats.InnovationLeader
+	case "perfect_roadmap":
+		// Note: Track enterprise features completed and customer losses
+		return stats.GameMode == "founder" && stats.EnterpriseFeatures >= 3 && stats.CustomerLossDuringRoadmap == false
+
+	// Phase 1: Customer Segmentation
+	case "enterprise_champion":
+		return stats.GameMode == "founder" && stats.EnterpriseCustomers >= 100
+	case "vertical_domination":
+		return stats.GameMode == "founder" && stats.VerticalConcentration >= 0.80
+
+	// Phase 1: Pricing Strategy
+	case "pricing_wizard":
+		return stats.GameMode == "founder" && stats.PricingExperimentsCompleted >= 3
+	case "premium_positioning":
+		return stats.GameMode == "founder" && stats.PremiumPricingSuccess
+	case "volume_play":
+		return stats.GameMode == "founder" && stats.LowTouchCustomers >= 500
+
+	// Phase 1: Sales Pipeline
+	case "sales_machine":
+		return stats.GameMode == "founder" && stats.DealsClosedWon >= 50
+	case "perfect_close":
+		return stats.GameMode == "founder" && stats.HighProbabilityClose
+	case "pipeline_master":
+		return stats.GameMode == "founder" && stats.MaxPipelineSize >= 100
+
+	// Phase 2-3
+	case "content_machine":
+		return stats.GameMode == "founder" && stats.ContentLeads >= 1000
+	case "seo_master":
+		return stats.GameMode == "founder" && stats.SEOScore >= 90
+	case "customer_champion":
+		return stats.GameMode == "founder" && stats.MaxNPS >= 70
+	case "churn_slayer":
+		return stats.GameMode == "founder" && stats.CustomerChurnRate <= 0.02
+	case "know_thy_enemy":
+		return stats.GameMode == "founder" && stats.IntelReportsCommissioned >= 10
+	case "technical_excellence":
+		return stats.GameMode == "founder" && stats.TechDebtKeptLow
+	case "media_darling":
+		return stats.GameMode == "founder" && stats.MajorMediaMentions >= 5
+	case "board_whisperer":
+		return stats.GameMode == "founder" && stats.BoardPressureKeptLow
 	}
 	
 	return false

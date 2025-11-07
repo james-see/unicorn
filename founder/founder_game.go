@@ -1009,6 +1009,47 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 
 	// 7. Process advanced features (affiliates, partnerships, etc.)
 	// These will add more MRR, so we'll compare baseline to final MRR after all processing
+	
+	// Process product roadmap feature development
+	roadmapMsgs := fs.ProcessRoadmapProgress()
+	messages = append(messages, roadmapMsgs...)
+
+	// Process segment focus and vertical targeting
+	segmentMsgs := fs.ProcessSegmentFocus()
+	messages = append(messages, segmentMsgs...)
+
+	// Process pricing experiments and competitor pressure
+	pricingMsgs := fs.ProcessPricingExperiment()
+	messages = append(messages, pricingMsgs...)
+	
+	competitorPricingMsgs := fs.CheckCompetitorPricing()
+	messages = append(messages, competitorPricingMsgs...)
+
+	// Process sales pipeline - generate leads and move deals forward
+	if fs.MRR >= 50000 || fs.Customers >= 20 {
+		newDealsMsgs := fs.GenerateNewDeals()
+		messages = append(messages, newDealsMsgs...)
+		
+		pipelineMsgs := fs.ProcessPipeline()
+		messages = append(messages, pipelineMsgs...)
+	}
+
+	// Process content marketing
+	contentMsgs := fs.UpdateContentProgram()
+	messages = append(messages, contentMsgs...)
+
+	// Process customer success playbooks
+	csMsgs := fs.UpdateCSPlaybooks()
+	messages = append(messages, csMsgs...)
+
+	// Process technical debt accumulation
+	debtMsgs := fs.AccumulateTechnicalDebt()
+	messages = append(messages, debtMsgs...)
+
+	// Process PR campaigns
+	prMsgs := fs.UpdatePRProgram()
+	messages = append(messages, prMsgs...)
+
 	partnershipMsgs := fs.UpdatePartnerships()
 	messages = append(messages, partnershipMsgs...)
 
