@@ -1,5 +1,39 @@
 # Changelog
 
+## Version 3.28.0 - Game End Screen Flow Fix & Level-Up Points System (2025-11-06)
+
+### Major Features Added
+
+#### 💰 Level-Up Points System
+- **Points for Leveling Up**: Players now earn points when leveling up (10 × newLevel points)
+- **Persistent Points**: Level-up points are stored in database and persist across sessions
+- **Points Display**: Level-up screen now shows points earned from leveling up
+- **Upgrade Purchases**: Level-up points can be spent on upgrades just like achievement points
+- **Continuous Progression**: Players continue earning points even after unlocking all achievements
+- **Database Migration**: Added `level_up_points` column to `player_profiles` table
+- **Implementation**: Modified `AddExperience()` in `database/database.go` to award and track level-up points
+
+### Bug Fixes
+
+#### 🎮 Game End Screen Flow (Founder Mode)
+- **Fixed Screen Jump**: Added pause at end of `displayFounderFinalScore()` before showing achievements/progression
+- **Better UX**: Players can now properly review final score screen (including equity payouts) before moving to level up screen
+- **Implementation**: Added "Press 'Enter' to see achievements and progression..." prompt in `ui/founder_ui.go`
+
+### User Experience Improvements
+- **Points Visibility**: Level-up points are now included in all point calculations and displays
+- **Clear Feedback**: Points earned from level ups are clearly displayed in the level-up celebration screen
+- **Consistent Points**: All UI screens now correctly show total points (achievements + level-ups)
+
+### Technical Changes
+- **Database Schema**: Added `level_up_points` column to `player_profiles` table with migration
+- **Function Signature**: Updated `AddExperience()` to return points earned from level ups
+- **UI Updates**: Updated all point calculation locations to include level-up points:
+  - `ui/achievements_ui.go` (VC mode)
+  - `ui/founder_ui.go` (Founder mode)
+  - `ui/main_menu.go` (Upgrade menu)
+- **Display Updates**: Updated `DisplayLevelUp()` to show points earned
+
 ## Version 3.27.0 - Board Table Visualization, Enhanced Competitor System & Chairman Delegation (2025-11-06)
 
 ### Major Features Added

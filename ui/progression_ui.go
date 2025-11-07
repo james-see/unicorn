@@ -13,12 +13,13 @@ import (
 )
 
 // DisplayLevelUp shows a celebration screen when player levels up
-func DisplayLevelUp(playerName string, oldLevel, newLevel int, unlocks []string) {
+func DisplayLevelUp(playerName string, oldLevel, newLevel int, unlocks []string, pointsEarned int) {
 	clear.ClearIt()
 	
 	cyan := color.New(color.FgCyan, color.Bold)
 	yellow := color.New(color.FgYellow, color.Bold)
 	green := color.New(color.FgGreen, color.Bold)
+	magenta := color.New(color.FgMagenta, color.Bold)
 	
 	// Level up banner
 	cyan.Println("\n" + strings.Repeat("=", 70))
@@ -30,6 +31,12 @@ func DisplayLevelUp(playerName string, oldLevel, newLevel int, unlocks []string)
 	green.Printf("   Level %d ", oldLevel)
 	fmt.Print("→ ")
 	yellow.Printf("Level %d\n", newLevel)
+	
+	// Show points earned
+	if pointsEarned > 0 {
+		fmt.Println()
+		magenta.Printf("   💰 Points Earned: +%d points\n", pointsEarned)
+	}
 	
 	// Show new title
 	levelInfo := progression.GetLevelInfo(newLevel)

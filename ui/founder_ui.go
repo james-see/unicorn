@@ -1592,6 +1592,11 @@ func displayFounderFinalScore(fs *founder.FounderState) {
 		}
 		green.Printf("   Total Raised: $%s\n", formatFounderCurrency(totalRaised))
 	}
+
+	// Pause to let user review final score before showing achievements/progression
+	fmt.Println()
+	fmt.Print("\nPress 'Enter' to see achievements and progression...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 func askToSubmitFounderToGlobalLeaderboard(fs *founder.FounderState) {
@@ -3243,7 +3248,7 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 	oldLevel := profileBefore.Level
 	
 	// Add XP to player profile
-	leveledUp, newLevel, err := db.AddExperience(fs.FounderName, xpEarned)
+	leveledUp, newLevel, levelUpPoints, err := db.AddExperience(fs.FounderName, xpEarned)
 	if err != nil {
 		color.Yellow("\nWarning: Could not add XP: %v", err)
 	} else {
@@ -3287,7 +3292,7 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 		// Show level up screen if leveled up
 		if leveledUp {
 			levelInfo := progression.GetLevelInfo(newLevel)
-			DisplayLevelUp(fs.FounderName, oldLevel, newLevel, levelInfo.Unlocks)
+			DisplayLevelUp(fs.FounderName, oldLevel, newLevel, levelInfo.Unlocks, levelUpPoints)
 		} else {
 			// Show progress towards next level
 			profileAfter, _ := db.GetPlayerProfile(fs.FounderName)
@@ -3305,6 +3310,12 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 		if ach, exists := achievements.AllAchievements[id]; exists {
 			totalLifetimePoints += ach.Points
 		}
+	}
+	
+	// Add level-up points
+	profile, _ := db.GetPlayerProfile(fs.FounderName)
+	if profile != nil {
+		totalLifetimePoints += profile.LevelUpPoints
 	}
 
 	// Get owned upgrades to calculate available balance

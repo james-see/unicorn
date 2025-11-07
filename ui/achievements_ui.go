@@ -132,7 +132,7 @@ func CheckAndUnlockAchievements(gs *game.GameState) {
 	oldLevel := profileBefore.Level
 	
 	// Add XP to player profile
-	leveledUp, newLevel, err := database.AddExperience(gs.PlayerName, xpEarned)
+	leveledUp, newLevel, levelUpPoints, err := database.AddExperience(gs.PlayerName, xpEarned)
 	if err != nil {
 		color.Yellow("\nWarning: Could not add XP: %v", err)
 	} else {
@@ -174,7 +174,7 @@ func CheckAndUnlockAchievements(gs *game.GameState) {
 		// Show level up screen if leveled up
 		if leveledUp {
 			levelInfo := progression.GetLevelInfo(newLevel)
-			DisplayLevelUp(gs.PlayerName, oldLevel, newLevel, levelInfo.Unlocks)
+			DisplayLevelUp(gs.PlayerName, oldLevel, newLevel, levelInfo.Unlocks, levelUpPoints)
 		} else {
 			// Show progress towards next level
 			profileAfter, _ := database.GetPlayerProfile(gs.PlayerName)
@@ -192,6 +192,12 @@ func CheckAndUnlockAchievements(gs *game.GameState) {
 		if ach, exists := achievements.AllAchievements[id]; exists {
 			totalLifetimePoints += ach.Points
 		}
+	}
+	
+	// Add level-up points
+	profile, _ := database.GetPlayerProfile(gs.PlayerName)
+	if profile != nil {
+		totalLifetimePoints += profile.LevelUpPoints
 	}
 
 	// Get owned upgrades to calculate available balance

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -130,6 +131,17 @@ func InitDB(dbPath string) error {
 	_, err = db.Exec(createTablesSQL)
 	if err != nil {
 		return fmt.Errorf("failed to create tables: %v", err)
+	}
+
+	// Add level_up_points column if it doesn't exist (migration)
+	_, err = db.Exec(`
+		ALTER TABLE player_profiles 
+		ADD COLUMN level_up_points INTEGER DEFAULT 0
+	`)
+	// Ignore error if column already exists
+	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		// Only return error if it's not a "column already exists" error
+		return fmt.Errorf("failed to add level_up_points column: %v", err)
 	}
 
 	return nil
@@ -659,6 +671,7 @@ type PlayerProfile struct {
 	Level              int
 	ExperiencePoints   int
 	TotalPointsEarned  int
+	LevelUpPoints      int // Points earned from leveling up
 	NextLevelXP        int
 	ProgressPercent    float64
 	CreatedAt          time.Time
@@ -669,7 +682,7 @@ type PlayerProfile struct {
 func GetPlayerProfile(playerName string) (*PlayerProfile, error) {
 	// Try to get existing profile
 	query := `
-		SELECT player_name, level, experience_points, total_points_earned, created_at, last_played
+		SELECT player_name, level, experience_points, total_points_earned, COALESCE(level_up_points, 0), created_at, last_played
 		FROM player_profiles
 		WHERE player_name = ?
 	`
@@ -680,6 +693,7 @@ func GetPlayerProfile(playerName string) (*PlayerProfile, error) {
 		&profile.Level,
 		&profile.ExperiencePoints,
 		&profile.TotalPointsEarned,
+		&profile.LevelUpPoints,
 		&profile.CreatedAt,
 		&profile.LastPlayed,
 	)
@@ -687,8 +701,8 @@ func GetPlayerProfile(playerName string) (*PlayerProfile, error) {
 	if err == sql.ErrNoRows {
 		// Create new profile
 		insertQuery := `
-			INSERT INTO player_profiles (player_name, level, experience_points, total_points_earned)
-			VALUES (?, 1, 0, 0)
+			INSERT INTO player_profiles (player_name, level, experience_points, total_points_earned, level_up_points)
+			VALUES (?, 1, 0, 0, 0)
 		`
 		_, err := db.Exec(insertQuery, playerName)
 		if err != nil {
@@ -701,6 +715,7 @@ func GetPlayerProfile(playerName string) (*PlayerProfile, error) {
 			Level:              1,
 			ExperiencePoints:   0,
 			TotalPointsEarned:  0,
+			LevelUpPoints:      0,
 			CreatedAt:          time.Now(),
 			LastPlayed:         time.Now(),
 		}
@@ -731,17 +746,19 @@ func GetLevelRequirement(level int) int {
 }
 
 // AddExperience adds XP to a player and handles level ups
-func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel int, err error) {
+// Returns: leveledUp, newLevel, pointsEarned (from level ups), error
+func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel int, pointsEarned int, err error) {
 	// Get current profile
 	profile, err := GetPlayerProfile(playerName)
 	if err != nil {
-		return false, 0, err
+		return false, 0, 0, err
 	}
 	
 	// Add XP
 	newXP := profile.ExperiencePoints + xpAmount
 	newTotal := profile.TotalPointsEarned + xpAmount
 	currentLevel := profile.Level
+	totalPointsEarned := 0
 	
 	// Check for level ups
 	for {
@@ -751,6 +768,10 @@ func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel in
 			newXP -= requiredXP
 			leveledUp = true
 			
+			// Award points for leveling up: 10 * newLevel
+			levelUpPoints := 10 * currentLevel
+			totalPointsEarned += levelUpPoints
+			
 			// Record level up in history
 			historyQuery := `
 				INSERT INTO player_level_history (player_name, level, reached_at)
@@ -758,25 +779,40 @@ func AddExperience(playerName string, xpAmount int) (leveledUp bool, newLevel in
 			`
 			_, err := db.Exec(historyQuery, playerName, currentLevel)
 			if err != nil {
-				return false, 0, fmt.Errorf("failed to record level history: %v", err)
+				return false, 0, 0, fmt.Errorf("failed to record level history: %v", err)
 			}
 		} else {
 			break
 		}
 	}
 	
+	// Calculate new level_up_points total
+	newLevelUpPoints := profile.LevelUpPoints + totalPointsEarned
+	
 	// Update profile
 	updateQuery := `
 		UPDATE player_profiles
-		SET level = ?, experience_points = ?, total_points_earned = ?, last_played = CURRENT_TIMESTAMP
+		SET level = ?, experience_points = ?, total_points_earned = ?, level_up_points = ?, last_played = CURRENT_TIMESTAMP
 		WHERE player_name = ?
 	`
-	_, err = db.Exec(updateQuery, currentLevel, newXP, newTotal, playerName)
+	_, err = db.Exec(updateQuery, currentLevel, newXP, newTotal, newLevelUpPoints, playerName)
 	if err != nil {
-		return false, 0, fmt.Errorf("failed to update player profile: %v", err)
+		return false, 0, 0, fmt.Errorf("failed to update player profile: %v", err)
 	}
 	
-	return leveledUp, currentLevel, nil
+	return leveledUp, currentLevel, totalPointsEarned, nil
+}
+
+// GetTotalPlayerPoints returns the total points a player has (achievement points + level-up points)
+func GetTotalPlayerPoints(playerName string) (int, error) {
+	// Get level-up points from profile
+	profile, err := GetPlayerProfile(playerName)
+	if err != nil {
+		return 0, err
+	}
+	
+	// Return level-up points (achievement points are calculated in UI)
+	return profile.LevelUpPoints, nil
 }
 
 // UpdateLastPlayed updates the last played timestamp for a player

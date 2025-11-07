@@ -134,6 +134,12 @@ func DisplayUpgradeMenu() {
 			totalLifetimePoints += ach.Points
 		}
 	}
+	
+	// Add level-up points
+	profile, _ := database.GetPlayerProfile(playerName)
+	if profile != nil {
+		totalLifetimePoints += profile.LevelUpPoints
+	}
 
 	// Get owned upgrades
 	ownedUpgrades, err := database.GetPlayerUpgrades(playerName)
@@ -277,6 +283,12 @@ func PurchaseUpgrades(playerName string, totalPoints int, ownedUpgrades []string
 			currentPoints += ach.Points
 		}
 	}
+	
+	// Add level-up points
+	profilePurchase, _ := database.GetPlayerProfile(playerName)
+	if profilePurchase != nil {
+		currentPoints += profilePurchase.LevelUpPoints
+	}
 
 	// Deduct cost of owned upgrades
 	currentOwnedUpgrades, err := database.GetPlayerUpgrades(playerName)
@@ -363,6 +375,12 @@ func PurchaseUpgrades(playerName string, totalPoints int, ownedUpgrades []string
 		if ach, exists := achievements.AllAchievements[id]; exists {
 			newTotalPoints += ach.Points
 		}
+	}
+	
+	// Add level-up points
+	profileRefresh, _ := database.GetPlayerProfile(playerName)
+	if profileRefresh != nil {
+		newTotalPoints += profileRefresh.LevelUpPoints
 	}
 
 	newOwnedUpgrades, errUpgrades := database.GetPlayerUpgrades(playerName)
