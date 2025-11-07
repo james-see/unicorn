@@ -1,6 +1,6 @@
 # Unicorn Game - Feature Roadmap
 
-**Last Updated:** 2025-11-06 (v3.25.0)
+**Last Updated:** 2025-11-06 (v3.27.0)
 
 This document tracks planned features and enhancements for the Unicorn game. Items marked with ✅ are already implemented.
 

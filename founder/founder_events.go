@@ -7,8 +7,9 @@ import (
 
 
 func (fs *FounderState) SpawnCompetitor() *Competitor {
-	// 3% chance per month after month 12
-	if fs.Turn < 12 || rand.Float64() > 0.03 {
+	// 8% chance per month after month 6 (increased from 3% after month 12)
+	// This ensures competitors spawn more reliably
+	if fs.Turn < 6 || rand.Float64() > 0.08 {
 		return nil
 	}
 

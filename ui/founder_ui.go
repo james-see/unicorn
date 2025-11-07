@@ -730,6 +730,9 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		}
 		fmt.Println("10. Expand to New Market")
 		fmt.Println("11. Execute Pivot/Strategy Change")
+		if fs.AffiliateProgram != nil {
+			fmt.Println("11b. End Affiliate Program")
+		}
 		
 		// Strategic opportunities (numbered sequentially)
 		nextOption := 12
@@ -774,6 +777,15 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		fmt.Printf("\nWhat would you like to do? (0-%d): ", maxChoice)
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
+
+		// Check for "11b" to end affiliate program before parsing as integer
+		if choice == "11b" && fs.AffiliateProgram != nil {
+			shouldContinue := handleEndAffiliateProgram(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
 
 		// Parse choice and validate range
 		choiceNum, err := strconv.Atoi(choice)
@@ -2168,6 +2180,10 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 	}
 
 	fmt.Println("\nOptions:")
+	if len(fs.BoardMembers) > 0 || fs.BoardSeats > 1 {
+		magenta := color.New(color.FgMagenta, color.Bold)
+		magenta.Println("0. View Board Table (visual board members display)")
+	}
 	fmt.Println("1. Add Board Seat (costs ~2% from equity pool)")
 	fmt.Println("2. Expand Equity Pool (dilutes you by 1-10%)")
 	green.Println("3. Add Advisor (0.25-1% equity for strategic guidance)")
@@ -2192,7 +2208,7 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 			red.Println("6. Fire Board Member (investor - requires 51%+ ownership)")
 		}
 	}
-	fmt.Println("0. Cancel")
+	fmt.Println("9. Cancel")
 
 	maxOption := "3"
 	if len(fs.BoardMembers) > 0 {
@@ -2293,13 +2309,114 @@ func handleBoardAndEquity(fs *founder.FounderState) bool {
 		handleFireBoardMember(fs)
 
 	case "0":
-		fmt.Println("\nCanceled")
+		handleViewBoardTable(fs)
 		return true
 	default:
 		color.Red("\nInvalid choice!")
 		return true
 	}
 	return false
+}
+
+func handleViewBoardTable(fs *founder.FounderState) {
+	clear.ClearIt()
+	
+	yellow := color.New(color.FgYellow)
+	magenta := color.New(color.FgMagenta, color.Bold)
+	green := color.New(color.FgGreen)
+	red := color.New(color.FgRed)
+	
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	magenta.Println("                    🏛️  BOARD TABLE 🏛️")
+	fmt.Println(strings.Repeat("=", 70))
+	
+	fmt.Printf("\nTotal Board Seats: %d\n", fs.BoardSeats)
+	fmt.Printf("Your Equity: %.2f%%\n", 100.0-fs.EquityPool-fs.EquityGivenAway)
+	fmt.Printf("Equity Pool: %.2f%%\n", fs.EquityPool)
+	
+	// Filter active board members
+	activeMembers := []founder.BoardMember{}
+	chairman := (*founder.BoardMember)(nil)
+	for i := range fs.BoardMembers {
+		if fs.BoardMembers[i].IsActive {
+			activeMembers = append(activeMembers, fs.BoardMembers[i])
+			if fs.BoardMembers[i].IsChairman {
+				chairman = &fs.BoardMembers[i]
+			}
+		}
+	}
+	
+	fmt.Println("\n" + strings.Repeat("-", 70))
+	fmt.Println(ascii.BoardTable)
+	fmt.Println(strings.Repeat("-", 70))
+	
+	if len(activeMembers) == 0 {
+		yellow.Println("\n📭 No board members currently seated.")
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return
+	}
+	
+	// Display board members around the table
+	fmt.Println("\n" + strings.Repeat("-", 70))
+	green.Println("Board Members:")
+	fmt.Println(strings.Repeat("-", 70))
+	
+	// Show chairman first if exists
+	if chairman != nil {
+		magenta.Printf("\n👔 CHAIRMAN:\n")
+		fmt.Printf("   %s (%s)\n", chairman.Name, chairman.Type)
+		expertise := chairman.Expertise
+		if len(expertise) > 0 {
+			expertise = strings.ToUpper(expertise[:1]) + expertise[1:]
+		}
+		fmt.Printf("   Expertise: %s\n", expertise)
+		fmt.Printf("   Equity: %.2f%%\n", chairman.EquityCost)
+		if chairman.ContributionScore > 0 {
+			green.Printf("   Contribution Score: %.0f%%\n", chairman.ContributionScore*100)
+		}
+		fmt.Println()
+	}
+	
+	// Show other members
+	otherMembers := []founder.BoardMember{}
+	for _, member := range activeMembers {
+		if !member.IsChairman {
+			otherMembers = append(otherMembers, member)
+		}
+	}
+	
+	if len(otherMembers) > 0 {
+		fmt.Println("Board Members:")
+		for i, member := range otherMembers {
+			memberType := member.Type
+			if member.Type == "investor" {
+				red.Printf("   %d. %s (%s)\n", i+1, member.Name, memberType)
+			} else {
+				fmt.Printf("   %d. %s (%s)\n", i+1, member.Name, memberType)
+			}
+			expertise := member.Expertise
+			if len(expertise) > 0 {
+				expertise = strings.ToUpper(expertise[:1]) + expertise[1:]
+			}
+			fmt.Printf("      Expertise: %s\n", expertise)
+			fmt.Printf("      Equity: %.2f%%\n", member.EquityCost)
+			if member.ContributionScore > 0 {
+				green.Printf("      Contribution Score: %.0f%%\n", member.ContributionScore*100)
+			}
+			fmt.Println()
+		}
+	}
+	
+	// Show empty seats
+	emptySeats := fs.BoardSeats - len(activeMembers)
+	if emptySeats > 0 {
+		yellow.Printf("\n📭 Empty Seats: %d\n", emptySeats)
+	}
+	
+	fmt.Println(strings.Repeat("-", 70))
+	fmt.Println("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 func handleAddAdvisor(fs *founder.FounderState) {
@@ -2928,6 +3045,9 @@ func handleExitOptions(fs *founder.FounderState) bool {
 		fmt.Printf("   Your Payout: $%s (%.2f%% equity)\n\n", 
 			formatFounderCurrency(selectedExit.FounderPayout), founderEquity)
 		
+		fmt.Println("Press 'Enter' to see final results...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		
 		return false // Game ends
 	}
 
@@ -2965,6 +3085,9 @@ func handleExitOptions(fs *founder.FounderState) bool {
 	green.Printf("\n🎉 Congratulations! You've exited via %s!\n", strings.ToUpper(selectedExit.Type))
 	fmt.Printf("   Company Valuation: $%s\n", formatFounderCurrency(selectedExit.Valuation))
 	fmt.Printf("   Your Payout: $%s\n\n", formatFounderCurrency(selectedExit.FounderPayout))
+	
+	fmt.Println("Press 'Enter' to see final results...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 
 	return false // Game ends, process final month
 }
@@ -3387,6 +3510,90 @@ func handleViewAffiliateProgram(fs *founder.FounderState) {
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
+func handleEndAffiliateProgram(fs *founder.FounderState) bool {
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+	red := color.New(color.FgRed)
+	cyan := color.New(color.FgCyan)
+	reader := bufio.NewReader(os.Stdin)
+
+	if fs.AffiliateProgram == nil {
+		cyan.Println("\nNo affiliate program is running!")
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return true
+	}
+
+	prog := fs.AffiliateProgram
+	
+	// Count active affiliate customers
+	affiliateCustomers := 0
+	var totalAffiliateMRR int64
+	for _, c := range fs.CustomerList {
+		if c.IsActive && c.Source == "affiliate" {
+			affiliateCustomers++
+			totalAffiliateMRR += c.DealSize
+		}
+	}
+
+	fmt.Println("\n" + strings.Repeat("─", 70))
+	yellow.Println("🛑 END AFFILIATE PROGRAM")
+	fmt.Println(strings.Repeat("─", 70))
+
+	fmt.Printf("\nCurrent Program Stats:\n")
+	fmt.Printf("Active Affiliates: %d\n", prog.Affiliates)
+	fmt.Printf("Active Affiliate Customers: %d\n", affiliateCustomers)
+	fmt.Printf("Affiliate MRR: $%s/month\n", formatFounderCurrency(totalAffiliateMRR))
+	fmt.Printf("Monthly Platform Fee: $%s\n", formatFounderCurrency(prog.MonthlyPlatformFee))
+
+	fmt.Println("\nWhat would you like to do with affiliate customers?")
+	fmt.Println("1. Transition to Direct Sales (customers stay, no churn)")
+	fmt.Println("2. Let Customers Churn (customers leave when program ends)")
+	fmt.Println("0. Cancel")
+
+	fmt.Print("\nYour choice (0-2): ")
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	if choice == "0" {
+		fmt.Println("\n✓ Keeping affiliate program running...")
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return true
+	}
+
+	transitionCustomers := false
+	if choice == "1" {
+		transitionCustomers = true
+	} else if choice != "2" {
+		red.Println("\nInvalid choice!")
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return true
+	}
+
+	// End the program
+	err := fs.EndAffiliateProgram(transitionCustomers)
+	if err != nil {
+		red.Printf("\n✗ Error: %v\n", err)
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return true
+	}
+
+	if transitionCustomers {
+		green.Printf("\n✓ Affiliate program ended. %d customers transitioned to direct sales.\n", affiliateCustomers)
+		green.Println("   No customer churn - they're now direct customers.")
+	} else {
+		yellow.Printf("\n✓ Affiliate program ended. %d affiliate customers churned.\n", affiliateCustomers)
+		red.Printf("   Lost $%s/month in MRR.\n", formatFounderCurrency(totalAffiliateMRR))
+	}
+
+	fmt.Println("\nPress 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return true // Return to menu (doesn't advance turn)
+}
+
 func handleViewFinancials(fs *founder.FounderState) {
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
@@ -3619,12 +3826,23 @@ func handleStrategicOpportunity(fs *founder.FounderState) bool {
 		fmt.Printf(" (Current cash: $%s)\n", formatFounderCurrency(fs.Cash))
 	}
 
+	// Check if chairman exists and can delegate
+	chairman := fs.GetChairman()
+	hasChairman := chairman != nil && chairman.IsActive && chairman.IsChairman
+	
 	fmt.Println("\nOptions:")
 	fmt.Println("1. Accept Opportunity")
 	fmt.Println("2. Decline Opportunity")
+	if hasChairman && (opp.Type == "conference" || opp.Type == "press") {
+		green.Println("3. Delegate to Chairman (saves founder time, chairman handles it)")
+	}
 	fmt.Println("0. Decide Later")
 
-	fmt.Print("\nYour decision (0-2): ")
+	maxOption := 2
+	if hasChairman && (opp.Type == "conference" || opp.Type == "press") {
+		maxOption = 3
+	}
+	fmt.Printf("\nYour decision (0-%d): ", maxOption)
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
@@ -3664,10 +3882,52 @@ func handleStrategicOpportunity(fs *founder.FounderState) bool {
 		}
 
 		fs.PendingOpportunity = nil
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return false
+
+	case "3":
+		// Delegate to chairman (only for conference/press)
+		if !hasChairman || (opp.Type != "conference" && opp.Type != "press") {
+			color.Red("\nInvalid choice")
+			return true
+		}
+		
+		// Check if can afford
+		if opp.Cost > fs.Cash {
+			color.Red("\n✗ Insufficient cash! Need $%s, have $%s",
+				formatFounderCurrency(opp.Cost), formatFounderCurrency(fs.Cash))
+			fmt.Println("\nPress 'Enter' to continue...")
+			bufio.NewReader(os.Stdin).ReadBytes('\n')
+			return true
+		}
+		
+		// Chairman handles it - same benefits but founder saves time
+		fs.Cash -= opp.Cost
+		green.Printf("\n✓ Delegated to %s (Chairman). They'll handle this on your behalf.\n", chairman.Name)
+		green.Println("   You save founder time and can focus on other priorities.")
+		
+		// Apply same effects as accepting, but with chairman bonus
+		switch opp.Type {
+		case "press":
+			newCustomers := 5 + rand.Intn(10)
+			green.Printf("✓ TechCrunch feature published! Expect %d new customers over next 3 months\n", newCustomers)
+		case "conference":
+			green.Println("✓ Conference presentation successful! Leads and recruiting pipeline boosted")
+			green.Println("   Chairman's network connections enhanced the results.")
+		}
+		
+		fs.PendingOpportunity = nil
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return false
 
 	case "2":
 		yellow.Printf("\n✓ Declined: %s\n", opp.Title)
 		fs.PendingOpportunity = nil
+		fmt.Println("\nPress 'Enter' to continue...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		return false
 
 	case "0":
 		fmt.Println("\n✓ Will decide later (opportunity still pending)")
@@ -3677,8 +3937,4 @@ func handleStrategicOpportunity(fs *founder.FounderState) bool {
 		color.Red("\nInvalid choice")
 		return true
 	}
-
-	fmt.Println("\nPress 'Enter' to continue...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
-	return false
 }

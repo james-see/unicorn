@@ -1,5 +1,76 @@
 # Changelog
 
+## Version 3.27.0 - Board Table Visualization, Enhanced Competitor System & Chairman Delegation (2025-11-06)
+
+### Major Features Added
+
+#### 🏛️ Board Table Visualization (Founder Mode)
+- **Visual Board Display**: New "View Board Table" option in Board & Equity menu
+- **ASCII Art Table**: Beautiful ASCII art board table visualization
+- **Member Details**: Shows all board members with:
+  - Name, type (advisor/investor/independent)
+  - Expertise area
+  - Equity percentage
+  - Contribution score
+- **Chairman Highlighting**: Chairman displayed separately with special highlighting
+- **Empty Seats Indicator**: Shows how many board seats are available
+- **Equity Overview**: Displays your equity, equity pool, and total board seats
+- **Implementation**: New `handleViewBoardTable()` function in `ui/founder_ui.go`
+- **Access**: Option "0" in Board & Equity menu when board members exist
+
+#### 🎯 Enhanced Competitor System (Founder Mode)
+- **Earlier Competitor Spawn**: Competitors now spawn starting at month 6 (was month 12)
+- **Higher Spawn Rate**: Increased spawn probability from 3% to 8% per month
+- **More Dynamic Gameplay**: Creates more competitive pressure earlier in the game
+- **Balanced Challenge**: Ensures competitors appear more reliably for strategic gameplay
+- **Implementation**: Updated `SpawnCompetitor()` in `founder/founder_events.go`
+
+#### 👔 Chairman Delegation (Founder Mode)
+- **Strategic Opportunity Delegation**: Chairman can now handle conference and press opportunities
+- **Time Savings**: Delegating to chairman saves founder time while maintaining benefits
+- **Network Bonus**: Chairman's network connections enhance results when delegated
+- **Use Cases**: 
+  - Conference presentations (chairman handles on your behalf)
+  - Press opportunities (chairman manages media relations)
+- **Enhanced Results**: Delegated opportunities get bonus effects from chairman's expertise
+- **Implementation**: Added delegation option in `handleStrategicOpportunity()` function
+
+#### 🛑 End Affiliate Program UI Improvements (Founder Mode)
+- **Menu Integration**: Added "11b. End Affiliate Program" option in main decision menu
+- **Customer Transition Options**: Clear choice between transitioning customers or letting them churn
+- **Better UX**: Improved flow with clear prompts and confirmation
+- **Implementation**: New `handleEndAffiliateProgram()` function with full UI
+
+### User Experience Improvements
+- **Press Enter Prompts**: Added "Press 'Enter' to continue..." prompts after exit options for better flow
+- **Board Table Access**: Easy visual access to board composition
+- **Better Navigation**: Improved menu organization and option numbering
+- **Visual Feedback**: Clear visual indicators for board members and their roles
+
+### Technical Changes
+
+**Modified Files**:
+- `founder/founder_events.go` - Updated competitor spawn logic (earlier spawn, higher rate)
+- `ui/founder_ui.go` - Added board table visualization, chairman delegation, end affiliate program UI, various UX improvements
+
+**New Functions**:
+- `handleViewBoardTable(fs)` - Displays visual board table with all members
+- `handleEndAffiliateProgram(fs)` - Full UI for ending affiliate programs
+
+**Updated Functions**:
+- `SpawnCompetitor()` - Changed spawn timing and probability
+- `handleStrategicOpportunity()` - Added chairman delegation option
+- `handleBoardAndEquity()` - Added board table option
+- `handleExitOptions()` - Added press enter prompts
+
+### Notes
+- Board table visualization makes board management more intuitive
+- Earlier competitor spawn creates more engaging mid-game challenges
+- Chairman delegation provides strategic flexibility for founders
+- All changes maintain backward compatibility
+
+---
+
 ## Version 3.26.0 - VC Firm Name Customization (2025-11-06)
 
 ### Major Features Added
