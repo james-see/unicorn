@@ -100,22 +100,27 @@ func ShowDueDiligenceMenu(gs *game.GameState, startup *game.Startup, amount int6
 	if shouldBlock {
 		fmt.Println()
 		color.Red("⚠️  WARNING: %s\n", blockReason)
-		fmt.Print("\nStill proceed with investment? (y/n): ")
-		input, _ = reader.ReadString('\n')
-		input = strings.ToLower(strings.TrimSpace(input))
+	}
 
-		if input != "y" && input != "yes" {
-			fmt.Println("Investment cancelled. Returning to menu.")
-			gs.Portfolio.Cash += selectedLevel.Cost // Refund DD cost
-			return "cancelled"
-		}
+	// Always give option to proceed or cancel after seeing DD findings
+	fmt.Println()
+	if shouldBlock {
+		fmt.Print("Still proceed with investment? (y/n): ")
+	} else {
+		fmt.Print("Proceed with investment? (y/n): ")
+	}
+	
+	input, _ = reader.ReadString('\n')
+	input = strings.ToLower(strings.TrimSpace(input))
+
+	if input != "y" && input != "yes" {
+		fmt.Println("Investment cancelled. Returning to menu.")
+		gs.Portfolio.Cash += selectedLevel.Cost // Refund DD cost
+		return "cancelled"
 	}
 
 	// Apply findings to startup
 	game.ApplyDDFindings(startup, findings)
-
-	fmt.Print("\nPress Enter to proceed with investment...")
-	reader.ReadBytes('\n')
 
 	return selectedLevel.ID
 }
