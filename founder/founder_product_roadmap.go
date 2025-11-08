@@ -13,6 +13,7 @@ func (fs *FounderState) InitializeProductRoadmap() {
 		AvailableFeatures: getAvailableFeatures(),
 		CompletedCount:    0,
 		InProgressCount:   0,
+		CompetitorLaunches: []CompetitorFeatureLaunch{},
 	}
 }
 
@@ -262,14 +263,54 @@ func (fs *FounderState) ProcessRoadmapProgress() []string {
 				fs.ProductRoadmap.CompletedCount++
 				fs.ProductRoadmap.InProgressCount--
 
+				// Check if competitor launched this feature before player completed it
+				// Map feature names to competitor feature names (normalize for comparison)
+				featureMap := map[string][]string{
+					"REST API": {"API", "REST API", "API Integration"},
+					"Mobile App": {"Mobile App", "Mobile", "iOS App", "Android App"},
+					"Enterprise SSO": {"SSO", "Single Sign-On", "Enterprise SSO"},
+					"Advanced Analytics": {"Analytics", "Advanced Analytics", "Reporting"},
+					"AI/ML Capabilities": {"AI", "ML", "Machine Learning", "Artificial Intelligence"},
+					"Integrations Hub": {"Integrations", "Integration Hub", "API Integration"},
+					"Security Suite": {"Security", "Security Suite", "Enterprise Security"},
+				}
+				
+				// Check if any competitor launched a similar feature before completion
+				competitorLaunchedFirst := false
+				for _, launch := range fs.ProductRoadmap.CompetitorLaunches {
+					// Check if this competitor launch matches the completed feature
+					matchingNames, exists := featureMap[feature.Name]
+					if !exists {
+						// Try direct match
+						matchingNames = []string{feature.Name}
+					}
+					for _, matchName := range matchingNames {
+						if launch.FeatureName == matchName && launch.MonthLaunched < feature.MonthCompleted {
+							competitorLaunchedFirst = true
+							break
+						}
+					}
+					if competitorLaunchedFirst {
+						break
+					}
+				}
+
 				// Apply benefits permanently
 				fs.CustomerChurnRate = math.Max(0.01, fs.CustomerChurnRate-feature.ChurnReduction)
 
-				messages = append(messages, fmt.Sprintf("✅ FEATURE COMPLETE: %s! Churn -%.1f%%, Close Rate +%.0f%%, Deal Size +%.0f%%",
-					feature.Name,
-					feature.ChurnReduction*100,
-					feature.CloseRateIncrease*100,
-					feature.DealSizeIncrease*100))
+				if competitorLaunchedFirst {
+					messages = append(messages, fmt.Sprintf("✅ FEATURE COMPLETE: %s! (Competitors launched similar features earlier) Churn -%.1f%%, Close Rate +%.0f%%, Deal Size +%.0f%%",
+						feature.Name,
+						feature.ChurnReduction*100,
+						feature.CloseRateIncrease*100,
+						feature.DealSizeIncrease*100))
+				} else {
+					messages = append(messages, fmt.Sprintf("✅ FEATURE COMPLETE: %s! 🏆 Innovation Leader! Churn -%.1f%%, Close Rate +%.0f%%, Deal Size +%.0f%%",
+						feature.Name,
+						feature.ChurnReduction*100,
+						feature.CloseRateIncrease*100,
+						feature.DealSizeIncrease*100))
+				}
 			} else {
 				messages = append(messages, fmt.Sprintf("🔨 %s: %d%% complete (%d engineers working)",
 					feature.Name, feature.DevelopmentProgress, feature.AllocatedEngineers))
@@ -294,6 +335,17 @@ func (fs *FounderState) ProcessRoadmapProgress() []string {
 				compName = activeComps[rand.Intn(len(activeComps))].Name
 			}
 		}
+
+		// Track competitor launch for innovation leader tracking
+		if fs.ProductRoadmap == nil {
+			fs.InitializeProductRoadmap()
+		}
+		launch := CompetitorFeatureLaunch{
+			FeatureName:   feature,
+			CompetitorName: compName,
+			MonthLaunched: fs.Turn,
+		}
+		fs.ProductRoadmap.CompetitorLaunches = append(fs.ProductRoadmap.CompetitorLaunches, launch)
 
 		messages = append(messages, fmt.Sprintf("⚠️  %s launched a new %s feature! Consider your product roadmap", compName, feature))
 	}

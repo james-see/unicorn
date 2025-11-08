@@ -1,5 +1,107 @@
 # Changelog
 
+## Version 3.31.0 - Founder Mode Advanced Features & Achievement Tracking (2025-11-08)
+
+### 🌟 MAJOR NEW FEATURES: Founder Mode Advanced Growth & Crisis Management
+
+A comprehensive expansion of Founder Mode with 7 new advanced features covering growth mechanics, platform effects, partnerships, and crisis management systems.
+
+#### 🏢 Startup Acquisitions System
+- **Acquisition Targets**: Generate 1-3 acquisition opportunities quarterly ($2M+ ARR or Series B)
+- **Integration Mechanics**: 3-6 month integration periods with progress tracking
+- **Synergy Bonuses**: 10-50% revenue boost after successful integration
+- **Risk Management**: Low/medium/high risk levels affecting integration success
+- **Customer Retention**: Track customer churn during integration periods
+- **UI Integration**: Full menu system (11d) for viewing and executing acquisitions
+
+#### 🌐 Platform Effects & Network Effects
+- **Platform Types**: Marketplace, Social, Data, Infrastructure platforms
+- **Network Effects**: Activate at customer thresholds (200-1000 customers)
+- **Developer Ecosystem**: Track developers, API usage, third-party apps
+- **Marketplace Revenue**: Commission-based revenue for marketplace platforms
+- **Network Bonuses**: CAC reduction (5-15%), retention boost (2-8%), growth acceleration (5-20%)
+- **UI Integration**: Full menu system (11e) for platform management
+
+#### 🤝 Enhanced Strategic Partnerships & Integrations
+- **Integration Depths**: Surface, Deep, Native integration levels
+- **Revenue Sharing**: 10-20% revenue share for deep/native integrations
+- **Co-Marketing Campaigns**: Launch joint marketing efforts ($10-30k)
+- **Data Sharing**: Enable data partnerships for improved product
+- **CAC & Churn Benefits**: Up to 25% CAC reduction, 5% churn reduction
+- **UI Integration**: Enhanced partnership menu with integration options
+
+#### 🔒 Security Breach & Incident Response
+- **Incident Types**: Data breach, ransomware, DDoS, insider threat, vulnerability
+- **Severity Levels**: Low, medium, high, critical with escalating impacts
+- **Response Actions**: Contain, investigate, notify, defend, resolve
+- **Compliance Certs**: SOC2, ISO27001, HIPAA, GDPR certifications
+- **Security Team**: Hire security professionals to improve posture
+- **Impact**: Customer churn, CAC increases, reputation damage
+- **UI Integration**: Full menu system (11f) for security management
+
+#### 📰 Enhanced PR Crisis Management
+- **Crisis Types**: Scandal, product failure, layoffs, founder drama, competitor attack
+- **Response Strategies**: Deny, apologize, transparent, aggressive
+- **Media Coverage**: TechCrunch, WSJ, Forbes, Bloomberg coverage
+- **Duration**: 1-12 months depending on severity
+- **Brand Damage**: 5-50% brand score reduction
+- **PR Firm Benefits**: +20% effectiveness, 30% cost reduction
+- **UI Integration**: Full menu system (11g) for crisis response
+
+#### 📉 Market Crash & Economic Downturn
+- **Event Types**: Recession, market crash, funding winter, sector crash
+- **Severity Levels**: Mild, moderate, severe, extreme
+- **Survival Strategies**: Cut costs, pivot, downround, extend runway, acquire
+- **Impact**: Growth reduction (30-90%), CAC increases (1.1-1.7x), churn spikes (2-15%)
+- **Duration**: 3-24 months depending on severity
+- **Unlock**: Month 12+ (after initial growth phase)
+- **UI Integration**: Full menu system (11h) for economic strategy
+
+#### 👤 Key Person Risk & Succession Planning
+- **Key Person Assessment**: Automatically assess CEO, CTO, CFO, Head of Sales
+- **Risk Levels**: Low, medium, high based on role importance
+- **Event Types**: Quit, poached, illness, scandal, death
+- **Succession Plans**: Create backup plans with 3-6 month training periods
+- **Impact**: Growth reduction (10-50%), churn increases (3-5%), CAC spikes (20-30%)
+- **Recovery**: 3-6 months to replace, longer without succession plan
+- **Unlock**: $2M+ ARR or 50+ employees
+- **UI Integration**: Full menu system (11i) for succession planning
+
+#### 🎯 Achievement Tracking Enhancements
+- **Innovation Leader**: Track if features completed before competitors launch similar features
+- **Customer Loss During Roadmap**: Track customers churned while features in development
+- **Competitor Launch Tracking**: Record all competitor feature launches with timestamps
+- **Feature Comparison**: Map player features to competitor features for accurate tracking
+
+#### 🎮 VC Mode Enhancements
+- **15 New Startups**: Added startups 31-45.json covering AI/ML, Biotech, Crypto/Web3, ClimateTech, SpaceTech
+- **Expanded Portfolio**: Game now loads and manages 45 total startups (up from 30)
+
+### 🔧 Technical Improvements
+- All new features fully integrated into monthly game loop (`ProcessMonth`)
+- All features initialized in `NewFounderGame()` constructor
+- Complete UI handlers for all 7 new features
+- Achievement system updated with new tracking fields
+- Database schema ready for new achievement types
+
+### 📊 Files Added
+- `founder/founder_acquisitions.go` - Acquisition system
+- `founder/founder_platform.go` - Platform & network effects
+- `founder/founder_partnerships.go` - Enhanced partnerships
+- `founder/founder_security.go` - Security incidents
+- `founder/founder_crisis_pr.go` - PR crisis management
+- `founder/founder_economy.go` - Economic events
+- `founder/founder_succession.go` - Succession planning
+- `startups/31.json` through `startups/45.json` - 15 new startups
+- `FOUNDER_FEATURES_STATUS.md` - Implementation status document
+
+### 🐛 Bug Fixes
+- Fixed InnovationLeader achievement tracking
+- Fixed CustomerLossDuringRoadmap achievement tracking
+- Improved competitor feature launch tracking
+
+---
+
 ## Version 3.30.0 - VC Reputation & Value-Add System (2025-11-07)
 
 ### 🌟 MAJOR NEW SYSTEM: VC Reputation & Operational Excellence

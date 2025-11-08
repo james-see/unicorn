@@ -86,6 +86,31 @@ type GameStats struct {
 	TechDebtKeptLow          bool
 	MajorMediaMentions       int
 	BoardPressureKeptLow     bool
+
+	// Advanced growth mechanics stats
+	AcquisitionsCompleted    int
+	AcquisitionSynergy        float64
+	FastIntegration           bool
+	PlatformLaunched          bool
+	NetworkEffectActivated    bool
+	MarketplaceRevenue        int64
+	DeepIntegrations          int
+	NativeIntegrations        int
+	PartnershipRevenuePercent float64
+
+	// Crisis management stats
+	SecurityScoreMaintained   int
+	SecurityIncidentsResolved  int
+	LowChurnDuringIncident    bool
+	ComplianceCertsAchieved    int
+	PRCrisesNavigated         int
+	BrandScoreMaintained      int
+	EconomicDownturnsSurvived  int
+	FundingWinterRaised       bool
+	MarketShareGained         bool
+	SuccessionPlansCreated     int
+	KeyPersonsRetained         bool
+	KeyPersonReplaced         bool
 	
 	// Career stats
 	TotalGames      int
@@ -724,6 +749,190 @@ var AllAchievements = map[string]Achievement{
 		Points:      40,
 		Rarity:      RarityEpic,
 	},
+
+	// Advanced Growth Mechanics Achievements
+	"serial_acquirer": {
+		ID:          "serial_acquirer",
+		Name:        "Serial Acquirer",
+		Description: "Complete 3 acquisitions",
+		Icon:        "🏢",
+		Category:    CategoryStrategy,
+		Points:      45,
+		Rarity:      RarityEpic,
+	},
+	"synergy_master": {
+		ID:          "synergy_master",
+		Name:        "Synergy Master",
+		Description: "Achieve 50%+ revenue boost from acquisition",
+		Icon:        "⚡",
+		Category:    CategoryPerformance,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"integration_expert": {
+		ID:          "integration_expert",
+		Name:        "Integration Expert",
+		Description: "Complete acquisition integration in <4 months",
+		Icon:        "🔧",
+		Category:    CategoryPerformance,
+		Points:      35,
+		Rarity:      RarityRare,
+	},
+	"platform_builder": {
+		ID:          "platform_builder",
+		Name:        "Platform Builder",
+		Description: "Reach 1000+ customers with platform model",
+		Icon:        "🌐",
+		Category:    CategoryStrategy,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"network_effect": {
+		ID:          "network_effect",
+		Name:        "Network Effect",
+		Description: "Activate strong network effects",
+		Icon:        "🔗",
+		Category:    CategoryStrategy,
+		Points:      45,
+		Rarity:      RarityEpic,
+	},
+	"marketplace_master": {
+		ID:          "marketplace_master",
+		Name:        "Marketplace Master",
+		Description: "Generate $500k+ from marketplace fees",
+		Icon:        "💰",
+		Category:    CategoryWealth,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+	"integration_master": {
+		ID:          "integration_master",
+		Name:        "Integration Master",
+		Description: "Create 10+ deep integrations",
+		Icon:        "🔌",
+		Category:    CategoryStrategy,
+		Points:      35,
+		Rarity:      RarityRare,
+	},
+	"ecosystem_builder": {
+		ID:          "ecosystem_builder",
+		Name:        "Ecosystem Builder",
+		Description: "Generate 30%+ revenue from partnerships",
+		Icon:        "🤝",
+		Category:    CategoryPerformance,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+
+	// Crisis Management Achievements
+	"security_champion": {
+		ID:          "security_champion",
+		Name:        "Security Champion",
+		Description: "Maintain 90+ security score for 12 months",
+		Icon:        "🔒",
+		Category:    CategoryChallenge,
+		Points:      45,
+		Rarity:      RarityEpic,
+	},
+	"incident_response": {
+		ID:          "incident_response",
+		Name:        "Incident Response",
+		Description: "Resolve critical security incident with <5% churn",
+		Icon:        "🛡️",
+		Category:    CategoryChallenge,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"compliance_master": {
+		ID:          "compliance_master",
+		Name:        "Compliance Master",
+		Description: "Achieve all major certifications (SOC2, ISO27001, HIPAA, GDPR)",
+		Icon:        "✅",
+		Category:    CategoryChallenge,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"crisis_manager": {
+		ID:          "crisis_manager",
+		Name:        "Crisis Manager",
+		Description: "Successfully navigate 3+ PR crises",
+		Icon:        "📰",
+		Category:    CategoryChallenge,
+		Points:      45,
+		Rarity:      RarityEpic,
+	},
+	"brand_resilience": {
+		ID:          "brand_resilience",
+		Name:        "Brand Resilience",
+		Description: "Maintain brand score >70 through crisis",
+		Icon:        "💪",
+		Category:    CategoryChallenge,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+	"media_master": {
+		ID:          "media_master",
+		Name:        "Media Master",
+		Description: "Turn PR crisis into positive coverage",
+		Icon:        "📺",
+		Category:    CategoryChallenge,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"recession_survivor": {
+		ID:          "recession_survivor",
+		Name:        "Recession Survivor",
+		Description: "Survive severe economic downturn",
+		Icon:        "📉",
+		Category:    CategoryChallenge,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"funding_winter_warrior": {
+		ID:          "funding_winter_warrior",
+		Name:        "Funding Winter Warrior",
+		Description: "Raise funding during funding winter",
+		Icon:        "❄️",
+		Category:    CategoryChallenge,
+		Points:      55,
+		Rarity:      RarityLegendary,
+	},
+	"market_leader": {
+		ID:          "market_leader",
+		Name:        "Market Leader",
+		Description: "Gain market share during sector crash",
+		Icon:        "👑",
+		Category:    CategoryChallenge,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
+	"succession_ready": {
+		ID:          "succession_ready",
+		Name:        "Succession Ready",
+		Description: "Have succession plans for all key persons",
+		Icon:        "📋",
+		Category:    CategoryStrategy,
+		Points:      40,
+		Rarity:      RarityEpic,
+	},
+	"retention_master": {
+		ID:          "retention_master",
+		Name:        "Retention Master",
+		Description: "Keep all key persons for 60 months",
+		Icon:        "👥",
+		Category:    CategoryChallenge,
+		Points:      45,
+		Rarity:      RarityEpic,
+	},
+	"crisis_leader": {
+		ID:          "crisis_leader",
+		Name:        "Crisis Leader",
+		Description: "Successfully replace key person with <10% impact",
+		Icon:        "🎯",
+		Category:    CategoryChallenge,
+		Points:      50,
+		Rarity:      RarityEpic,
+	},
 	
 	// Diversification Chain
 	"diversified_starter": {
@@ -1148,6 +1357,50 @@ func checkAchievement(id string, stats GameStats) bool {
 		return stats.GameMode == "founder" && stats.MajorMediaMentions >= 5
 	case "board_whisperer":
 		return stats.GameMode == "founder" && stats.BoardPressureKeptLow
+
+	// Advanced Growth Mechanics Achievements
+	case "serial_acquirer":
+		return stats.GameMode == "founder" && stats.AcquisitionsCompleted >= 3
+	case "synergy_master":
+		return stats.GameMode == "founder" && stats.AcquisitionSynergy >= 0.5
+	case "integration_expert":
+		return stats.GameMode == "founder" && stats.FastIntegration
+	case "platform_builder":
+		return stats.GameMode == "founder" && stats.PlatformLaunched && stats.Customers >= 1000
+	case "network_effect":
+		return stats.GameMode == "founder" && stats.NetworkEffectActivated
+	case "marketplace_master":
+		return stats.GameMode == "founder" && stats.MarketplaceRevenue >= 500000
+	case "integration_master":
+		return stats.GameMode == "founder" && stats.DeepIntegrations >= 10
+	case "ecosystem_builder":
+		return stats.GameMode == "founder" && stats.PartnershipRevenuePercent >= 0.30
+
+	// Crisis Management Achievements
+	case "security_champion":
+		return stats.GameMode == "founder" && stats.SecurityScoreMaintained >= 90
+	case "incident_response":
+		return stats.GameMode == "founder" && stats.SecurityIncidentsResolved > 0 && stats.LowChurnDuringIncident
+	case "compliance_master":
+		return stats.GameMode == "founder" && stats.ComplianceCertsAchieved >= 4
+	case "crisis_manager":
+		return stats.GameMode == "founder" && stats.PRCrisesNavigated >= 3
+	case "brand_resilience":
+		return stats.GameMode == "founder" && stats.BrandScoreMaintained >= 70
+	case "media_master":
+		return stats.GameMode == "founder" && stats.PRCrisesNavigated > 0 && stats.BrandScoreMaintained >= 70
+	case "recession_survivor":
+		return stats.GameMode == "founder" && stats.EconomicDownturnsSurvived > 0
+	case "funding_winter_warrior":
+		return stats.GameMode == "founder" && stats.FundingWinterRaised
+	case "market_leader":
+		return stats.GameMode == "founder" && stats.MarketShareGained
+	case "succession_ready":
+		return stats.GameMode == "founder" && stats.SuccessionPlansCreated >= 3
+	case "retention_master":
+		return stats.GameMode == "founder" && stats.KeyPersonsRetained
+	case "crisis_leader":
+		return stats.GameMode == "founder" && stats.KeyPersonReplaced
 	}
 	
 	return false

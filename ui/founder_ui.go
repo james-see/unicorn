@@ -737,8 +737,26 @@ func handleFounderDecisions(fs *founder.FounderState) {
 		if len(fs.FundingRounds) > 0 || fs.MRR >= 100000 {
 			fmt.Println("11c. Manage Pricing Strategy 💰")
 		}
+		if fs.CanAcquire() {
+			fmt.Println("11d. Acquisitions 🏢")
+		}
+		if fs.CanLaunchPlatform() {
+			fmt.Println("11e. Platform Strategy 🌐")
+		}
+		if fs.SecurityPosture != nil && fs.CanHaveSecurityIncidents() {
+			fmt.Println("11f. Security & Compliance 🔒")
+		}
+		if fs.PRProgram != nil && fs.PRProgram.HasPRFirm {
+			fmt.Println("11g. PR Crisis Management 📰")
+		}
+		if fs.Turn >= 12 {
+			fmt.Println("11h. Economic Strategy 📉")
+		}
+		if fs.CanHaveKeyPersonRisk() {
+			fmt.Println("11i. Succession Planning 👤")
+		}
 		if fs.AffiliateProgram != nil {
-			fmt.Println("11d. End Affiliate Program")
+			fmt.Println("11j. End Affiliate Program")
 		}
 		
 		// Strategic opportunities (numbered sequentially)
@@ -816,8 +834,62 @@ func handleFounderDecisions(fs *founder.FounderState) {
 			break
 		}
 
-		// Check for "11d" to end affiliate program before parsing as integer
-		if choice == "11d" && fs.AffiliateProgram != nil {
+		// Check for "11d" to acquisitions before parsing as integer
+		if choice == "11d" && fs.CanAcquire() {
+			shouldContinue := handleAcquisitions(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11e" to platform strategy before parsing as integer
+		if choice == "11e" && fs.CanLaunchPlatform() {
+			shouldContinue := handlePlatformStrategy(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11f" to security & compliance before parsing as integer
+		if choice == "11f" && fs.SecurityPosture != nil && fs.CanHaveSecurityIncidents() {
+			shouldContinue := handleSecurityCompliance(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11g" to PR crisis management before parsing as integer
+		if choice == "11g" && fs.PRProgram != nil && fs.PRProgram.HasPRFirm {
+			shouldContinue := handlePRCrisis(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11h" to economic strategy before parsing as integer
+		if choice == "11h" && fs.Turn >= 12 {
+			shouldContinue := handleEconomicStrategy(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11i" to succession planning before parsing as integer
+		if choice == "11i" && fs.CanHaveKeyPersonRisk() {
+			shouldContinue := handleSuccessionPlanning(fs)
+			if shouldContinue {
+				continue
+			}
+			break
+		}
+
+		// Check for "11j" to end affiliate program before parsing as integer
+		if choice == "11j" && fs.AffiliateProgram != nil {
 			shouldContinue := handleEndAffiliateProgram(fs)
 			if shouldContinue {
 				continue
@@ -3301,9 +3373,9 @@ func saveFounderScoreAndCheckAchievements(fs *founder.FounderState) {
 		
 		// Phase 1 stats
 		FeaturesCompleted:          featuresCompleted,
-		InnovationLeader:           false, // TODO: Track if feature completed before competitor
+		InnovationLeader:           calculateInnovationLeader(fs),
 		EnterpriseFeatures:         enterpriseFeatures,
-		CustomerLossDuringRoadmap:  false, // TODO: Track if customers were lost during roadmap execution
+		CustomerLossDuringRoadmap:  fs.CustomersLostDuringRoadmap > 0,
 		EnterpriseCustomers:        enterpriseCustomers,
 		VerticalConcentration:      verticalConcentration,
 		PricingExperimentsCompleted: pricingExperiments,
@@ -5056,4 +5128,324 @@ func handleViewSalesPipeline(fs *founder.FounderState) {
 
 	fmt.Print("\nPress 'Enter' to continue...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+// handleAcquisitions manages acquisition targets and completed acquisitions
+func handleAcquisitions(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+	green := color.New(color.FgGreen)
+
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                    ACQUISITIONS")
+	cyan.Println(strings.Repeat("=", 70))
+
+	completed, inProgress, totalMRR, totalCost := fs.GetAcquisitionSummary()
+	fmt.Printf("\nCompleted: %d | In Progress: %d | Total MRR Gained: $%s | Total Cost: $%s\n",
+		completed, inProgress, formatFounderCurrency(totalMRR), formatFounderCurrency(totalCost))
+
+	if len(fs.AcquisitionTargets) > 0 {
+		yellow.Println("\n📋 Available Acquisition Targets:")
+		for i, target := range fs.AcquisitionTargets {
+			fmt.Printf("\n%d. %s\n", i+1, target.Name)
+			fmt.Printf("   MRR: $%s | Customers: %d | Cost: $%s | Risk: %s\n",
+				formatFounderCurrency(target.MRR), target.Customers, formatFounderCurrency(target.AcquisitionCost+target.IntegrationCost), target.Risk)
+			fmt.Printf("   Technology: %s\n", strings.Join(target.Technology, ", "))
+		}
+
+		fmt.Print("\nAcquire a target? (number or 'back'): ")
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		if input != "back" && input != "" {
+			idx, err := strconv.Atoi(input)
+			if err == nil && idx > 0 && idx <= len(fs.AcquisitionTargets) {
+				acq, err := fs.AcquireCompany(idx - 1)
+				if err != nil {
+					color.Red("Error: %v", err)
+				} else {
+					green.Printf("✅ Acquired %s! Integration will take %d months.\n", acq.TargetName, acq.IntegrationMonths)
+				}
+			}
+		}
+	} else {
+		fmt.Println("\nNo acquisition targets available. Check back next quarter.")
+	}
+
+	fmt.Print("\nPress Enter to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return true
+}
+
+// handlePlatformStrategy manages platform launch and network effects
+func handlePlatformStrategy(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	green := color.New(color.FgGreen)
+
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                  PLATFORM STRATEGY")
+	cyan.Println(strings.Repeat("=", 70))
+
+	isPlatform, developers, apps, apiUsage, marketplaceRevenue, networkScore := fs.GetPlatformSummary()
+
+	if !isPlatform {
+		fmt.Println("\nPlatform not launched yet.")
+		fmt.Println("\nPlatform Types:")
+		fmt.Println("1. Marketplace (Uber model)")
+		fmt.Println("2. Social (LinkedIn model)")
+		fmt.Println("3. Data (network gets smarter)")
+		fmt.Println("4. Infrastructure (AWS model)")
+
+		fmt.Print("\nLaunch platform? (1-4 or 'back'): ")
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		platformTypes := map[string]string{"1": "marketplace", "2": "social", "3": "data", "4": "infrastructure"}
+		if platformType, ok := platformTypes[input]; ok {
+			err := fs.LaunchPlatform(platformType)
+			if err != nil {
+				color.Red("Error: %v", err)
+			} else {
+				green.Printf("✅ Platform launched! Type: %s\n", platformType)
+			}
+		}
+	} else {
+		fmt.Printf("\nPlatform Status:\n")
+		fmt.Printf("Developers: %d | Apps: %d | API Usage: %s calls/mo\n", developers, apps, formatFounderCurrency(apiUsage))
+		fmt.Printf("Marketplace Revenue: $%s/mo | Network Score: %.1f%%\n",
+			formatFounderCurrency(marketplaceRevenue), networkScore*100)
+	}
+
+	fmt.Print("\nPress Enter to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return true
+}
+
+// handleSecurityCompliance manages security posture and incidents
+func handleSecurityCompliance(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	red := color.New(color.FgRed)
+
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("              SECURITY & COMPLIANCE")
+	cyan.Println(strings.Repeat("=", 70))
+
+	if fs.SecurityPosture != nil {
+		fmt.Printf("\nSecurity Score: %d/100\n", fs.SecurityPosture.SecurityScore)
+		fmt.Printf("Compliance Certs: %s\n", strings.Join(fs.SecurityPosture.ComplianceCerts, ", "))
+		fmt.Printf("Security Team: %d | Vulnerabilities: %d\n", fs.SecurityPosture.SecurityTeamSize, fs.SecurityPosture.Vulnerabilities)
+	}
+
+	if fs.ActiveSecurityIncident != nil {
+		incident := fs.ActiveSecurityIncident
+		red.Printf("\n🚨 ACTIVE INCIDENT: %s (%s)\n", incident.Type, incident.Severity)
+		fmt.Printf("Customers Affected: %d | Data Exposed: %s\n", incident.CustomersAffected, incident.DataExposed)
+		fmt.Println("\nResponse Options:")
+		fmt.Println("1. Contain ($50-150k)")
+		fmt.Println("2. Investigate ($100-300k)")
+		fmt.Println("3. Notify Customers ($20-100k)")
+		fmt.Println("4. Legal Defense ($200-500k)")
+		fmt.Println("5. Resolve (after containment + investigation)")
+
+		fmt.Print("\nChoose action (1-5 or 'back'): ")
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		actions := map[string]string{"1": "contain", "2": "investigate", "3": "notify", "4": "defend", "5": "resolve"}
+		if action, ok := actions[input]; ok {
+			err := fs.RespondToSecurityIncident(action)
+			if err != nil {
+				color.Red("Error: %v", err)
+			}
+		}
+	} else {
+		fmt.Println("\nNo active security incidents.")
+	}
+
+	fmt.Print("\nPress Enter to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return true
+}
+
+// handlePRCrisis manages PR crisis response
+func handlePRCrisis(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	red := color.New(color.FgRed)
+
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("              PR CRISIS MANAGEMENT")
+	cyan.Println(strings.Repeat("=", 70))
+
+	if fs.ActivePRCrisis != nil {
+		crisis := fs.ActivePRCrisis
+		red.Printf("\n🚨 ACTIVE CRISIS: %s (%s)\n", crisis.Type, crisis.Severity)
+		fmt.Printf("Media Coverage: %s\n", strings.Join(crisis.MediaCoverage, ", "))
+		fmt.Printf("CAC Impact: %.0f%% | Churn Impact: %.0f%%\n", (crisis.CACImpact-1.0)*100, crisis.ChurnImpact*100)
+
+		if crisis.Response == "none" {
+			fmt.Println("\nResponse Options:")
+			fmt.Println("1. Deny (cheap, risky)")
+			fmt.Println("2. Apologize (moderate)")
+			fmt.Println("3. Transparent (best outcome)")
+			fmt.Println("4. Aggressive (legal, expensive)")
+
+			fmt.Print("\nChoose response (1-4 or 'back'): ")
+			reader := bufio.NewReader(os.Stdin)
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+
+			responses := map[string]string{"1": "deny", "2": "apologize", "3": "transparent", "4": "aggressive"}
+			if response, ok := responses[input]; ok {
+				err := fs.RespondToPRCrisis(response)
+				if err != nil {
+					color.Red("Error: %v", err)
+				}
+			}
+		} else {
+			fmt.Printf("\nResponse: %s (Cost: $%s)\n", crisis.Response, formatFounderCurrency(crisis.ResponseCost))
+		}
+	} else {
+		fmt.Println("\nNo active PR crisis.")
+	}
+
+	fmt.Print("\nPress Enter to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return true
+}
+
+// handleEconomicStrategy manages economic events and survival strategies
+func handleEconomicStrategy(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("                ECONOMIC STRATEGY")
+	cyan.Println(strings.Repeat("=", 70))
+
+	if fs.EconomicEvent != nil && fs.EconomicEvent.Active {
+		event := fs.EconomicEvent
+		yellow.Printf("\n📉 ACTIVE EVENT: %s (%s)\n", event.Type, event.Severity)
+		fmt.Printf("Growth Impact: %.0f%% | CAC Impact: %.0f%% | Churn Impact: %.0f%%\n",
+			(1.0-event.GrowthImpact)*100, (event.CACImpact-1.0)*100, event.ChurnImpact*100)
+		fmt.Printf("Duration: %d months remaining\n", event.DurationMonths-(fs.Turn-event.Month))
+
+		fmt.Println("\nSurvival Strategies:")
+		fmt.Println("1. Cut Costs (layoffs)")
+		fmt.Println("2. Pivot")
+		fmt.Println("3. Down Round")
+		fmt.Println("4. Extend Runway")
+		fmt.Println("5. Acquire Competitors")
+
+		fmt.Print("\nChoose strategy (1-5 or 'back'): ")
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		strategies := map[string]string{"1": "cut_costs", "2": "pivot", "3": "downround", "4": "extend_runway", "5": "acquire"}
+		if strategy, ok := strategies[input]; ok {
+			err := fs.ExecuteSurvivalStrategy(strategy)
+			if err != nil {
+				color.Red("Error: %v", err)
+			}
+		}
+	} else {
+		fmt.Println("\nNo active economic event.")
+	}
+
+	fmt.Print("\nPress Enter to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return true
+}
+
+// handleSuccessionPlanning manages key person risks and succession plans
+func handleSuccessionPlanning(fs *founder.FounderState) bool {
+	clear.ClearIt()
+	cyan := color.New(color.FgCyan, color.Bold)
+	yellow := color.New(color.FgYellow)
+
+	cyan.Println("\n" + strings.Repeat("=", 70))
+	cyan.Println("              SUCCESSION PLANNING")
+	cyan.Println(strings.Repeat("=", 70))
+
+	if len(fs.KeyPersonRisks) > 0 {
+		yellow.Println("\nKey Person Risks:")
+		for _, kpr := range fs.KeyPersonRisks {
+			status := "❌ No Plan"
+			if kpr.SuccessionReady {
+				status = "✅ Plan Ready"
+			}
+			fmt.Printf("\n%s (%s) - Risk: %s | Retention: %.0f%% %s\n",
+				kpr.PersonName, kpr.Role, kpr.RiskLevel, kpr.RetentionScore*100, status)
+		}
+	} else {
+		fmt.Println("\nNo key person risks identified.")
+	}
+
+	fmt.Print("\nPress Enter to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	return true
+}
+
+// calculateInnovationLeader checks if player completed at least one feature before competitors launched similar features
+func calculateInnovationLeader(fs *founder.FounderState) bool {
+	if fs.ProductRoadmap == nil || len(fs.ProductRoadmap.Features) == 0 {
+		return false
+	}
+
+	// Map feature names to competitor feature names (normalize for comparison)
+	featureMap := map[string][]string{
+		"REST API":           {"API", "REST API", "API Integration"},
+		"Mobile App":         {"Mobile App", "Mobile", "iOS App", "Android App"},
+		"Enterprise SSO":     {"SSO", "Single Sign-On", "Enterprise SSO"},
+		"Advanced Analytics": {"Analytics", "Advanced Analytics", "Reporting"},
+		"AI/ML Capabilities": {"AI", "ML", "Machine Learning", "Artificial Intelligence"},
+		"Integrations Hub":   {"Integrations", "Integration Hub", "API Integration"},
+		"Security Suite":     {"Security", "Security Suite", "Enterprise Security"},
+		"Performance Optimization": {"Performance", "Optimization"},
+		"White Label":        {"White Label", "White-Label"},
+		"Workflow Automation": {"Automation", "Workflow"},
+	}
+
+	// Check each completed feature
+	for _, feature := range fs.ProductRoadmap.Features {
+		if feature.Status != "completed" {
+			continue
+		}
+
+		// Get matching competitor feature names
+		matchingNames, exists := featureMap[feature.Name]
+		if !exists {
+			// Try direct match
+			matchingNames = []string{feature.Name}
+		}
+
+		// Check if any competitor launched a similar feature before this was completed
+		competitorLaunchedFirst := false
+		for _, launch := range fs.ProductRoadmap.CompetitorLaunches {
+			for _, matchName := range matchingNames {
+				if launch.FeatureName == matchName && launch.MonthLaunched < feature.MonthCompleted {
+					competitorLaunchedFirst = true
+					break
+				}
+			}
+			if competitorLaunchedFirst {
+				break
+			}
+		}
+
+		// If this feature was completed before any competitor launched it, player is innovation leader
+		if !competitorLaunchedFirst {
+			return true
+		}
+	}
+
+	return false
 }

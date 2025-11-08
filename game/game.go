@@ -375,8 +375,8 @@ func (gs *GameState) LoadStartups(playerUpgrades []string) {
 	gs.AvailableStartups = []Startup{}
 	allStartups := []Startup{}
 
-	// Load all 30 startups
-	for i := 1; i <= 30; i++ {
+	// Load all 45 startups
+	for i := 1; i <= 45; i++ {
 		var startup Startup
 		jsonFile, err := os.Open(fmt.Sprintf("startups/%d.json", i))
 		if err != nil {

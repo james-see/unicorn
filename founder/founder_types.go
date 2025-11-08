@@ -184,6 +184,29 @@ type FounderState struct {
 	InvestorUpdates    []InvestorUpdate
 	BoardRequests      []BoardRequest
 	PendingBoardRequest *BoardRequest
+
+	// ADVANCED GROWTH MECHANICS
+	AcquisitionTargets []AcquisitionTarget
+	Acquisitions        []Acquisition
+	PlatformMetrics     *PlatformMetrics
+	NetworkEffects      []NetworkEffect
+	PartnershipIntegrations []PartnershipIntegration
+
+	// CRISIS MANAGEMENT
+	SecurityPosture     *SecurityPosture
+	SecurityIncidents   []SecurityIncident
+	ActiveSecurityIncident *SecurityIncident
+	PRCrises            []PRCrisis
+	ActivePRCrisis      *PRCrisis
+	CrisisResponses     []CrisisResponse
+	EconomicEvent       *EconomicEvent
+	SurvivalStrategies  []SurvivalStrategy
+	KeyPersonRisks      []KeyPersonRisk
+	KeyPersonEvents     []KeyPersonEvent
+	SuccessionPlans     []SuccessionPlan
+	
+	// Roadmap tracking for achievements
+	CustomersLostDuringRoadmap int // Track customers churned while features were in progress
 }
 
 // Customer represents an individual customer deal
@@ -394,6 +417,14 @@ type ProductRoadmap struct {
 	AvailableFeatures []ProductFeature // Template of possible features
 	CompletedCount    int
 	InProgressCount   int
+	CompetitorLaunches []CompetitorFeatureLaunch // Track competitor feature launches
+}
+
+// CompetitorFeatureLaunch tracks when a competitor launched a feature
+type CompetitorFeatureLaunch struct {
+	FeatureName string // Feature name (e.g., "API", "Mobile App", "SSO")
+	CompetitorName string
+	MonthLaunched int
 }
 
 // Deal represents a sales opportunity
@@ -637,5 +668,187 @@ type BoardHelp struct {
 	CACImpact      float64
 	LeadsGenerated int
 	IntrosMade     []string
+}
+
+// ============================================================================
+// ADVANCED GROWTH MECHANICS: Acquisitions, Platform Effects, Partnerships
+// ============================================================================
+
+// AcquisitionTarget represents a potential acquisition target
+type AcquisitionTarget struct {
+	Name            string
+	Category        string
+	MRR             int64
+	Customers       int
+	TeamSize        int
+	Technology      []string // Features/IP you gain
+	AcquisitionCost int64
+	IntegrationCost int64
+	SynergyBonus    float64 // Revenue boost from integration
+	Risk            string  // "low", "medium", "high"
+	MonthAppeared   int
+	ExpiresIn       int // Months until opportunity expires
+}
+
+// Acquisition represents a completed acquisition
+type Acquisition struct {
+	TargetName        string
+	Month             int
+	Cost              int64
+	CustomersGained   int
+	MRRGained         int64
+	TeamGained        int
+	Success           bool
+	IntegrationMonths int
+	IntegrationProgress int // 0-100%
+	SynergyRealized   float64 // Actual synergy achieved
+}
+
+// PlatformMetrics represents platform business metrics
+type PlatformMetrics struct {
+	IsPlatform         bool
+	ThirdPartyApps     int
+	DeveloperCount     int
+	APIUsage           int64 // API calls per month
+	MarketplaceRevenue int64 // Revenue from marketplace fees
+	NetworkEffectScore float64 // 0-1, how strong network effects are
+	PlatformType       string // "marketplace", "social", "data", "infrastructure"
+	LaunchedMonth      int
+}
+
+// NetworkEffect represents network effect mechanics
+type NetworkEffect struct {
+	Type          string  // "marketplace", "social", "data", "infrastructure"
+	Strength      float64 // 0-1
+	CustomerValue float64 // How much value each new customer adds
+	Threshold     int     // Customers needed to activate
+	Active        bool
+	ActivatedMonth int
+}
+
+// Enhanced Partnership (extends existing Partnership struct)
+// Note: Partnership struct already exists, we'll add fields via composition in FounderState
+
+// PartnershipIntegration represents deep integration details
+type PartnershipIntegration struct {
+	PartnerName     string
+	IntegrationDepth string // "surface", "deep", "native"
+	RevenueShare    float64 // % of deals from partnership
+	CACReduction    float64 // % reduction in CAC
+	ChurnReduction  float64 // % reduction in churn
+	MRRContribution int64   // MRR directly from partnership
+	CoMarketingActive bool
+	DataSharingActive bool
+}
+
+// ============================================================================
+// CRISIS MANAGEMENT: Security, PR Crisis, Economy, Key Person Risk
+// ============================================================================
+
+// SecurityIncident represents a security breach or incident
+type SecurityIncident struct {
+	Type             string  // "data_breach", "ransomware", "ddos", "insider_threat", "vulnerability"
+	Severity         string  // "low", "medium", "high", "critical"
+	Month             int
+	CustomersAffected int
+	DataExposed       string  // "PII", "financial", "health", "none"
+	ResponseCost      int64
+	LegalCosts        int64
+	ReputationDamage  float64 // 0-1
+	Resolved          bool
+	ResolutionMonth   int
+	ResponseActions   []string
+}
+
+// SecurityPosture represents overall security status
+type SecurityPosture struct {
+	SecurityScore    int      // 0-100
+	ComplianceCerts  []string // "SOC2", "ISO27001", "HIPAA", "GDPR"
+	SecurityTeamSize int
+	SecurityBudget    int64
+	LastAudit         int
+	Vulnerabilities   int
+	BugBountyActive   bool
+	BugBountyBudget   int64
+}
+
+// PRCrisis represents a PR crisis event
+type PRCrisis struct {
+	Type            string   // "scandal", "product_failure", "layoffs", "founder_drama", "competitor_attack"
+	Severity        string   // "minor", "moderate", "major", "critical"
+	Month           int
+	MediaCoverage    []string // Outlets covering the story
+	Response        string   // "none", "deny", "apologize", "transparent", "aggressive"
+	ResponseCost     int64
+	DurationMonths   int
+	CACImpact        float64 // Multiplier on CAC
+	ChurnImpact      float64 // Additional churn %
+	BrandDamage      float64 // 0-1
+	Resolved         bool
+	ResolutionMonth  int
+}
+
+// CrisisResponse represents response to a PR crisis
+type CrisisResponse struct {
+	CrisisType    string
+	ResponseType  string
+	Cost          int64
+	Effectiveness float64 // 0-1
+	Outcome       string  // "contained", "escalated", "resolved"
+	Month         int
+}
+
+// EconomicEvent represents economic downturn or market crash
+type EconomicEvent struct {
+	Type             string  // "recession", "market_crash", "funding_winter", "sector_crash"
+	Severity         string  // "mild", "moderate", "severe", "extreme"
+	Month             int
+	DurationMonths    int
+	GrowthImpact      float64 // Multiplier on growth (0.5 = 50% reduction)
+	CACImpact         float64 // Multiplier on CAC
+	ChurnImpact       float64 // Additional churn %
+	FundingImpact     float64 // Multiplier on funding availability
+	CustomerBudgetCut float64 // % reduction in customer budgets
+	Active            bool
+}
+
+// SurvivalStrategy represents strategies to survive economic downturn
+type SurvivalStrategy struct {
+	Strategy      string   // "cut_costs", "pivot", "downround", "extend_runway", "acquire"
+	Cost          int64
+	Effectiveness float64 // 0-1
+	Tradeoffs     []string // What you lose
+	MonthStarted  int
+	Active        bool
+}
+
+// KeyPersonRisk represents risk associated with key personnel
+type KeyPersonRisk struct {
+	PersonName      string   // "founder", "cto", "cfo", "head_of_sales"
+	Role            string
+	RiskLevel       string   // "low", "medium", "high", "critical"
+	Dependencies    []string // What breaks if they leave
+	SuccessionReady bool
+	RetentionScore  float64 // 0-1, likelihood of staying
+}
+
+// KeyPersonEvent represents a key person leaving or crisis
+type KeyPersonEvent struct {
+	PersonName      string
+	EventType       string // "quit", "poached", "illness", "scandal", "death"
+	Month           int
+	Impact          EventImpact
+	ReplacementCost int64
+	RecoveryMonths  int
+	Resolved        bool
+}
+
+// SuccessionPlan represents succession planning for key persons
+type SuccessionPlan struct {
+	PersonName     string
+	BackupPerson   string
+	TrainingMonths int
+	Ready          bool
+	MonthCreated   int
 }
 

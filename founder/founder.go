@@ -171,6 +171,9 @@ func NewFounderGame(founderName string, template StartupTemplate, playerUpgrades
 		MonthReachedProfitability: -1, // -1 means not yet profitable
 		PlayerUpgrades: playerUpgrades,
 		HiresCount: 0,
+		
+		// Roadmap tracking for achievements
+		CustomersLostDuringRoadmap: 0,
 	}
 
 	// Add randomness to initial cash (±20%) - only if not already randomized
@@ -360,6 +363,13 @@ func NewFounderGame(founderName string, template StartupTemplate, playerUpgrades
 
 	fs.CalculateTeamCost()
 	fs.CalculateRunway()
+
+	// Initialize new advanced features
+	InitializeAcquisitions(fs)
+	InitializePlatform(fs)
+	InitializePartnershipIntegrations(fs)
+	InitializeSecurity(fs)
+	InitializeKeyPersonRisks(fs)
 
 	return fs
 }

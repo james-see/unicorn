@@ -916,11 +916,22 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 			activeAffiliateCustomers[i], activeAffiliateCustomers[j] = activeAffiliateCustomers[j], activeAffiliateCustomers[i]
 		})
 
+		// Check if any features are in progress (for tracking customer loss during roadmap)
+		hasInProgressFeatures := false
+		if fs.ProductRoadmap != nil && fs.ProductRoadmap.InProgressCount > 0 {
+			hasInProgressFeatures = true
+		}
+
 		// Churn direct customers
 		for i := 0; i < lostDirectCustomers && i < len(activeDirectCustomers); i++ {
 			customer := activeDirectCustomers[i]
 			fs.churnCustomer(customer.ID)
 			fs.DirectMRR -= customer.DealSize
+			
+			// Track if customer was lost during roadmap execution
+			if hasInProgressFeatures {
+				fs.CustomersLostDuringRoadmap++
+			}
 		}
 
 		// Churn affiliate customers
@@ -928,6 +939,11 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 			customer := activeAffiliateCustomers[i]
 			fs.churnCustomer(customer.ID)
 			fs.AffiliateMRR -= customer.DealSize
+			
+			// Track if customer was lost during roadmap execution
+			if hasInProgressFeatures {
+				fs.CustomersLostDuringRoadmap++
+			}
 		}
 
 		lostCustomers = lostDirectCustomers + lostAffiliateCustomers
@@ -1050,8 +1066,16 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 	prMsgs := fs.UpdatePRProgram()
 	messages = append(messages, prMsgs...)
 
+	// Process PR crises
+	prCrisisMsgs := fs.ProcessPRCrises()
+	messages = append(messages, prCrisisMsgs...)
+
 	partnershipMsgs := fs.UpdatePartnerships()
 	messages = append(messages, partnershipMsgs...)
+
+	// Process enhanced partnership integrations
+	partnershipIntegrationMsgs := fs.ProcessPartnershipIntegrations()
+	messages = append(messages, partnershipIntegrationMsgs...)
 
 	affiliateMsgs := fs.UpdateAffiliateProgram()
 	messages = append(messages, affiliateMsgs...)
@@ -1064,6 +1088,51 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 
 	marketMsgs := fs.UpdateGlobalMarkets()
 	messages = append(messages, marketMsgs...)
+
+	// Process acquisitions
+	acquisitionMsgs := fs.ProcessAcquisitionIntegration()
+	messages = append(messages, acquisitionMsgs...)
+	fs.GenerateAcquisitionTargets()
+
+	// Process platform metrics and network effects
+	platformMsgs := fs.ProcessPlatformMetrics()
+	messages = append(messages, platformMsgs...)
+	// Apply network effect bonuses
+	cacReduction, retentionBonus, growthBonus := fs.ApplyNetworkEffectBonuses()
+	if cacReduction < 1.0 {
+		fs.BaseCAC = int64(float64(fs.BaseCAC) * cacReduction)
+	}
+	if retentionBonus > 0 {
+		fs.CustomerChurnRate = math.Max(0.01, fs.CustomerChurnRate-retentionBonus)
+	}
+	if growthBonus > 1.0 {
+		fs.MonthlyGrowthRate *= growthBonus
+	}
+
+	// Process security incidents
+	securityMsgs := fs.ProcessSecurityIncidents()
+	messages = append(messages, securityMsgs...)
+	if fs.SpawnSecurityIncident() != nil {
+		messages = append(messages, fmt.Sprintf("🔒 SECURITY INCIDENT: %s - Severity: %s", fs.ActiveSecurityIncident.Type, fs.ActiveSecurityIncident.Severity))
+	}
+
+	// Process economic events
+	economyMsgs := fs.ProcessEconomicEvent()
+	messages = append(messages, economyMsgs...)
+	if fs.EconomicEvent == nil || !fs.EconomicEvent.Active {
+		if fs.SpawnEconomicEvent() != nil {
+			messages = append(messages, fmt.Sprintf("📉 ECONOMIC EVENT: %s - Severity: %s", fs.EconomicEvent.Type, fs.EconomicEvent.Severity))
+		}
+	}
+
+	// Process key person events and succession plans
+	successionMsgs := fs.ProcessSuccessionPlans()
+	messages = append(messages, successionMsgs...)
+	keyPersonMsgs := fs.ProcessKeyPersonEvents()
+	messages = append(messages, keyPersonMsgs...)
+	if newEvent := fs.SpawnKeyPersonEvent(); newEvent != nil {
+		messages = append(messages, fmt.Sprintf("👤 KEY PERSON EVENT: %s %s", newEvent.PersonName, newEvent.EventType))
+	}
 
 	// 8. Spawn new competitors randomly
 	if newComp := fs.SpawnCompetitor(); newComp != nil {
