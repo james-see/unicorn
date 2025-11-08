@@ -168,7 +168,7 @@ func (fs *FounderState) ProcessPartnershipIntegrations() []string {
 			// Estimate partnership deals as 5-15% of new MRR
 			newMRRFromPartnership := int64(float64(fs.MRR) * pi.RevenueShare * (0.05 + rand.Float64()*0.10))
 			pi.MRRContribution = newMRRFromPartnership
-			totalMRRContribution += newMRRFromPartribution
+			totalMRRContribution += newMRRFromPartnership
 		}
 
 		totalCACReduction += pi.CACReduction
