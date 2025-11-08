@@ -1,5 +1,41 @@
 # Changelog
 
+## Version 3.31.1 - Founder Mode Startup Expansion & Bug Fixes (2025-11-08)
+
+### 🐛 Bug Fixes
+- Fixed typo in `founder_partnerships.go`: `newMRRFromPartribution` -> `newMRRFromPartnership`
+- Fixed build error preventing compilation
+
+### 🎮 Founder Mode Enhancements
+- **Added 15 new startups to founder mode** (now 52 total, up from 37)
+  - **SaaS**: +6 new companies (21 total)
+    - NeuralForge (ML infrastructure)
+    - DataMind (AI analytics)
+    - AutoML Pro (no-code ML)
+    - VisionAI (computer vision API)
+    - EcoTrack (sustainability platform)
+    - ZeroDay Shield (security vulnerability detection)
+  - **DeepTech**: +6 new companies (15 total)
+    - DeFiFlow (DeFi platform)
+    - ChainLink Pro (blockchain infrastructure)
+    - CarbonZero (carbon capture)
+    - SolarGrid (solar management)
+    - OrbitData (satellite data)
+    - SpaceLogistics (space logistics)
+  - **HealthTech**: +3 new companies (7 total)
+    - GeneCure (gene therapy)
+    - BioScan (diagnostic imaging)
+    - MedDevice Pro (remote monitoring)
+  - **FinTech**: 5 companies (unchanged)
+  - **GovTech**: 4 companies (unchanged)
+
+### 📊 Impact
+- Founder mode now offers significantly more variety with 52 startup options
+- Better coverage of emerging categories (AI/ML, Biotech, Crypto, ClimateTech, SpaceTech)
+- All startups properly converted from VC mode format to founder mode format
+
+---
+
 ## Version 3.31.0 - Founder Mode Advanced Features & Achievement Tracking (2025-11-08)
 
 ### 🌟 MAJOR NEW FEATURES: Founder Mode Advanced Growth & Crisis Management
