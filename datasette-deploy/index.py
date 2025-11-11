@@ -19,12 +19,12 @@ postgres_url = os.environ.get("POSTGRES_URL")
 if not postgres_url:
     raise ValueError("POSTGRES_URL environment variable is required. Set it in Vercel dashboard.")
 
-# Datasette supports Postgres via connection strings
-# The connection string should be in format: postgresql://user:pass@host:port/db
+# Datasette with Postgres connection
+# Datasette accepts a list of connection strings
 ds = Datasette(
-    files=[],  # No SQLite files
-    immutables=[],
-    databases={"leaderboard": {"url": postgres_url}},
+    files=[],  # SQLite files (none)
+    immutables=[],  # Immutable SQLite files (none)
+    databases=[postgres_url],  # Postgres connection string as a list
     metadata=metadata,
     secret=secret,
     cors=True,
