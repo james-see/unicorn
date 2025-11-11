@@ -2,6 +2,13 @@ name: Deploy Datasette to Vercel
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'datasette-deploy/**'
+      - '.github/workflows/datasette-deploy.yml'
   schedule:
     - cron: '0 */6 * * *'  # Every 6 hours
 
@@ -11,80 +18,34 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-      
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y sqlite3
-      
-      - name: Install datasette and plugins
-        run: |
-          pip install --upgrade pip
-          pip install datasette datasette-publish-vercel datasette-cors
-      
-      - name: Prepare database
-        run: |
-          # Use database from datasette-deploy directory, or create if missing
-          if [ -f datasette-deploy/leaderboard.db ]; then
-            cp datasette-deploy/leaderboard.db leaderboard.db
-            echo "✓ Using existing database from datasette-deploy/"
-          else
-            echo "Creating new database..."
-            sqlite3 leaderboard.db <<EOF
-            CREATE TABLE IF NOT EXISTS game_scores (
-              id TEXT PRIMARY KEY,
-              player_name TEXT NOT NULL,
-              final_net_worth INTEGER NOT NULL,
-              roi REAL NOT NULL,
-              successful_exits INTEGER NOT NULL,
-              turns_played INTEGER NOT NULL,
-              difficulty TEXT NOT NULL,
-              played_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE INDEX IF NOT EXISTS idx_net_worth ON game_scores(final_net_worth DESC);
-            CREATE INDEX IF NOT EXISTS idx_roi ON game_scores(roi DESC);
-            CREATE INDEX IF NOT EXISTS idx_player ON game_scores(player_name);
-            CREATE INDEX IF NOT EXISTS idx_difficulty ON game_scores(difficulty);
-            EOF
-            echo "✓ Created new database"
-          fi
-      
-      - name: Verify database
-        run: |
-          sqlite3 leaderboard.db "SELECT COUNT(*) as count FROM game_scores;" || echo "Database check failed"
-          echo "✓ Database verified"
+      - name: Install Vercel CLI
+        run: npm install -g vercel
       
       - name: Deploy to Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           if [ -z "$VERCEL_TOKEN" ]; then
             echo "⚠️  VERCEL_TOKEN secret not set. Skipping deployment."
-            echo "To enable deployment, add VERCEL_TOKEN to GitHub Secrets:"
-            echo "1. Go to https://vercel.com/account/tokens"
-            echo "2. Create a new token"
-            echo "3. Add it to GitHub repo secrets as VERCEL_TOKEN"
+            echo "To enable deployment, add these secrets to GitHub:"
+            echo "1. VERCEL_TOKEN - Get from https://vercel.com/account/tokens"
+            echo "2. VERCEL_ORG_ID - Get from Vercel project settings"
+            echo "3. VERCEL_PROJECT_ID - Get from Vercel project settings"
             exit 0
           fi
           
-          # Use metadata from datasette-deploy if available, otherwise root
-          METADATA_FILE="datasette-metadata.json"
-          if [ -f "datasette-deploy/datasette-metadata.json" ]; then
-            METADATA_FILE="datasette-deploy/datasette-metadata.json"
-          fi
+          cd datasette-deploy
           
-          echo "Deploying with metadata: $METADATA_FILE"
-          datasette publish vercel leaderboard.db \
-            --project=unicorn-leaderboard \
-            --token=$VERCEL_TOKEN \
-            --install=datasette-cors \
-            --metadata=$METADATA_FILE \
-            --extra-options="--setting sql_time_limit_ms 3500 --setting allow_download off" \
-            --yes
+          # Pull environment (links project)
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN || echo "Project link step"
+          
+          # Build
+          vercel build --prod --token=$VERCEL_TOKEN
+          
+          # Deploy
+          vercel deploy --prod --token=$VERCEL_TOKEN
       
       - name: Deployment summary
         if: always()
@@ -93,7 +54,9 @@ jobs:
           if [ "${{ job.status }}" = "success" ]; then
             echo "✅ Datasette deployed successfully!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Visit: https://unicorn-leaderboard.vercel.app" >> $GITHUB_STEP_SUMMARY
+            echo "The deployment connects to Postgres via POSTGRES_URL environment variable." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** Ensure POSTGRES_URL is set in Vercel dashboard." >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Deployment failed. Check logs above." >> $GITHUB_STEP_SUMMARY
           fi
