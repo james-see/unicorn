@@ -1,29 +1,30 @@
 import asyncio
 from datasette.app import Datasette
 import json
-import pathlib
 import os
 
-static_mounts = [
-    (static, str((pathlib.Path(".") / static).resolve()))
-    for static in []
-]
-
+# Load metadata
 metadata = dict()
 try:
     metadata_path = os.path.join(os.path.dirname(__file__), 'datasette-metadata.json')
-    metadata = json.load(open(metadata_path))
+    with open(metadata_path) as f:
+        metadata = json.load(f)
 except Exception:
-    pass
+    metadata = {"title": "Unicorn Leaderboard"}
 
-secret = os.environ.get("DATASETTE_SECRET")
+secret = os.environ.get("DATASETTE_SECRET", "default-secret-change-in-production")
 
-# Use SQLite database included in deployment
-db_path = os.path.join(os.path.dirname(__file__), 'leaderboard.db')
+# Connect to Vercel Postgres database
+postgres_url = os.environ.get("POSTGRES_URL")
+if not postgres_url:
+    raise ValueError("POSTGRES_URL environment variable is required. Set it in Vercel dashboard.")
 
+# Datasette supports Postgres via connection strings
+# The connection string should be in format: postgresql://user:pass@host:port/db
 ds = Datasette(
-    [db_path],  # SQLite database file
-    static_mounts=static_mounts,
+    files=[],  # No SQLite files
+    immutables=[],
+    databases={"leaderboard": {"url": postgres_url}},
     metadata=metadata,
     secret=secret,
     cors=True,
@@ -32,5 +33,7 @@ ds = Datasette(
         "allow_download": False
     }
 )
+
+# Initialize datasette
 asyncio.run(ds.invoke_startup())
 app = ds.app()
