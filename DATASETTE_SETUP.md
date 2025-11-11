@@ -6,9 +6,11 @@ This document explains how to set up and deploy the global leaderboard for Unico
 
 The global leaderboard system consists of three components:
 
-1. **Datasette Instance** - Hosted on Vercel, provides read-only JSON API for leaderboard data
+1. **Datasette Instance** - Hosted on Vercel with SQLite database, provides read-only JSON API for leaderboard data
 2. **Serverless API** - Go-based Vercel function that accepts score submissions
 3. **GitHub Pages** - Displays the leaderboard with live data fetching
+
+**Note:** This setup uses SQLite (not Postgres) which is simpler and works perfectly with Vercel's serverless deployment.
 
 ## Prerequisites
 

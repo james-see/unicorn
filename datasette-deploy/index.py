@@ -18,21 +18,19 @@ except Exception:
 
 secret = os.environ.get("DATASETTE_SECRET")
 
-# Connect to Vercel Postgres database
-postgres_url = os.environ.get("POSTGRES_URL")
-if not postgres_url:
-    raise ValueError("POSTGRES_URL environment variable is required")
+# Use SQLite database included in deployment
+db_path = os.path.join(os.path.dirname(__file__), 'leaderboard.db')
 
-# Datasette can connect to Postgres databases using connection strings
-# Format: postgres://user:password@host:port/database
 ds = Datasette(
-    [],  # No SQLite files
-    [postgres_url],  # Postgres connection string
+    [db_path],  # SQLite database file
     static_mounts=static_mounts,
     metadata=metadata,
     secret=secret,
     cors=True,
-    settings={}
+    settings={
+        "sql_time_limit_ms": 3500,
+        "allow_download": False
+    }
 )
 asyncio.run(ds.invoke_startup())
 app = ds.app()
