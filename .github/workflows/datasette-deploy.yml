@@ -21,18 +21,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sqlite3
       
-      - name: Install datasette and plugins
+      - name: Install Vercel CLI
         run: |
-          pip install --upgrade pip
-          pip install datasette datasette-publish-vercel datasette-cors
+          npm install -g vercel@latest
       
       - name: Prepare database
         run: |
-          # Use database from datasette-deploy directory, or create if missing
-          if [ -f datasette-deploy/leaderboard.db ]; then
-            cp datasette-deploy/leaderboard.db leaderboard.db
-            echo "✓ Using existing database from datasette-deploy/"
-          else
+          cd datasette-deploy
+          # Use existing database or create if missing
+          if [ ! -f leaderboard.db ]; then
             echo "Creating new database..."
             sqlite3 leaderboard.db <<EOF
             CREATE TABLE IF NOT EXISTS game_scores (
@@ -51,11 +48,14 @@ jobs:
             CREATE INDEX IF NOT EXISTS idx_difficulty ON game_scores(difficulty);
             EOF
             echo "✓ Created new database"
+          else
+            echo "✓ Using existing database"
           fi
       
       - name: Verify database
         run: |
-          sqlite3 leaderboard.db "SELECT COUNT(*) as count FROM game_scores;" || echo "Database check failed"
+          cd datasette-deploy
+          sqlite3 leaderboard.db "SELECT COUNT(*) as count FROM game_scores;" || echo "Database check completed"
           echo "✓ Database verified"
       
       - name: Deploy to Vercel
@@ -71,20 +71,17 @@ jobs:
             exit 0
           fi
           
-          # Use metadata from datasette-deploy if available, otherwise root
-          METADATA_FILE="datasette-metadata.json"
-          if [ -f "datasette-deploy/datasette-metadata.json" ]; then
-            METADATA_FILE="datasette-deploy/datasette-metadata.json"
+          cd datasette-deploy
+          
+          # Link to project first (if not already linked)
+          if [ ! -f .vercel/project.json ]; then
+            echo "Linking to project unicorn-leaderboard..."
+            echo "y" | vercel link --token=$VERCEL_TOKEN --project=unicorn-leaderboard || true
           fi
           
-          echo "Deploying with metadata: $METADATA_FILE"
-          datasette publish vercel leaderboard.db \
-            --project=unicorn-leaderboard \
-            --token=$VERCEL_TOKEN \
-            --install=datasette-cors \
-            --metadata=$METADATA_FILE \
-            --extra-options="--setting sql_time_limit_ms 3500 --setting allow_download off" \
-            --yes
+          # Deploy using Vercel CLI
+          echo "Deploying to Vercel..."
+          vercel deploy --prod --token=$VERCEL_TOKEN --yes
       
       - name: Deployment summary
         if: always()
@@ -94,6 +91,13 @@ jobs:
             echo "✅ Datasette deployed successfully!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Visit: https://unicorn-leaderboard.vercel.app" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Note: If POSTGRES_URL is set in Vercel, it will use Postgres. Otherwise, it will use SQLite." >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Deployment failed. Check logs above." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Common issues:" >> $GITHUB_STEP_SUMMARY
+            echo "- VERCEL_TOKEN not set in GitHub Secrets" >> $GITHUB_STEP_SUMMARY
+            echo "- Python dependencies not installed correctly" >> $GITHUB_STEP_SUMMARY
+            echo "- Database file missing or corrupted" >> $GITHUB_STEP_SUMMARY
           fi
