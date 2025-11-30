@@ -4,11 +4,10 @@ import (
 	"math/rand"
 )
 
-
 func (gs *GameState) InitializeAIPlayers() {
 	// Initialize LP commitments for AI players
 	lpCommittedCapital, capitalCallSchedule := initializeLPCommitments(gs.Difficulty.StartingCash, gs.Difficulty.MaxTurns)
-	
+
 	// Randomly select 3-5 AI players from the pool
 	allAIPlayers := []AIPlayer{
 		{
@@ -257,12 +256,12 @@ func (gs *GameState) InitializeAIPlayers() {
 	rand.Shuffle(len(allAIPlayers), func(i, j int) {
 		allAIPlayers[i], allAIPlayers[j] = allAIPlayers[j], allAIPlayers[i]
 	})
-	
+
 	numPlayers := 3 + rand.Intn(3) // 3-5 AI players
 	if numPlayers > len(allAIPlayers) {
 		numPlayers = len(allAIPlayers)
 	}
-	
+
 	gs.AIPlayers = allAIPlayers[:numPlayers]
 }
 
@@ -293,31 +292,35 @@ func (gs *GameState) AIPlayerMakeInvestments() {
 			}
 
 			// Decision based on risk tolerance and startup metrics
+			// Note: RiskScore ranges from 0.5-1.0, GrowthPotential from 0.5-1.0
 			shouldInvest := false
 			if ai.Strategy == "conservative" {
-				shouldInvest = startup.RiskScore < 0.4 && startup.GrowthPotential > 0.5
+				// Conservative: prefer lower risk (0.5-0.65) and decent growth
+				shouldInvest = startup.RiskScore <= 0.65 && startup.GrowthPotential >= 0.55
 			} else if ai.Strategy == "aggressive" {
-				shouldInvest = startup.GrowthPotential > 0.7 || (startup.RiskScore > 0.7 && startup.GrowthPotential > 0.6)
+				// Aggressive: chase high growth, accept higher risk
+				shouldInvest = startup.GrowthPotential >= 0.7 || (startup.RiskScore >= 0.7 && startup.GrowthPotential >= 0.6)
 			} else if ai.Strategy == "early_stage" {
 				// Y Combinator: Focus on early-stage companies with high growth potential
-				shouldInvest = startup.Valuation < 2000000 && startup.GrowthPotential > 0.6 && startup.RiskScore < 0.8
+				shouldInvest = startup.Valuation < 800000 && startup.GrowthPotential >= 0.6
 			} else if ai.Strategy == "mega_fund" {
 				// SoftBank: Invest in larger rounds, focus on scale
-				shouldInvest = startup.Valuation > 1000000 && startup.GrowthPotential > 0.65
+				shouldInvest = startup.Valuation >= 500000 && startup.GrowthPotential >= 0.6
 			} else if ai.Strategy == "seed_focused" {
 				// First Round: Seed-stage focus, lower valuations, high growth potential
-				shouldInvest = startup.Valuation < 3000000 && startup.GrowthPotential > 0.65 && startup.RiskScore < 0.75
+				shouldInvest = startup.Valuation < 600000 && startup.GrowthPotential >= 0.6 && startup.RiskScore <= 0.8
 			} else if ai.Strategy == "enterprise_focused" {
 				// Greylock: Enterprise SaaS focus, prefer SaaS category
-				shouldInvest = (startup.Category == "SaaS" || startup.Category == "GovTech") && startup.GrowthPotential > 0.55 && startup.RiskScore < 0.65
+				shouldInvest = (startup.Category == "SaaS" || startup.Category == "GovTech") && startup.GrowthPotential >= 0.55
 			} else if ai.Strategy == "deep_tech" {
 				// Index Ventures: Deep tech focus, high risk tolerance
-				shouldInvest = (startup.Category == "DeepTech" || startup.Category == "Hardware") && startup.GrowthPotential > 0.6
+				shouldInvest = (startup.Category == "DeepTech" || startup.Category == "Hardware" || startup.Category == "CleanTech") && startup.GrowthPotential >= 0.55
 			} else if ai.Strategy == "consumer_focused" {
-				// Lightspeed: Consumer products focus, moderate-high risk
-				shouldInvest = startup.Category == "SaaS" && startup.GrowthPotential > 0.6 && startup.RiskScore < 0.7
+				// Lightspeed: Consumer products focus
+				shouldInvest = (startup.Category == "SaaS" || startup.Category == "Advertising" || startup.Category == "Consumer") && startup.GrowthPotential >= 0.55
 			} else { // balanced
-				shouldInvest = startup.GrowthPotential > 0.5 && startup.RiskScore < 0.7
+				// Balanced: moderate approach - will invest in most decent startups
+				shouldInvest = startup.GrowthPotential >= 0.5 && startup.RiskScore <= 0.85
 			}
 
 			if shouldInvest {
