@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -174,10 +175,24 @@ func (a *App) Init() tea.Cmd {
 		} else {
 			debugFile.WriteString("DB exists: NO - " + statErr.Error() + "\n")
 		}
-		debugFile.Close()
 	}
 
-	database.InitDB(dbPath)
+	initErr := database.InitDB(dbPath)
+	if debugFile != nil {
+		if initErr != nil {
+			debugFile.WriteString("InitDB error: " + initErr.Error() + "\n")
+		} else {
+			debugFile.WriteString("InitDB: SUCCESS\n")
+		}
+		// Test query
+		scores, queryErr := database.GetTopScoresByNetWorth(5, "all")
+		if queryErr != nil {
+			debugFile.WriteString("Query error: " + queryErr.Error() + "\n")
+		} else {
+			debugFile.WriteString(fmt.Sprintf("Query returned %d scores\n", len(scores)))
+		}
+		debugFile.Close()
+	}
 
 	// Start with splash screen
 	a.splash = NewSplashScreen(a.width, a.height)
