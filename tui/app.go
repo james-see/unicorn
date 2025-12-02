@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -164,35 +163,7 @@ func (a *App) Init() tea.Cmd {
 	// Create config directory if it doesn't exist
 	os.MkdirAll(unicornDir, 0755)
 	dbPath := filepath.Join(unicornDir, "unicorn_scores.db")
-
-	// Debug: write path info to temp file
-	debugFile, _ := os.Create("/tmp/unicorn-debug.log")
-	if debugFile != nil {
-		debugFile.WriteString("Config dir: " + configDir + "\n")
-		debugFile.WriteString("DB path: " + dbPath + "\n")
-		if _, statErr := os.Stat(dbPath); statErr == nil {
-			debugFile.WriteString("DB exists: YES\n")
-		} else {
-			debugFile.WriteString("DB exists: NO - " + statErr.Error() + "\n")
-		}
-	}
-
-	initErr := database.InitDB(dbPath)
-	if debugFile != nil {
-		if initErr != nil {
-			debugFile.WriteString("InitDB error: " + initErr.Error() + "\n")
-		} else {
-			debugFile.WriteString("InitDB: SUCCESS\n")
-		}
-		// Test query
-		scores, queryErr := database.GetTopScoresByNetWorth(5, "all")
-		if queryErr != nil {
-			debugFile.WriteString("Query error: " + queryErr.Error() + "\n")
-		} else {
-			debugFile.WriteString(fmt.Sprintf("Query returned %d scores\n", len(scores)))
-		}
-		debugFile.Close()
-	}
+	database.InitDB(dbPath)
 
 	// Start with splash screen
 	a.splash = NewSplashScreen(a.width, a.height)
