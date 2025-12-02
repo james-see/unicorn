@@ -49,18 +49,27 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          output_name="unicorn-${{ matrix.name }}"
+          output_name="unicorn"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             output_name="${output_name}.exe"
           fi
           go build -o "${output_name}" -ldflags="-s -w" .
-          echo "BINARY_NAME=${output_name}" >> $GITHUB_ENV
+
+      - name: Create archive
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip unicorn-${{ matrix.name }}.zip unicorn.exe
+            echo "ARCHIVE_NAME=unicorn-${{ matrix.name }}.zip" >> $GITHUB_ENV
+          else
+            tar -czvf unicorn-${{ matrix.name }}.tar.gz unicorn
+            echo "ARCHIVE_NAME=unicorn-${{ matrix.name }}.tar.gz" >> $GITHUB_ENV
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: unicorn-${{ matrix.name }}
-          path: ${{ env.BINARY_NAME }}
+          path: ${{ env.ARCHIVE_NAME }}
           retention-days: 30
 
   release:
@@ -68,6 +77,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      is_tag: ${{ steps.version.outputs.IS_TAG }}
 
     steps:
       - name: Checkout code
@@ -136,19 +148,111 @@ jobs:
 
             ## Downloads
 
-            - `unicorn-linux-amd64` - Linux x86_64
-            - `unicorn-linux-arm64` - Linux ARM64
-            - `unicorn-windows-amd64.exe` - Windows x86_64
-            - `unicorn-darwin-amd64` - macOS Intel
-            - `unicorn-darwin-arm64` - macOS Apple Silicon
+            - `unicorn-linux-amd64.tar.gz` - Linux x86_64
+            - `unicorn-linux-arm64.tar.gz` - Linux ARM64
+            - `unicorn-windows-amd64.zip` - Windows x86_64
+            - `unicorn-darwin-amd64.tar.gz` - macOS Intel
+            - `unicorn-darwin-arm64.tar.gz` - macOS Apple Silicon
+
+            ## Homebrew
+
+            ```bash
+            brew install james-see/tap/unicorn
+            ```
           files: |
-            artifacts/unicorn-linux-amd64
-            artifacts/unicorn-linux-arm64
-            artifacts/unicorn-windows-amd64.exe
-            artifacts/unicorn-darwin-amd64
-            artifacts/unicorn-darwin-arm64
+            artifacts/unicorn-linux-amd64.tar.gz
+            artifacts/unicorn-linux-arm64.tar.gz
+            artifacts/unicorn-windows-amd64.zip
+            artifacts/unicorn-darwin-amd64.tar.gz
+            artifacts/unicorn-darwin-arm64.tar.gz
           draft: false
           prerelease: ${{ steps.version.outputs.IS_TAG == 'false' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    if: needs.release.outputs.is_tag == 'true'
+
+    steps:
+      - name: Download release artifacts for SHA calculation
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          BASE_URL="https://github.com/james-see/unicorn/releases/download/${VERSION}"
+          
+          curl -sL "${BASE_URL}/unicorn-darwin-amd64.tar.gz" -o darwin-amd64.tar.gz
+          curl -sL "${BASE_URL}/unicorn-darwin-arm64.tar.gz" -o darwin-arm64.tar.gz
+          curl -sL "${BASE_URL}/unicorn-linux-amd64.tar.gz" -o linux-amd64.tar.gz
+          curl -sL "${BASE_URL}/unicorn-linux-arm64.tar.gz" -o linux-arm64.tar.gz
+          
+          echo "SHA_DARWIN_AMD64=$(sha256sum darwin-amd64.tar.gz | cut -d ' ' -f1)" >> $GITHUB_ENV
+          echo "SHA_DARWIN_ARM64=$(sha256sum darwin-arm64.tar.gz | cut -d ' ' -f1)" >> $GITHUB_ENV
+          echo "SHA_LINUX_AMD64=$(sha256sum linux-amd64.tar.gz | cut -d ' ' -f1)" >> $GITHUB_ENV
+          echo "SHA_LINUX_ARM64=$(sha256sum linux-arm64.tar.gz | cut -d ' ' -f1)" >> $GITHUB_ENV
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: james-see/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          VERSION_NUM="${VERSION#v}"
+          mkdir -p homebrew-tap/Formula
+          cat > homebrew-tap/Formula/unicorn.rb << EOF
+          # typed: false
+          # frozen_string_literal: true
+
+          class Unicorn < Formula
+            desc "Terminal-based venture capital simulation game"
+            homepage "https://github.com/james-see/unicorn"
+            version "${VERSION_NUM}"
+            license "MIT"
+
+            on_macos do
+              on_intel do
+                url "https://github.com/james-see/unicorn/releases/download/v${VERSION_NUM}/unicorn-darwin-amd64.tar.gz"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+              on_arm do
+                url "https://github.com/james-see/unicorn/releases/download/v${VERSION_NUM}/unicorn-darwin-arm64.tar.gz"
+                sha256 "${SHA_DARWIN_ARM64}"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "https://github.com/james-see/unicorn/releases/download/v${VERSION_NUM}/unicorn-linux-amd64.tar.gz"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+              on_arm do
+                url "https://github.com/james-see/unicorn/releases/download/v${VERSION_NUM}/unicorn-linux-arm64.tar.gz"
+                sha256 "${SHA_LINUX_ARM64}"
+              end
+            end
+
+            def install
+              bin.install "unicorn"
+            end
+
+            test do
+              system "\#{bin}/unicorn", "--help"
+            end
+          end
+          EOF
+          # Remove leading spaces from heredoc
+          sed -i 's/^          //' homebrew-tap/Formula/unicorn.rb
+
+      - name: Commit and push formula
+        working-directory: homebrew-tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/unicorn.rb
+          git commit -m "unicorn ${{ needs.release.outputs.version }}"
+          git push
 
