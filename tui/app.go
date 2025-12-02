@@ -109,20 +109,20 @@ type ScreenModel interface {
 
 // App is the root model for the entire application
 type App struct {
-	width        int
-	height       int
+	width         int
+	height        int
 	currentScreen Screen
-	screenStack  []Screen
-	gameData     *GameData
-	
+	screenStack   []Screen
+	gameData      *GameData
+
 	// Screen models
-	splash      ScreenModel
-	mainMenu    ScreenModel
-	vcSetup     ScreenModel
-	vcGame      ScreenModel
-	vcInvest    ScreenModel
-	vcTurn      ScreenModel
-	vcResults   ScreenModel
+	splash       ScreenModel
+	mainMenu     ScreenModel
+	vcSetup      ScreenModel
+	vcGame       ScreenModel
+	vcInvest     ScreenModel
+	vcTurn       ScreenModel
+	vcResults    ScreenModel
 	founderSetup ScreenModel
 	founderGame  ScreenModel
 	leaderboard  ScreenModel
@@ -132,9 +132,9 @@ type App struct {
 	progression  ScreenModel
 	analytics    ScreenModel
 	help         ScreenModel
-	
-	quitting    bool
-	showHelp    bool
+
+	quitting bool
+	showHelp bool
 }
 
 // NewApp creates a new application instance
@@ -146,26 +146,25 @@ func NewApp() *App {
 		screenStack:   []Screen{},
 		gameData:      &GameData{},
 	}
-	
+
 	// Initialize screens - they will be created lazily
 	return app
 }
 
 // Init initializes the application
 func (a *App) Init() tea.Cmd {
-	// Get user config directory (~/.config/unicorn)
+	// Get user config directory (~/.config/unicorn on Linux, ~/Library/Application Support/unicorn on macOS)
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		configDir = os.Getenv("HOME")
 	}
 	unicornDir := filepath.Join(configDir, "unicorn")
-	
+
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(unicornDir, 0755); err == nil {
-		dbPath := filepath.Join(unicornDir, "unicorn_scores.db")
-		database.InitDB(dbPath)
-	}
-	
+	os.MkdirAll(unicornDir, 0755)
+	dbPath := filepath.Join(unicornDir, "unicorn_scores.db")
+	database.InitDB(dbPath)
+
 	// Start with splash screen
 	a.splash = NewSplashScreen(a.width, a.height)
 	return a.splash.Init()
@@ -466,12 +465,12 @@ func Run() error {
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
-	
+
 	_, err := p.Run()
-	
+
 	// Clean up database on exit
 	database.CloseDB()
-	
+
 	return err
 }
 
