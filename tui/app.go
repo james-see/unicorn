@@ -163,6 +163,20 @@ func (a *App) Init() tea.Cmd {
 	// Create config directory if it doesn't exist
 	os.MkdirAll(unicornDir, 0755)
 	dbPath := filepath.Join(unicornDir, "unicorn_scores.db")
+
+	// Debug: write path info to temp file
+	debugFile, _ := os.Create("/tmp/unicorn-debug.log")
+	if debugFile != nil {
+		debugFile.WriteString("Config dir: " + configDir + "\n")
+		debugFile.WriteString("DB path: " + dbPath + "\n")
+		if _, statErr := os.Stat(dbPath); statErr == nil {
+			debugFile.WriteString("DB exists: YES\n")
+		} else {
+			debugFile.WriteString("DB exists: NO - " + statErr.Error() + "\n")
+		}
+		debugFile.Close()
+	}
+
 	database.InitDB(dbPath)
 
 	// Start with splash screen
