@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -150,10 +153,17 @@ func NewApp() *App {
 
 // Init initializes the application
 func (a *App) Init() tea.Cmd {
-	// Initialize database
-	err := database.InitDB("unicorn_scores.db")
+	// Get user config directory (~/.config/unicorn)
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		// Continue without database - scores won't save
+		configDir = os.Getenv("HOME")
+	}
+	unicornDir := filepath.Join(configDir, "unicorn")
+	
+	// Create config directory if it doesn't exist
+	if err := os.MkdirAll(unicornDir, 0755); err == nil {
+		dbPath := filepath.Join(unicornDir, "unicorn_scores.db")
+		database.InitDB(dbPath)
 	}
 	
 	// Start with splash screen
