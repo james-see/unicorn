@@ -30,6 +30,10 @@ func NewReputationScreen(width, height int, playerName string) *ReputationScreen
 	ti.CharLimit = 30
 	ti.Width = 30
 
+	if playerName == "" {
+		ti.Focus()
+	}
+
 	s := &ReputationScreen{
 		width:      width,
 		height:     height,
@@ -38,9 +42,7 @@ func NewReputationScreen(width, height int, playerName string) *ReputationScreen
 		inputMode:  playerName == "",
 	}
 
-	if playerName == "" {
-		ti.Focus()
-	} else {
+	if playerName != "" {
 		s.loadReputation()
 	}
 
