@@ -20,10 +20,15 @@ type AchievementsScreen struct {
 	height           int
 	playerName       string
 	unlockedAchs     []string
+	unlockedMap      map[string]bool
 	totalPoints      int
 	scrollOffset     int
 	selectedCategory int
 	categories       []string
+
+	// Chain view
+	chainIDs      []string
+	selectedChain int
 
 	// Name entry
 	needsName bool
@@ -51,6 +56,12 @@ func NewAchievementsScreen(width, height int, playerName string) *AchievementsSc
 	// Load unlocked achievements
 	unlocked, _ := database.GetPlayerAchievements(playerName)
 
+	// Build unlocked map for quick lookup
+	unlockedMap := make(map[string]bool)
+	for _, id := range unlocked {
+		unlockedMap[id] = true
+	}
+
 	// Calculate total points
 	totalPoints := 0
 	for _, id := range unlocked {
@@ -59,16 +70,21 @@ func NewAchievementsScreen(width, height int, playerName string) *AchievementsSc
 		}
 	}
 
-	// Get categories
-	categories := []string{"All", "Investing", "Performance", "Events", "Meta"}
+	// Get categories (including Chains)
+	categories := []string{"All", "Chains", "Investing", "Performance", "Events", "Meta"}
+
+	// Get chain IDs
+	chainIDs := achievements.GetAllChains()
 
 	return &AchievementsScreen{
 		width:        width,
 		height:       height,
 		playerName:   playerName,
 		unlockedAchs: unlocked,
+		unlockedMap:  unlockedMap,
 		totalPoints:  totalPoints,
 		categories:   categories,
+		chainIDs:     chainIDs,
 	}
 }
 
@@ -132,6 +148,11 @@ func (s *AchievementsScreen) View() string {
 	// Name input screen
 	if s.needsName {
 		return s.renderNameInput()
+	}
+
+	// Chains view is separate
+	if s.categories[s.selectedCategory] == "Chains" {
+		return s.renderChainsView()
 	}
 
 	var b strings.Builder
@@ -287,6 +308,108 @@ func (s *AchievementsScreen) renderNameInput() string {
 	// Help
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
 	b.WriteString(helpStyle.Render("enter confirm • esc back"))
+
+	return b.String()
+}
+
+func (s *AchievementsScreen) renderChainsView() string {
+	var b strings.Builder
+
+	// Header
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Gold).
+		Bold(true).
+		Width(70).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🔗 ACHIEVEMENT CHAINS 🔗")))
+	b.WriteString("\n\n")
+
+	// Category tabs
+	var tabs []string
+	for i, cat := range s.categories {
+		style := lipgloss.NewStyle().Padding(0, 2)
+		if i == s.selectedCategory {
+			style = style.Foreground(styles.Black).Background(styles.Cyan).Bold(true)
+		} else {
+			style = style.Foreground(styles.Gray)
+		}
+		tabs = append(tabs, style.Render(cat))
+	}
+	tabRow := strings.Join(tabs, " ")
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(tabRow))
+	b.WriteString("\n\n")
+
+	// Chains content
+	chainsBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Magenta).
+		Padding(1, 2).
+		Width(70)
+
+	var chainsContent strings.Builder
+
+	if len(s.chainIDs) == 0 {
+		chainsContent.WriteString("No achievement chains available yet.\n")
+	} else {
+		for _, chainID := range s.chainIDs {
+			unlocked, total := achievements.GetChainProgress(s.playerName, chainID)
+			chainAchs := achievements.GetAchievementsByChain(chainID)
+
+			// Chain header
+			chainName := strings.ReplaceAll(chainID, "_", " ")
+			chainName = strings.ToUpper(chainName[:1]) + chainName[1:] + " Chain"
+
+			headerStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
+			chainsContent.WriteString(headerStyle.Render(fmt.Sprintf("▶ %s: %d/%d", chainName, unlocked, total)))
+			chainsContent.WriteString("\n")
+
+			// Progress bar
+			progressWidth := 20
+			filled := int(float64(unlocked) / float64(total) * float64(progressWidth))
+			progressBar := "["
+			for i := 0; i < progressWidth; i++ {
+				if i < filled {
+					progressBar += "█"
+				} else {
+					progressBar += "░"
+				}
+			}
+			progressBar += "]"
+			progressStyle := lipgloss.NewStyle().Foreground(styles.Green)
+			chainsContent.WriteString("  " + progressStyle.Render(progressBar))
+			chainsContent.WriteString("\n")
+
+			// Chain achievements
+			for i, ach := range chainAchs {
+				prefix := "   "
+				if i > 0 {
+					prefix = "   ↓ "
+				}
+
+				if s.unlockedMap[ach.ID] {
+					achStyle := lipgloss.NewStyle().Foreground(styles.Green)
+					chainsContent.WriteString(achStyle.Render(fmt.Sprintf("%s✓ %s %s (+%d)", prefix, ach.Icon, ach.Name, ach.Points)))
+				} else if achievements.CheckAchievementChain(s.playerName, ach.ID) {
+					achStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+					chainsContent.WriteString(achStyle.Render(fmt.Sprintf("%s○ %s %s (Available)", prefix, ach.Icon, ach.Name)))
+				} else {
+					achStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+					chainsContent.WriteString(achStyle.Render(fmt.Sprintf("%s● %s %s (Locked)", prefix, ach.Icon, ach.Name)))
+				}
+				chainsContent.WriteString("\n")
+			}
+			chainsContent.WriteString("\n")
+		}
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(chainsBox.Render(chainsContent.String())))
+	b.WriteString("\n\n")
+
+	// Help
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("←/→ category • ↑/↓ scroll • esc back"))
 
 	return b.String()
 }
