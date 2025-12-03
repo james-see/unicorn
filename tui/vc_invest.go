@@ -105,14 +105,18 @@ func (s *VCInvestScreen) refreshStartupTable() {
 		}
 
 		riskLabel := "Low"
-		if startup.RiskScore > 0.6 {
+		if startup.RiskScore > 0.85 {
+			riskLabel = "V.High"
+		} else if startup.RiskScore > 0.6 {
 			riskLabel = "High"
 		} else if startup.RiskScore > 0.4 {
 			riskLabel = "Med"
 		}
 
 		growthLabel := "High"
-		if startup.GrowthPotential < 0.4 {
+		if startup.GrowthPotential > 0.85 {
+			growthLabel = "V.High"
+		} else if startup.GrowthPotential < 0.4 {
 			growthLabel = "Low"
 		} else if startup.GrowthPotential < 0.6 {
 			growthLabel = "Med"

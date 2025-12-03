@@ -140,7 +140,15 @@ var (
 			Foreground(Red).
 			Bold(true)
 
+	RiskVeryHighStyle = lipgloss.NewStyle().
+				Foreground(Magenta).
+				Bold(true)
+
 	// Growth indicators
+	GrowthVeryHighStyle = lipgloss.NewStyle().
+				Foreground(Cyan).
+				Bold(true)
+
 	GrowthHighStyle = lipgloss.NewStyle().
 			Foreground(Green).
 			Bold(true)
@@ -350,7 +358,9 @@ func formatCurrency(amount int64) string {
 
 // RiskStyle returns appropriate style for risk level
 func RiskStyle(riskScore float64) lipgloss.Style {
-	if riskScore > 0.6 {
+	if riskScore > 0.85 {
+		return RiskVeryHighStyle
+	} else if riskScore > 0.6 {
 		return RiskHighStyle
 	} else if riskScore > 0.4 {
 		return RiskMediumStyle
@@ -360,7 +370,9 @@ func RiskStyle(riskScore float64) lipgloss.Style {
 
 // GrowthStyle returns appropriate style for growth potential
 func GrowthStyle(growthPotential float64) lipgloss.Style {
-	if growthPotential > 0.6 {
+	if growthPotential > 0.85 {
+		return GrowthVeryHighStyle
+	} else if growthPotential > 0.6 {
 		return GrowthHighStyle
 	} else if growthPotential > 0.4 {
 		return GrowthMediumStyle

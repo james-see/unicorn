@@ -164,9 +164,9 @@ func NewFounderGame(founderName string, template StartupTemplate, playerUpgrades
 		ExitMonth:     0,
 
 		MonthReachedProfitability: -1, // -1 means not yet profitable
-		PlayerUpgrades: playerUpgrades,
-		HiresCount: 0,
-		
+		PlayerUpgrades:            playerUpgrades,
+		HiresCount:                0,
+
 		// Roadmap tracking for achievements
 		CustomersLostDuringRoadmap: 0,
 	}
@@ -203,7 +203,7 @@ func NewFounderGame(founderName string, template StartupTemplate, playerUpgrades
 		switch upgradeID {
 		case "fast_track":
 			// Start with 10% more product maturity
-			fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity + 0.1)
+			fs.ProductMaturity = math.Min(1.0, fs.ProductMaturity+0.1)
 			// Recalculate churn after maturity boost
 			baseChurnFromMaturity = (1.0-fs.ProductMaturity)*0.65 + 0.05
 			fs.CustomerChurnRate = baseChurnFromMaturity * (1.0 + churnVariation)
