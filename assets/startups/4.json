@@ -1,0 +1,13 @@
+{
+    "name": "QuantLeap",
+    "description": "AI-powered stock trading platform",
+    "category": "FinTech",
+    "valuation": 25,
+    "grossburnrate": 8,
+    "Monthly Activation Rate": 200,
+    "Monthly Active Visitors": 5000,
+    "Monthly Sales": 150,
+    "Cost": 1000,
+    "Sale Price": 5000,
+    "Percent Margin Per Unit": 40
+}

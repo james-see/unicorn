@@ -1,0 +1,14 @@
+{
+    "name": "SolarGrid",
+    "description": "SaaS platform for managing distributed solar energy systems",
+    "category": "ClimateTech",
+    "valuation": 26,
+    "grossburnrate": 10,
+    "Monthly Activation Rate": 75,
+    "Monthly Active Visitors": 2200,
+    "Monthly Sales": 65,
+    "Cost": 12000,
+    "Sale Price": 40000,
+    "Percent Margin Per Unit": 42
+}
+

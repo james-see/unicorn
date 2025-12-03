@@ -1,0 +1,14 @@
+{
+    "name": "SpaceLogistics",
+    "description": "Space logistics platform for satellite deployment and management",
+    "category": "SpaceTech",
+    "valuation": 42,
+    "grossburnrate": 17,
+    "Monthly Activation Rate": 35,
+    "Monthly Active Visitors": 700,
+    "Monthly Sales": 20,
+    "Cost": 200000,
+    "Sale Price": 800000,
+    "Percent Margin Per Unit": 62
+}
+

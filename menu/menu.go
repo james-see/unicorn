@@ -4,10 +4,10 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 
+	"github.com/jamesacampbell/unicorn/assets"
 	clear "github.com/jamesacampbell/unicorn/clear"
 )
 
@@ -39,14 +39,10 @@ func DisplayMenu(username string, pot int64) {
 
 func loadJSONData(companyid int) StartupData {
 	var t StartupData
-	jsonFile, err := os.Open(fmt.Sprintf("startups/%d.json", companyid))
+	byteValue, err := assets.ReadStartupFile(companyid)
 	if err != nil {
 		fmt.Println(err)
-	}
-	defer jsonFile.Close()
-	byteValue, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		fmt.Println(err)
+		return t
 	}
 
 	err = json.Unmarshal(byteValue, &t)

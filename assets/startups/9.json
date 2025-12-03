@@ -1,0 +1,13 @@
+{
+    "name": "PetConnect",
+    "description": "Social network for pet owners",
+    "category": "Social Media",
+    "valuation": 12,
+    "grossburnrate": 7,
+    "Monthly Activation Rate": 300,
+    "Monthly Active Visitors": 20000,
+    "Monthly Sales": 80,
+    "Cost": 50,
+    "Sale Price": 100,
+    "Percent Margin Per Unit": 20
+}

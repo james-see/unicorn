@@ -1,0 +1,14 @@
+{
+    "name": "BioScan",
+    "description": "AI-powered diagnostic imaging for early disease detection",
+    "category": "Biotech",
+    "valuation": 38,
+    "grossburnrate": 15,
+    "Monthly Activation Rate": 50,
+    "Monthly Active Visitors": 1000,
+    "Monthly Sales": 35,
+    "Cost": 75000,
+    "Sale Price": 300000,
+    "Percent Margin Per Unit": 55
+}
+

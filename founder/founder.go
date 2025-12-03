@@ -3,21 +3,16 @@ package founder
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/rand"
-	"os"
+
+	"github.com/jamesacampbell/unicorn/assets"
 )
 
-
+// LoadFounderStartups loads startup templates from embedded assets
+// The filename parameter is kept for backwards compatibility but is ignored
 func LoadFounderStartups(filename string) ([]StartupTemplate, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open startups.json: %v", err)
-	}
-	defer file.Close()
-
-	data, err := ioutil.ReadAll(file)
+	data, err := assets.ReadFounderStartups()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read startups.json: %v", err)
 	}

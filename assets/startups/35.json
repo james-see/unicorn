@@ -1,0 +1,14 @@
+{
+    "name": "GeneCure",
+    "description": "Gene therapy platform for rare genetic diseases",
+    "category": "Biotech",
+    "valuation": 45,
+    "grossburnrate": 18,
+    "Monthly Activation Rate": 40,
+    "Monthly Active Visitors": 800,
+    "Monthly Sales": 25,
+    "Cost": 100000,
+    "Sale Price": 500000,
+    "Percent Margin Per Unit": 60
+}
+

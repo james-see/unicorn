@@ -1,0 +1,14 @@
+{
+    "name": "SolarMax",
+    "description": "Established solar panel installation company",
+    "category": "CleanTech",
+    "valuation": 20,
+    "grossburnrate": 3,
+    "Monthly Activation Rate": 140,
+    "Monthly Active Visitors": 6000,
+    "Monthly Sales": 300,
+    "Cost": 500,
+    "Sale Price": 2500,
+    "Percent Margin Per Unit": 60
+}
+

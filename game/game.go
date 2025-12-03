@@ -3,12 +3,12 @@ package game
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/jamesacampbell/unicorn/assets"
 )
 
 // FundingRound represents a funding round for a startup
@@ -375,17 +375,14 @@ func (gs *GameState) LoadStartups(playerUpgrades []string) {
 	gs.AvailableStartups = []Startup{}
 	allStartups := []Startup{}
 
-	// Load all 45 startups
+	// Load all 45 startups from embedded files
 	for i := 1; i <= 45; i++ {
 		var startup Startup
-		jsonFile, err := os.Open(fmt.Sprintf("startups/%d.json", i))
+		byteValue, err := assets.ReadStartupFile(i)
 		if err != nil {
 			fmt.Printf("Warning: Could not load startup %d: %v\n", i, err)
 			continue
 		}
-
-		byteValue, _ := ioutil.ReadAll(jsonFile)
-		jsonFile.Close()
 
 		json.Unmarshal(byteValue, &startup)
 
@@ -439,14 +436,11 @@ func (gs *GameState) LoadStartups(playerUpgrades []string) {
 func (gs *GameState) LoadEvents() {
 	gs.EventPool = []GameEvent{}
 
-	jsonFile, err := os.Open("rounds/round-options.json")
+	byteValue, err := assets.ReadRoundOptions()
 	if err != nil {
 		fmt.Printf("Warning: Could not load events: %v\n", err)
 		return
 	}
-	defer jsonFile.Close()
-
-	byteValue, _ := ioutil.ReadAll(jsonFile)
 
 	var events [][]GameEvent
 	json.Unmarshal(byteValue, &events)

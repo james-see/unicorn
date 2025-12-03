@@ -1,0 +1,14 @@
+{
+    "name": "SafeBank",
+    "description": "Conservative digital banking platform",
+    "category": "FinTech",
+    "valuation": 25,
+    "grossburnrate": 2,
+    "Monthly Activation Rate": 150,
+    "Monthly Active Visitors": 10000,
+    "Monthly Sales": 500,
+    "Cost": 50,
+    "Sale Price": 200,
+    "Percent Margin Per Unit": 40
+}
+

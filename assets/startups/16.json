@@ -1,0 +1,13 @@
+{
+    "name": "UrbanFarm",
+    "description": "Vertical farming kits for apartments",
+    "category": "AgriTech",
+    "valuation": 11,
+    "grossburnrate": 5,
+    "Monthly Activation Rate": 140,
+    "Monthly Active Visitors": 7000,
+    "Monthly Sales": 250,
+    "Cost": 150,
+    "Sale Price": 400,
+    "Percent Margin Per Unit": 42
+}

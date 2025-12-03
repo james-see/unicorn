@@ -1,0 +1,14 @@
+{
+    "name": "EcoTrack",
+    "description": "Sustainability platform for tracking corporate carbon footprint",
+    "category": "ClimateTech",
+    "valuation": 24,
+    "grossburnrate": 8,
+    "Monthly Activation Rate": 80,
+    "Monthly Active Visitors": 2800,
+    "Monthly Sales": 70,
+    "Cost": 10000,
+    "Sale Price": 35000,
+    "Percent Margin Per Unit": 40
+}
+

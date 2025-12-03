@@ -1,0 +1,14 @@
+{
+    "name": "CarbonZero",
+    "description": "Carbon capture technology for industrial emissions",
+    "category": "ClimateTech",
+    "valuation": 40,
+    "grossburnrate": 16,
+    "Monthly Activation Rate": 45,
+    "Monthly Active Visitors": 900,
+    "Monthly Sales": 30,
+    "Cost": 150000,
+    "Sale Price": 600000,
+    "Percent Margin Per Unit": 58
+}
+
