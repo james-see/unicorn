@@ -32,6 +32,7 @@ const (
 	ScreenStats
 	ScreenProgression
 	ScreenAnalytics
+	ScreenReputation
 	ScreenHelp
 )
 
@@ -131,6 +132,7 @@ type App struct {
 	stats        ScreenModel
 	progression  ScreenModel
 	analytics    ScreenModel
+	reputation   ScreenModel
 	help         ScreenModel
 
 	quitting bool
@@ -291,6 +293,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.analytics, cmd = a.analytics.Update(msg)
 			cmds = append(cmds, cmd)
 		}
+	case ScreenReputation:
+		if a.reputation != nil {
+			a.reputation, cmd = a.reputation.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 	case ScreenHelp:
 		if a.help != nil {
 			a.help, cmd = a.help.Update(msg)
@@ -368,6 +375,10 @@ func (a *App) View() string {
 	case ScreenAnalytics:
 		if a.analytics != nil {
 			content = a.analytics.View()
+		}
+	case ScreenReputation:
+		if a.reputation != nil {
+			content = a.reputation.View()
 		}
 	case ScreenHelp:
 		if a.help != nil {
@@ -449,6 +460,10 @@ func (a *App) switchScreen(screen Screen, data interface{}) (tea.Model, tea.Cmd)
 	case ScreenAnalytics:
 		a.analytics = NewAnalyticsScreen(a.width, a.height)
 		cmd = a.analytics.Init()
+
+	case ScreenReputation:
+		a.reputation = NewReputationScreen(a.width, a.height, a.gameData.PlayerName)
+		cmd = a.reputation.Init()
 
 	case ScreenHelp:
 		a.help = NewHelpScreen(a.width, a.height)

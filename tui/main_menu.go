@@ -65,6 +65,12 @@ func NewMainMenuScreen(width, height int, gameData *GameData) *MainMenuScreen {
 			Icon:        "📉",
 		},
 		{
+			ID:          "reputation",
+			Title:       "VC Reputation",
+			Description: "View your reputation and deal flow quality",
+			Icon:        "⭐",
+		},
+		{
 			ID:          "help",
 			Title:       "Help & Info",
 			Description: "Learn how to play",
@@ -128,6 +134,8 @@ func (m *MainMenuScreen) handleSelection(id string) tea.Cmd {
 		return PushTo(ScreenProgression)
 	case "analytics":
 		return PushTo(ScreenAnalytics)
+	case "reputation":
+		return PushTo(ScreenReputation)
 	case "help":
 		return PushTo(ScreenHelp)
 	case "quit":

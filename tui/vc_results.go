@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jamesacampbell/unicorn/achievements"
 	"github.com/jamesacampbell/unicorn/database"
+	"github.com/jamesacampbell/unicorn/progression"
 	"github.com/jamesacampbell/unicorn/tui/components"
 	"github.com/jamesacampbell/unicorn/tui/keys"
 	"github.com/jamesacampbell/unicorn/tui/styles"
@@ -21,6 +22,8 @@ type ResultsPhase int
 
 const (
 	PhaseResults ResultsPhase = iota
+	PhaseXP
+	PhaseLevelUp
 	PhaseLeaderboard
 	PhaseAchievements
 	PhaseDone
@@ -43,7 +46,18 @@ type VCResultsScreen struct {
 	ratingIcon      string
 
 	// New achievements unlocked
-	newAchievements []string
+	newAchievements    []string
+	newAchievementObjs []achievements.Achievement
+
+	// XP and Level tracking
+	xpBreakdown    map[string]int
+	totalXP        int
+	leveledUp      bool
+	oldLevel       int
+	newLevel       int
+	levelUpPoints  int
+	profileBefore  *database.PlayerProfile
+	profileAfter   *database.PlayerProfile
 
 	// Leaderboard
 	leaderboardTable *components.GameTable
@@ -164,10 +178,75 @@ func (s *VCResultsScreen) Init() tea.Cmd {
 		s.scoreSaved = true
 	}
 
+	// Get profile before XP is added
+	s.profileBefore, _ = database.GetPlayerProfile(gs.PlayerName)
+	if s.profileBefore != nil {
+		s.oldLevel = s.profileBefore.Level
+	} else {
+		s.oldLevel = 1
+	}
+
 	// Check for achievements
 	s.checkAchievements()
 
+	// Calculate XP breakdown
+	s.calculateXPBreakdown()
+
+	// Add XP to player
+	var levelUpErr error
+	s.leveledUp, s.newLevel, s.levelUpPoints, levelUpErr = database.AddExperience(gs.PlayerName, s.totalXP)
+	if levelUpErr == nil {
+		s.profileAfter, _ = database.GetPlayerProfile(gs.PlayerName)
+	}
+
 	return nil
+}
+
+func (s *VCResultsScreen) calculateXPBreakdown() {
+	gs := s.gameData.GameState
+	s.xpBreakdown = make(map[string]int)
+
+	// Base XP for completing a game
+	s.xpBreakdown["Game Completion"] = progression.XPGameComplete
+	s.totalXP = progression.XPGameComplete
+
+	// Positive ROI bonus
+	if s.roi > 0 {
+		s.xpBreakdown["Positive ROI"] = progression.XPPositiveROI
+		s.totalXP += progression.XPPositiveROI
+	}
+
+	// Successful exits bonus
+	if s.successfulExits > 0 {
+		exitXP := progression.XPSuccessfulExit * s.successfulExits
+		s.xpBreakdown[fmt.Sprintf("Successful Exits (%d)", s.successfulExits)] = exitXP
+		s.totalXP += exitXP
+	}
+
+	// Difficulty bonus
+	switch strings.ToLower(gs.Difficulty.Name) {
+	case "medium":
+		s.xpBreakdown["Medium Difficulty"] = progression.XPDifficultyMedium
+		s.totalXP += progression.XPDifficultyMedium
+	case "hard":
+		s.xpBreakdown["Hard Difficulty"] = progression.XPDifficultyHard
+		s.totalXP += progression.XPDifficultyHard
+	case "expert":
+		s.xpBreakdown["Expert Difficulty"] = progression.XPDifficultyExpert
+		s.totalXP += progression.XPDifficultyExpert
+	}
+
+	// Achievement bonuses
+	if len(s.newAchievementObjs) > 0 {
+		achXP := 0
+		for _, ach := range s.newAchievementObjs {
+			achXP += ach.Points * progression.XPAchievementBase
+		}
+		if achXP > 0 {
+			s.xpBreakdown[fmt.Sprintf("New Achievements (%d)", len(s.newAchievementObjs))] = achXP
+			s.totalXP += achXP
+		}
+	}
 }
 
 func (s *VCResultsScreen) checkAchievements() {
@@ -193,6 +272,7 @@ func (s *VCResultsScreen) checkAchievements() {
 
 	for _, ach := range newUnlocks {
 		s.newAchievements = append(s.newAchievements, ach.Name)
+		s.newAchievementObjs = append(s.newAchievementObjs, ach)
 		database.UnlockAchievement(gs.PlayerName, ach.ID)
 	}
 }
@@ -205,6 +285,14 @@ func (s *VCResultsScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		case key.Matches(msg, keys.Global.Enter):
 			switch s.phase {
 			case PhaseResults:
+				s.phase = PhaseXP
+			case PhaseXP:
+				if s.leveledUp {
+					s.phase = PhaseLevelUp
+				} else {
+					s.phase = PhaseLeaderboard
+				}
+			case PhaseLevelUp:
 				s.phase = PhaseLeaderboard
 			case PhaseLeaderboard:
 				if len(s.newAchievements) > 0 {
@@ -229,6 +317,10 @@ func (s *VCResultsScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 // View renders the results screen
 func (s *VCResultsScreen) View() string {
 	switch s.phase {
+	case PhaseXP:
+		return s.renderXPBreakdown()
+	case PhaseLevelUp:
+		return s.renderLevelUp()
 	case PhaseLeaderboard:
 		return s.renderLeaderboard()
 	case PhaseAchievements:
@@ -452,6 +544,152 @@ func (s *VCResultsScreen) renderAchievements() string {
 	// Help
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
 	b.WriteString(helpStyle.Render("Press Enter to return to main menu"))
+
+	return b.String()
+}
+
+func (s *VCResultsScreen) renderXPBreakdown() string {
+	var b strings.Builder
+
+	// Header
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Cyan).
+		Bold(true).
+		Width(s.width).
+		Align(lipgloss.Center)
+	b.WriteString(headerStyle.Render("📊 EXPERIENCE EARNED 📊"))
+	b.WriteString("\n\n")
+
+	// XP breakdown box
+	xpBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2).
+		Width(50)
+
+	var xpContent strings.Builder
+
+	// Individual XP sources
+	sourceStyle := lipgloss.NewStyle().Foreground(styles.White)
+	xpStyle := lipgloss.NewStyle().Foreground(styles.Green).Bold(true)
+
+	for source, amount := range s.xpBreakdown {
+		xpContent.WriteString(xpStyle.Render(fmt.Sprintf("+%d XP ", amount)))
+		xpContent.WriteString(sourceStyle.Render(source))
+		xpContent.WriteString("\n")
+	}
+
+	xpContent.WriteString("\n")
+	xpContent.WriteString(strings.Repeat("─", 40))
+	xpContent.WriteString("\n")
+
+	// Total XP
+	totalStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
+	xpContent.WriteString(totalStyle.Render(fmt.Sprintf("Total XP Gained: +%d XP", s.totalXP)))
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(xpBox.Render(xpContent.String())))
+	b.WriteString("\n\n")
+
+	// Level progress
+	if s.profileAfter != nil {
+		levelBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Magenta).
+			Padding(1, 2).
+			Width(50)
+
+		var levelContent strings.Builder
+		levelStyle := lipgloss.NewStyle().Foreground(styles.Magenta).Bold(true)
+		levelInfo := progression.GetLevelInfo(s.profileAfter.Level)
+
+		levelContent.WriteString(levelStyle.Render(fmt.Sprintf("Level %d - %s", s.profileAfter.Level, levelInfo.Title)))
+		levelContent.WriteString("\n\n")
+
+		// Progress bar
+		progressBar := progression.FormatXPBar(s.profileAfter.ExperiencePoints, s.profileAfter.NextLevelXP, 30)
+		progressStyle := lipgloss.NewStyle().Foreground(styles.Cyan)
+		levelContent.WriteString(progressStyle.Render(progressBar))
+		levelContent.WriteString("\n")
+		levelContent.WriteString(fmt.Sprintf("%d / %d XP", s.profileAfter.ExperiencePoints, s.profileAfter.NextLevelXP))
+
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(levelBox.Render(levelContent.String())))
+		b.WriteString("\n\n")
+	}
+
+	// Help
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	if s.leveledUp {
+		b.WriteString(helpStyle.Render("Press Enter to see level up rewards!"))
+	} else {
+		b.WriteString(helpStyle.Render("Press Enter to see final standings"))
+	}
+
+	return b.String()
+}
+
+func (s *VCResultsScreen) renderLevelUp() string {
+	var b strings.Builder
+
+	// Big celebration header
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Gold).
+		Bold(true).
+		Width(s.width).
+		Align(lipgloss.Center)
+	b.WriteString(headerStyle.Render("🎉 LEVEL UP! 🎉"))
+	b.WriteString("\n\n")
+
+	// Level up box
+	levelBox := lipgloss.NewStyle().
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(styles.Gold).
+		Padding(1, 3).
+		Width(55)
+
+	var levelContent strings.Builder
+
+	// Level change
+	oldStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+	arrowStyle := lipgloss.NewStyle().Foreground(styles.White).Bold(true)
+	newStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
+
+	oldLevelInfo := progression.GetLevelInfo(s.oldLevel)
+	newLevelInfo := progression.GetLevelInfo(s.newLevel)
+
+	levelContent.WriteString(oldStyle.Render(fmt.Sprintf("Level %d - %s", s.oldLevel, oldLevelInfo.Title)))
+	levelContent.WriteString("\n")
+	levelContent.WriteString(arrowStyle.Render("           ↓"))
+	levelContent.WriteString("\n")
+	levelContent.WriteString(newStyle.Render(fmt.Sprintf("Level %d - %s", s.newLevel, newLevelInfo.Title)))
+	levelContent.WriteString("\n\n")
+
+	// Points earned
+	if s.levelUpPoints > 0 {
+		pointsStyle := lipgloss.NewStyle().Foreground(styles.Green).Bold(true)
+		levelContent.WriteString(pointsStyle.Render(fmt.Sprintf("💰 Bonus Points: +%d", s.levelUpPoints)))
+		levelContent.WriteString("\n\n")
+	}
+
+	// Unlocks
+	unlocks := newLevelInfo.Unlocks
+	if len(unlocks) > 0 {
+		unlockHeader := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+		levelContent.WriteString(unlockHeader.Render("🔓 NEW UNLOCKS:"))
+		levelContent.WriteString("\n")
+
+		unlockStyle := lipgloss.NewStyle().Foreground(styles.White)
+		for _, unlock := range unlocks {
+			levelContent.WriteString(unlockStyle.Render("   • " + unlock))
+			levelContent.WriteString("\n")
+		}
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(levelBox.Render(levelContent.String())))
+	b.WriteString("\n\n")
+
+	// Help
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("Press Enter to see final standings"))
 
 	return b.String()
 }
