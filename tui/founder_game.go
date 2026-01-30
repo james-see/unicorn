@@ -53,6 +53,14 @@ const (
 	FounderViewEconomy
 	FounderViewSuccession
 	FounderViewSalesPipeline
+	// New features for parity
+	FounderViewStrategicOpportunity
+	FounderViewContentMarketing
+	FounderViewCSPlaybooks
+	FounderViewCompetitiveIntel
+	FounderViewReferralProgram
+	FounderViewTechDebt
+	FounderViewEndAffiliate
 )
 
 // FounderGameScreen handles the founder game
@@ -117,6 +125,22 @@ type FounderGameScreen struct {
 	pricingInput    textinput.Model
 	securityInput   textinput.Model
 	successionInput textinput.Model
+
+	// New feature menus for parity
+	strategicOpportunityMenu *components.Menu
+	contentMarketingMenu     *components.Menu
+	csPlaybooksMenu          *components.Menu
+	competitiveIntelMenu     *components.Menu
+	referralProgramMenu      *components.Menu
+	techDebtMenu             *components.Menu
+	endAffiliateMenu         *components.Menu
+
+	// New inputs
+	contentBudgetInput   textinput.Model
+	csPlaybookInput      textinput.Model
+	referralRewardInput  textinput.Model
+	intelReportInput     textinput.Model
+	techDebtRefactorInput textinput.Model
 }
 
 // NewFounderGameScreen creates a new founder game screen
@@ -157,17 +181,52 @@ func NewFounderGameScreen(width, height int, gameData *GameData) *FounderGameScr
 	successionInput.CharLimit = 30
 	successionInput.Width = 25
 
+	// Content budget input
+	contentBudgetInput := textinput.New()
+	contentBudgetInput.Placeholder = "Monthly budget (10000-50000)"
+	contentBudgetInput.CharLimit = 10
+	contentBudgetInput.Width = 15
+
+	// CS Playbook input
+	csPlaybookInput := textinput.New()
+	csPlaybookInput.Placeholder = "Budget per month"
+	csPlaybookInput.CharLimit = 10
+	csPlaybookInput.Width = 15
+
+	// Referral reward input
+	referralRewardInput := textinput.New()
+	referralRewardInput.Placeholder = "Reward amount (100-1000)"
+	referralRewardInput.CharLimit = 10
+	referralRewardInput.Width = 15
+
+	// Intel report input
+	intelReportInput := textinput.New()
+	intelReportInput.Placeholder = "Competitor name"
+	intelReportInput.CharLimit = 30
+	intelReportInput.Width = 25
+
+	// Tech debt refactor input
+	techDebtRefactorInput := textinput.New()
+	techDebtRefactorInput.Placeholder = "Budget (50000-200000)"
+	techDebtRefactorInput.CharLimit = 10
+	techDebtRefactorInput.Width = 15
+
 	s := &FounderGameScreen{
-		width:           width,
-		height:          height,
-		gameData:        gameData,
-		view:            FounderViewMain,
-		marketingInput:  marketingInput,
-		affiliateInput:  affiliateInput,
-		buybackInput:    buybackInput,
-		pricingInput:    pricingInput,
-		securityInput:   securityInput,
-		successionInput: successionInput,
+		width:                 width,
+		height:                height,
+		gameData:              gameData,
+		view:                  FounderViewMain,
+		marketingInput:        marketingInput,
+		affiliateInput:        affiliateInput,
+		buybackInput:          buybackInput,
+		pricingInput:          pricingInput,
+		securityInput:         securityInput,
+		successionInput:       successionInput,
+		contentBudgetInput:    contentBudgetInput,
+		csPlaybookInput:       csPlaybookInput,
+		referralRewardInput:   referralRewardInput,
+		intelReportInput:      intelReportInput,
+		techDebtRefactorInput: techDebtRefactorInput,
 	}
 
 	s.rebuildActionsMenu()
@@ -218,6 +277,20 @@ func (s *FounderGameScreen) rebuildActionsMenu() {
 	} else {
 		items = append(items, components.MenuItem{
 			ID: "affiliate_view", Title: "View Affiliate Program", Description: fmt.Sprintf("%d affiliates, $%s/mo", fg.AffiliateProgram.Affiliates, formatCompactMoney(fg.AffiliateMRR)), Icon: "💸",
+		})
+		items = append(items, components.MenuItem{
+			ID: "end_affiliate", Title: "End Affiliate Program", Description: "Shut down affiliate program", Icon: "🚫",
+		})
+	}
+
+	// Referral Program
+	if fg.ReferralProgram == nil && fg.Customers >= 10 {
+		items = append(items, components.MenuItem{
+			ID: "referral", Title: "Launch Referral Program", Description: "Customers refer new customers", Icon: "🎁",
+		})
+	} else if fg.ReferralProgram != nil {
+		items = append(items, components.MenuItem{
+			ID: "referral_view", Title: "View Referral Program", Description: fmt.Sprintf("%d referrals total", fg.ReferralProgram.TotalReferrals), Icon: "🎁",
 		})
 	}
 
@@ -287,6 +360,59 @@ func (s *FounderGameScreen) rebuildActionsMenu() {
 		})
 	}
 
+	// Content Marketing (unlock: marketing hire OR $200k MRR)
+	hasMarketing := len(fg.Team.Marketing) > 0
+	if hasMarketing || fg.MRR >= 200000 {
+		if fg.ContentProgram == nil {
+			items = append(items, components.MenuItem{
+				ID: "content_marketing", Title: "Launch Content Marketing", Description: "SEO and content program", Icon: "📝",
+			})
+		} else {
+			items = append(items, components.MenuItem{
+				ID: "content_marketing", Title: "Manage Content Marketing", Description: fmt.Sprintf("SEO Score: %d, Traffic: %d", fg.ContentProgram.SEOScore, fg.ContentProgram.OrganicTraffic), Icon: "📝",
+			})
+		}
+	}
+
+	// CS Playbooks (unlock: CS hire OR 100+ customers)
+	hasCS := len(fg.Team.CustomerSuccess) > 0
+	if hasCS || fg.Customers >= 100 {
+		items = append(items, components.MenuItem{
+			ID: "cs_playbooks", Title: "CS Playbooks", Description: fmt.Sprintf("%d active playbooks", len(fg.CSPlaybooks)), Icon: "📋",
+		})
+	}
+
+	// Competitive Intelligence (unlock: Series A OR 5+ competitors)
+	hasSeriesA := false
+	for _, round := range fg.FundingRounds {
+		if round.RoundName == "Series A" {
+			hasSeriesA = true
+			break
+		}
+	}
+	if hasSeriesA || len(fg.Competitors) >= 5 {
+		if fg.CompetitiveIntel == nil {
+			items = append(items, components.MenuItem{
+				ID: "competitive_intel", Title: "Launch Competitive Intel", Description: "Hire analyst, gather intel", Icon: "🕵️",
+			})
+		} else {
+			items = append(items, components.MenuItem{
+				ID: "competitive_intel", Title: "Competitive Intelligence", Description: fmt.Sprintf("%d reports", len(fg.CompetitiveIntel.IntelReports)), Icon: "🕵️",
+			})
+		}
+	}
+
+	// Technical Debt (unlock: 5+ engineers OR $1M+ MRR)
+	if len(fg.Team.Engineers) >= 5 || fg.MRR >= 1000000 {
+		debtLevel := 0
+		if fg.TechnicalDebt != nil {
+			debtLevel = fg.TechnicalDebt.CurrentLevel
+		}
+		items = append(items, components.MenuItem{
+			ID: "tech_debt", Title: "Technical Debt", Description: fmt.Sprintf("Current debt: %d/100", debtLevel), Icon: "🔧",
+		})
+	}
+
 	// View data
 	items = append(items, components.MenuItem{
 		ID: "header_view", Title: "── VIEW DATA ──", Disabled: true, Icon: "",
@@ -304,6 +430,23 @@ func (s *FounderGameScreen) rebuildActionsMenu() {
 	if fg.SalesPipeline != nil && len(fg.SalesPipeline.ActiveDeals) > 0 {
 		items = append(items, components.MenuItem{
 			ID: "pipeline", Title: "View Sales Pipeline", Description: "Track deal progress", Icon: "📈",
+		})
+	}
+
+	// Solicit Customer Feedback (when customers > 0)
+	if fg.Customers > 0 {
+		items = append(items, components.MenuItem{
+			ID: "feedback", Title: "Solicit Customer Feedback", Description: "Improve product, reduce churn", Icon: "💬",
+		})
+	}
+
+	// Strategic Opportunity (when pending)
+	if fg.PendingOpportunity != nil {
+		items = append(items, components.MenuItem{
+			ID:          "opportunity",
+			Title:       "Strategic Opportunity!",
+			Description: fmt.Sprintf("%s (expires in %d months)", fg.PendingOpportunity.Title, fg.PendingOpportunity.ExpiresIn),
+			Icon:        "💡",
 		})
 	}
 
@@ -705,6 +848,49 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				return s, nil
 			}
 
+		// New feature views
+		case FounderViewStrategicOpportunity:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewContentMarketing:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewCSPlaybooks:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewCompetitiveIntel:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewReferralProgram:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewTechDebt:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewEndAffiliate:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
 		case FounderViewConfirmExit:
 			if key.Matches(msg, keys.Global.Back) {
 				s.view = FounderViewExit
@@ -761,6 +947,21 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 			return s.handleEconomySelection(msg.ID)
 		case FounderViewSuccession:
 			return s.handleSuccessionSelection(msg.ID)
+		// New feature handlers
+		case FounderViewStrategicOpportunity:
+			return s.handleStrategicOpportunitySelection(msg.ID)
+		case FounderViewContentMarketing:
+			return s.handleContentMarketingSelection(msg.ID)
+		case FounderViewCSPlaybooks:
+			return s.handleCSPlaybooksSelection(msg.ID)
+		case FounderViewCompetitiveIntel:
+			return s.handleCompetitiveIntelSelection(msg.ID)
+		case FounderViewReferralProgram:
+			return s.handleReferralProgramSelection(msg.ID)
+		case FounderViewTechDebt:
+			return s.handleTechDebtSelection(msg.ID)
+		case FounderViewEndAffiliate:
+			return s.handleEndAffiliateSelection(msg.ID)
 		}
 	}
 
@@ -846,6 +1047,35 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		if s.successionMenu != nil {
 			s.successionMenu, cmd = s.successionMenu.Update(msg)
 		}
+	// New feature menu updates
+	case FounderViewStrategicOpportunity:
+		if s.strategicOpportunityMenu != nil {
+			s.strategicOpportunityMenu, cmd = s.strategicOpportunityMenu.Update(msg)
+		}
+	case FounderViewContentMarketing:
+		if s.contentMarketingMenu != nil {
+			s.contentMarketingMenu, cmd = s.contentMarketingMenu.Update(msg)
+		}
+	case FounderViewCSPlaybooks:
+		if s.csPlaybooksMenu != nil {
+			s.csPlaybooksMenu, cmd = s.csPlaybooksMenu.Update(msg)
+		}
+	case FounderViewCompetitiveIntel:
+		if s.competitiveIntelMenu != nil {
+			s.competitiveIntelMenu, cmd = s.competitiveIntelMenu.Update(msg)
+		}
+	case FounderViewReferralProgram:
+		if s.referralProgramMenu != nil {
+			s.referralProgramMenu, cmd = s.referralProgramMenu.Update(msg)
+		}
+	case FounderViewTechDebt:
+		if s.techDebtMenu != nil {
+			s.techDebtMenu, cmd = s.techDebtMenu.Update(msg)
+		}
+	case FounderViewEndAffiliate:
+		if s.endAffiliateMenu != nil {
+			s.endAffiliateMenu, cmd = s.endAffiliateMenu.Update(msg)
+		}
 	}
 
 	return s, cmd
@@ -914,6 +1144,29 @@ func (s *FounderGameScreen) handleAction(id string) (ScreenModel, tea.Cmd) {
 			fmt.Sprintf("Active Affiliates: %d", fg.AffiliateProgram.Affiliates),
 			fmt.Sprintf("Affiliate MRR: $%s", formatCompactMoney(fg.AffiliateMRR)),
 			fmt.Sprintf("Affiliate Customers: %d", fg.AffiliateCustomers),
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "end_affiliate":
+		s.rebuildEndAffiliateMenu()
+		s.view = FounderViewEndAffiliate
+		return s, nil
+
+	case "referral":
+		s.rebuildReferralProgramMenu()
+		s.view = FounderViewReferralProgram
+		return s, nil
+
+	case "referral_view":
+		if fg.ReferralProgram != nil {
+			s.turnMessages = []string{
+				fmt.Sprintf("Referral Program Active since month %d", fg.ReferralProgram.LaunchedMonth),
+				fmt.Sprintf("Reward per Referral: $%s (%s)", formatCompactMoney(fg.ReferralProgram.RewardPerReferral), fg.ReferralProgram.RewardType),
+				fmt.Sprintf("Total Referrals: %d", fg.ReferralProgram.TotalReferrals),
+				fmt.Sprintf("Customers Acquired: %d", fg.ReferralProgram.CustomersAcquired),
+				fmt.Sprintf("Monthly Budget: $%s", formatCompactMoney(fg.ReferralProgram.MonthlyBudget)),
+			}
 		}
 		s.view = FounderViewMain
 		return s, nil
@@ -997,6 +1250,45 @@ func (s *FounderGameScreen) handleAction(id string) (ScreenModel, tea.Cmd) {
 
 	case "pipeline":
 		s.view = FounderViewSalesPipeline
+		return s, nil
+
+	case "feedback":
+		err := fg.SolicitCustomerFeedback()
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				"✓ Solicited customer feedback",
+				"  Product maturity improved",
+				"  Customer churn reduced",
+			}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "opportunity":
+		s.rebuildStrategicOpportunityMenu()
+		s.view = FounderViewStrategicOpportunity
+		return s, nil
+
+	case "content_marketing":
+		s.rebuildContentMarketingMenu()
+		s.view = FounderViewContentMarketing
+		return s, nil
+
+	case "cs_playbooks":
+		s.rebuildCSPlaybooksMenu()
+		s.view = FounderViewCSPlaybooks
+		return s, nil
+
+	case "competitive_intel":
+		s.rebuildCompetitiveIntelMenu()
+		s.view = FounderViewCompetitiveIntel
+		return s, nil
+
+	case "tech_debt":
+		s.rebuildTechDebtMenu()
+		s.view = FounderViewTechDebt
 		return s, nil
 	}
 
@@ -1582,9 +1874,42 @@ func (s *FounderGameScreen) rebuildBoardMenu() {
 		{ID: "add_advisor", Title: "Add Advisor", Description: "0.25-1% equity for guidance", Icon: "🧠"},
 	}
 
+	// Check for advisors who can be promoted to chairman
+	hasActiveAdvisor := false
+	hasChairman := false
+	for _, m := range fg.BoardMembers {
+		if m.IsActive {
+			hasActiveAdvisor = true
+			if m.IsChairman {
+				hasChairman = true
+			}
+		}
+	}
+
+	if hasActiveAdvisor && !hasChairman {
+		items = append(items, components.MenuItem{
+			ID: "set_chairman", Title: "Set Chairman", Description: "Promote advisor to chairman", Icon: "👑",
+		})
+	}
+
 	if len(fg.BoardMembers) > 0 {
 		items = append(items, components.MenuItem{
 			ID: "remove_advisor", Title: "Remove Advisor", Description: "With equity buyback option", Icon: "❌",
+		})
+	}
+
+	// Fire investor board member (requires 51%+ ownership)
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	hasInvestorBoardMember := false
+	for _, m := range fg.BoardMembers {
+		if m.IsActive && m.Type == "investor" {
+			hasInvestorBoardMember = true
+			break
+		}
+	}
+	if hasInvestorBoardMember && founderEquity >= 51.0 {
+		items = append(items, components.MenuItem{
+			ID: "fire_board_member", Title: "Fire Board Member", Description: "Remove investor director (requires 51%+)", Icon: "🔥",
 		})
 	}
 
@@ -1593,7 +1918,7 @@ func (s *FounderGameScreen) rebuildBoardMenu() {
 	})
 
 	s.boardMenu = components.NewMenu("BOARD & EQUITY", items)
-	s.boardMenu.SetSize(55, 12)
+	s.boardMenu.SetSize(55, 15)
 	s.boardMenu.SetHideHelp(true)
 }
 
@@ -1685,6 +2010,45 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 					}
 					break
 				}
+			}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "set_chairman":
+		// Find the first active advisor and promote to chairman
+		for _, m := range fg.BoardMembers {
+			if m.IsActive && !m.IsChairman {
+				err := fg.SetChairman(m.Name)
+				if err != nil {
+					s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+				} else {
+					s.turnMessages = []string{
+						fmt.Sprintf("✓ %s promoted to Chairman of the Board", m.Name),
+						"   Chairman can mitigate legal/press/regulatory crises",
+					}
+				}
+				break
+			}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "fire_board_member":
+		// Find and fire the first active investor board member
+		for _, m := range fg.BoardMembers {
+			if m.IsActive && m.Type == "investor" {
+				err := fg.FireBoardMember(m.Name)
+				if err != nil {
+					s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+				} else {
+					s.turnMessages = []string{
+						fmt.Sprintf("✓ Fired board member: %s", m.Name),
+						"   ⚠️  Board pressure increased significantly",
+						"   ⚠️  Board sentiment worsened",
+					}
+				}
+				break
 			}
 		}
 		s.view = FounderViewMain
@@ -1949,12 +2313,12 @@ func (s *FounderGameScreen) handleSegmentsSelection(id string) (ScreenModel, tea
 
 	if id == "view" {
 		var msgs []string
-		if fg.CustomerSegments != nil {
+		if len(fg.CustomerSegments) > 0 {
 			msgs = append(msgs, fmt.Sprintf("Current ICP: %s", fg.SelectedICP))
 			msgs = append(msgs, "")
-			for name, seg := range fg.CustomerSegments {
+			for _, seg := range fg.CustomerSegments {
 				msgs = append(msgs, fmt.Sprintf("%s: %d customers, $%s/mo avg",
-					name, seg.Volume, formatCompactMoney(seg.AvgDealSize)))
+					seg.Name, seg.Volume, formatCompactMoney(seg.AvgDealSize)))
 			}
 		} else {
 			msgs = append(msgs, "No segment data available")
@@ -2566,6 +2930,595 @@ func (s *FounderGameScreen) handleSuccessionSelection(id string) (ScreenModel, t
 	return s, nil
 }
 
+// ============================================================================
+// NEW FEATURE MENUS AND HANDLERS
+// ============================================================================
+
+// Strategic Opportunity
+func (s *FounderGameScreen) rebuildStrategicOpportunityMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+
+	if fg.PendingOpportunity != nil {
+		opp := fg.PendingOpportunity
+		items = append(items,
+			components.MenuItem{ID: "info", Title: opp.Title, Description: opp.Description, Disabled: true, Icon: "💡"},
+			components.MenuItem{ID: "accept", Title: "Accept Opportunity", Description: fmt.Sprintf("Benefit: %s", opp.Benefit), Icon: "✓"},
+			components.MenuItem{ID: "decline", Title: "Decline Opportunity", Description: "Pass on this opportunity", Icon: "✗"},
+		)
+	}
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
+
+	s.strategicOpportunityMenu = components.NewMenu("STRATEGIC OPPORTUNITY", items)
+	s.strategicOpportunityMenu.SetSize(60, 12)
+	s.strategicOpportunityMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleStrategicOpportunitySelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	if fg.PendingOpportunity == nil {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	opp := fg.PendingOpportunity
+
+	switch id {
+	case "accept":
+		// Apply the opportunity benefits
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Accepted: %s", opp.Title),
+			fmt.Sprintf("  Benefit: %s", opp.Benefit),
+		}
+		fg.PendingOpportunity = nil
+	case "decline":
+		s.turnMessages = []string{
+			fmt.Sprintf("✗ Declined: %s", opp.Title),
+		}
+		fg.PendingOpportunity = nil
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Content Marketing
+func (s *FounderGameScreen) rebuildContentMarketingMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+
+	if fg.ContentProgram == nil {
+		items = append(items,
+			components.MenuItem{ID: "launch_10k", Title: "Launch ($10k/mo)", Description: "Basic content program", Icon: "📝"},
+			components.MenuItem{ID: "launch_25k", Title: "Launch ($25k/mo)", Description: "Medium content program", Icon: "📝"},
+			components.MenuItem{ID: "launch_50k", Title: "Launch ($50k/mo)", Description: "Premium content program", Icon: "📝"},
+		)
+	} else {
+		items = append(items,
+			components.MenuItem{ID: "view", Title: "View Program Status", Description: fmt.Sprintf("SEO: %d, Traffic: %d", fg.ContentProgram.SEOScore, fg.ContentProgram.OrganicTraffic), Icon: "👁️"},
+			components.MenuItem{ID: "end", Title: "End Program", Description: "Stop content marketing", Icon: "🛑"},
+		)
+	}
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
+
+	s.contentMarketingMenu = components.NewMenu("CONTENT MARKETING", items)
+	s.contentMarketingMenu.SetSize(55, 12)
+	s.contentMarketingMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleContentMarketingSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	switch id {
+	case "launch_10k":
+		err := fg.LaunchContentProgram(10000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched content marketing program ($10k/mo)"}
+		}
+	case "launch_25k":
+		err := fg.LaunchContentProgram(25000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched content marketing program ($25k/mo)"}
+		}
+	case "launch_50k":
+		err := fg.LaunchContentProgram(50000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched content marketing program ($50k/mo)"}
+		}
+	case "view":
+		if fg.ContentProgram != nil {
+			s.turnMessages = []string{
+				"📝 Content Marketing Status:",
+				fmt.Sprintf("   Monthly Budget: $%s", formatCompactMoney(fg.ContentProgram.MonthlyBudget)),
+				fmt.Sprintf("   SEO Score: %d/100", fg.ContentProgram.SEOScore),
+				fmt.Sprintf("   Organic Traffic: %d visitors/mo", fg.ContentProgram.OrganicTraffic),
+				fmt.Sprintf("   Content Quality: %.0f/100", fg.ContentProgram.ContentQuality*100),
+				fmt.Sprintf("   Inbound Leads: %d this month", fg.ContentProgram.InboundLeads),
+			}
+		}
+	case "end":
+		fg.EndContentProgram()
+		s.turnMessages = []string{"✓ Ended content marketing program"}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// CS Playbooks
+func (s *FounderGameScreen) rebuildCSPlaybooksMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Active Playbooks", Description: fmt.Sprintf("%d playbooks running", len(fg.CSPlaybooks)), Icon: "👁️"},
+	}
+
+	// Check which playbooks are not yet launched
+	hasOnboarding := false
+	hasHealth := false
+	hasUpsell := false
+	hasRenewal := false
+	hasChurnPrevention := false
+
+	for _, pb := range fg.CSPlaybooks {
+		switch pb.Name {
+		case "Onboarding":
+			hasOnboarding = true
+		case "Health Monitoring":
+			hasHealth = true
+		case "Upsell":
+			hasUpsell = true
+		case "Renewal":
+			hasRenewal = true
+		case "Churn Prevention":
+			hasChurnPrevention = true
+		}
+	}
+
+	if !hasOnboarding {
+		items = append(items, components.MenuItem{ID: "launch_onboarding", Title: "Launch Onboarding", Description: "Help customers get started", Icon: "🚀"})
+	}
+	if !hasHealth {
+		items = append(items, components.MenuItem{ID: "launch_health", Title: "Launch Health Monitoring", Description: "Track customer health scores", Icon: "❤️"})
+	}
+	if !hasUpsell {
+		items = append(items, components.MenuItem{ID: "launch_upsell", Title: "Launch Upsell Program", Description: "Identify expansion opportunities", Icon: "📈"})
+	}
+	if !hasRenewal {
+		items = append(items, components.MenuItem{ID: "launch_renewal", Title: "Launch Renewal Program", Description: "Proactive renewal management", Icon: "🔄"})
+	}
+	if !hasChurnPrevention {
+		items = append(items, components.MenuItem{ID: "launch_churn", Title: "Launch Churn Prevention", Description: "Save at-risk customers", Icon: "🛡️"})
+	}
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
+
+	s.csPlaybooksMenu = components.NewMenu("CS PLAYBOOKS", items)
+	s.csPlaybooksMenu.SetSize(55, 15)
+	s.csPlaybooksMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleCSPlaybooksSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	switch id {
+	case "view":
+		if len(fg.CSPlaybooks) == 0 {
+			s.turnMessages = []string{"No CS playbooks active yet"}
+		} else {
+			msgs := []string{"📋 Active CS Playbooks:"}
+			for _, pb := range fg.CSPlaybooks {
+				msgs = append(msgs, fmt.Sprintf("   • %s (Budget: $%s/mo, NPS: %d)", pb.Name, formatCompactMoney(pb.MonthlyBudget), pb.NPSScore))
+			}
+			s.turnMessages = msgs
+		}
+	case "launch_onboarding":
+		err := fg.LaunchCSPlaybook("Onboarding", 5000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched Onboarding playbook"}
+		}
+	case "launch_health":
+		err := fg.LaunchCSPlaybook("Health Monitoring", 5000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched Health Monitoring playbook"}
+		}
+	case "launch_upsell":
+		err := fg.LaunchCSPlaybook("Upsell", 5000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched Upsell playbook"}
+		}
+	case "launch_renewal":
+		err := fg.LaunchCSPlaybook("Renewal", 5000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched Renewal playbook"}
+		}
+	case "launch_churn":
+		err := fg.LaunchCSPlaybook("Churn Prevention", 5000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched Churn Prevention playbook"}
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Competitive Intelligence
+func (s *FounderGameScreen) rebuildCompetitiveIntelMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+
+	if fg.CompetitiveIntel == nil {
+		items = append(items,
+			components.MenuItem{ID: "hire_80k", Title: "Hire Analyst ($80k/yr)", Description: "Basic competitive intelligence", Icon: "🕵️"},
+			components.MenuItem{ID: "hire_100k", Title: "Hire Analyst ($100k/yr)", Description: "Experienced analyst", Icon: "🕵️"},
+			components.MenuItem{ID: "hire_120k", Title: "Hire Analyst ($120k/yr)", Description: "Senior analyst", Icon: "🕵️"},
+		)
+	} else {
+		items = append(items,
+			components.MenuItem{ID: "view", Title: "View Intel Reports", Description: fmt.Sprintf("%d reports available", len(fg.CompetitiveIntel.IntelReports)), Icon: "👁️"},
+		)
+
+		// Add commission options for each competitor
+		for i, comp := range fg.Competitors {
+			items = append(items, components.MenuItem{
+				ID:          fmt.Sprintf("report_%d", i),
+				Title:       fmt.Sprintf("Commission Report: %s", comp.Name),
+				Description: fmt.Sprintf("$25-50k, threat: %s", comp.Threat),
+				Icon:        "📊",
+			})
+		}
+	}
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
+
+	s.competitiveIntelMenu = components.NewMenu("COMPETITIVE INTELLIGENCE", items)
+	s.competitiveIntelMenu.SetSize(55, 15)
+	s.competitiveIntelMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleCompetitiveIntelSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	switch id {
+	case "hire_80k":
+		err := fg.LaunchCompetitiveIntel(80000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Hired competitive intelligence analyst ($80k/yr)"}
+		}
+	case "hire_100k":
+		err := fg.LaunchCompetitiveIntel(100000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Hired competitive intelligence analyst ($100k/yr)"}
+		}
+	case "hire_120k":
+		err := fg.LaunchCompetitiveIntel(120000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Hired competitive intelligence analyst ($120k/yr)"}
+		}
+	case "view":
+		if fg.CompetitiveIntel != nil && len(fg.CompetitiveIntel.IntelReports) > 0 {
+			msgs := []string{"🕵️ Intel Reports:"}
+			for _, report := range fg.CompetitiveIntel.IntelReports {
+				recentMove := "No recent moves"
+				if len(report.RecentMoves) > 0 {
+					recentMove = report.RecentMoves[0]
+				}
+				msgs = append(msgs, fmt.Sprintf("   • %s (Threat: %s): %s", report.CompetitorName, report.ThreatLevel, recentMove))
+			}
+			s.turnMessages = msgs
+		} else {
+			s.turnMessages = []string{"No intel reports yet. Commission reports on competitors."}
+		}
+	default:
+		if strings.HasPrefix(id, "report_") {
+			idxStr := strings.TrimPrefix(id, "report_")
+			idx, _ := strconv.Atoi(idxStr)
+			if idx >= 0 && idx < len(fg.Competitors) {
+				comp := fg.Competitors[idx]
+				err := fg.CommissionIntelReport(comp.Name, 35000) // Average cost
+				if err != nil {
+					s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+				} else {
+					s.turnMessages = []string{fmt.Sprintf("✓ Commissioned intel report on %s ($35k)", comp.Name)}
+				}
+			}
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Referral Program
+func (s *FounderGameScreen) rebuildReferralProgramMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+
+	if fg.ReferralProgram == nil {
+		items = append(items,
+			components.MenuItem{ID: "launch_100", Title: "Launch ($100 reward)", Description: "Cash reward per referral", Icon: "🎁"},
+			components.MenuItem{ID: "launch_250", Title: "Launch ($250 reward)", Description: "Cash reward per referral", Icon: "🎁"},
+			components.MenuItem{ID: "launch_500", Title: "Launch ($500 reward)", Description: "Premium cash reward", Icon: "🎁"},
+			components.MenuItem{ID: "launch_credit", Title: "Launch (Account Credit)", Description: "$200 account credit per referral", Icon: "💳"},
+		)
+	} else {
+		items = append(items,
+			components.MenuItem{ID: "view", Title: "View Program Status", Icon: "👁️"},
+			components.MenuItem{ID: "end", Title: "End Referral Program", Icon: "🛑"},
+		)
+	}
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
+
+	s.referralProgramMenu = components.NewMenu("REFERRAL PROGRAM", items)
+	s.referralProgramMenu.SetSize(55, 12)
+	s.referralProgramMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleReferralProgramSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	switch id {
+	case "launch_100":
+		err := fg.LaunchReferralProgram(100, "cash")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched referral program ($100 cash reward)"}
+		}
+	case "launch_250":
+		err := fg.LaunchReferralProgram(250, "cash")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched referral program ($250 cash reward)"}
+		}
+	case "launch_500":
+		err := fg.LaunchReferralProgram(500, "cash")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched referral program ($500 cash reward)"}
+		}
+	case "launch_credit":
+		err := fg.LaunchReferralProgram(200, "credit")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Launched referral program ($200 account credit)"}
+		}
+	case "view":
+		if fg.ReferralProgram != nil {
+			s.turnMessages = []string{
+				"🎁 Referral Program Status:",
+				fmt.Sprintf("   Reward: $%s (%s)", formatCompactMoney(fg.ReferralProgram.RewardPerReferral), fg.ReferralProgram.RewardType),
+				fmt.Sprintf("   Total Referrals: %d", fg.ReferralProgram.TotalReferrals),
+				fmt.Sprintf("   Customers Acquired: %d", fg.ReferralProgram.CustomersAcquired),
+				fmt.Sprintf("   Monthly Budget: $%s", formatCompactMoney(fg.ReferralProgram.MonthlyBudget)),
+			}
+		}
+	case "end":
+		err := fg.EndReferralProgram()
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Ended referral program"}
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Technical Debt
+func (s *FounderGameScreen) rebuildTechDebtMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+
+	debtLevel := 0
+	velocity := 1.0
+	if fg.TechnicalDebt != nil {
+		debtLevel = fg.TechnicalDebt.CurrentLevel
+		velocity = fg.TechnicalDebt.VelocityImpact
+	}
+
+	items = append(items,
+		components.MenuItem{ID: "view", Title: "View Tech Debt Status", Description: fmt.Sprintf("Level: %d/100, Velocity: %.0f%%", debtLevel, velocity*100), Icon: "👁️"},
+	)
+
+	if debtLevel > 20 {
+		items = append(items,
+			components.MenuItem{ID: "refactor_small", Title: "Small Refactor ($50k)", Description: "Reduce debt by ~10 points", Icon: "🔧"},
+			components.MenuItem{ID: "refactor_medium", Title: "Medium Refactor ($100k)", Description: "Reduce debt by ~20 points", Icon: "🔧"},
+			components.MenuItem{ID: "refactor_large", Title: "Large Refactor ($200k)", Description: "Reduce debt by ~35 points", Icon: "🔧"},
+		)
+	}
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
+
+	s.techDebtMenu = components.NewMenu("TECHNICAL DEBT", items)
+	s.techDebtMenu.SetSize(55, 12)
+	s.techDebtMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleTechDebtSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	switch id {
+	case "view":
+		if fg.TechnicalDebt != nil {
+			td := fg.TechnicalDebt
+			msgs := []string{
+				"🔧 Technical Debt Status:",
+				fmt.Sprintf("   Current Level: %d/100", td.CurrentLevel),
+				fmt.Sprintf("   Velocity Impact: %.0f%%", td.VelocityImpact*100),
+				fmt.Sprintf("   Bug Frequency: %.1f%%", td.BugFrequency*100),
+				fmt.Sprintf("   Months Since Refactor: %d", td.MonthsSinceRefactor),
+			}
+			if td.ScalingProblems {
+				msgs = append(msgs, "   ⚠️  SCALING PROBLEMS ACTIVE")
+			}
+			s.turnMessages = msgs
+		} else {
+			s.turnMessages = []string{"Technical debt not yet being tracked"}
+		}
+	case "refactor_small":
+		engineers := len(fg.Team.Engineers)
+		if engineers == 0 {
+			engineers = 1
+		}
+		err := fg.RefactorTechDebt(50000, engineers)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				"✓ Small refactor complete ($50k)",
+				fmt.Sprintf("   New debt level: %d/100", fg.TechnicalDebt.CurrentLevel),
+			}
+		}
+	case "refactor_medium":
+		engineers := len(fg.Team.Engineers)
+		if engineers == 0 {
+			engineers = 1
+		}
+		err := fg.RefactorTechDebt(100000, engineers)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				"✓ Medium refactor complete ($100k)",
+				fmt.Sprintf("   New debt level: %d/100", fg.TechnicalDebt.CurrentLevel),
+			}
+		}
+	case "refactor_large":
+		engineers := len(fg.Team.Engineers)
+		if engineers == 0 {
+			engineers = 1
+		}
+		err := fg.RefactorTechDebt(200000, engineers)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				"✓ Large refactor complete ($200k)",
+				fmt.Sprintf("   New debt level: %d/100", fg.TechnicalDebt.CurrentLevel),
+			}
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// End Affiliate Program
+func (s *FounderGameScreen) rebuildEndAffiliateMenu() {
+	items := []components.MenuItem{
+		{ID: "transition", Title: "End & Transition Customers", Description: "Convert affiliate customers to direct", Icon: "✓"},
+		{ID: "end_only", Title: "End Program Only", Description: "Affiliate customers will churn", Icon: "⚠️"},
+		{ID: "cancel", Title: "Back", Icon: "←"},
+	}
+
+	s.endAffiliateMenu = components.NewMenu("END AFFILIATE PROGRAM", items)
+	s.endAffiliateMenu.SetSize(55, 10)
+	s.endAffiliateMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleEndAffiliateSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	switch id {
+	case "transition":
+		err := fg.EndAffiliateProgram(true)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				"✓ Ended affiliate program",
+				"  Affiliate customers converted to direct customers",
+			}
+		}
+	case "end_only":
+		err := fg.EndAffiliateProgram(false)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				"✓ Ended affiliate program",
+				"  ⚠️  Affiliate customers have churned",
+			}
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
 // View renders the founder game screen
 func (s *FounderGameScreen) View() string {
 	switch s.view {
@@ -2632,6 +3585,21 @@ func (s *FounderGameScreen) View() string {
 		return s.renderSuccession()
 	case FounderViewSalesPipeline:
 		return s.renderSalesPipeline()
+	// New feature views
+	case FounderViewStrategicOpportunity:
+		return s.renderStrategicOpportunity()
+	case FounderViewContentMarketing:
+		return s.renderContentMarketing()
+	case FounderViewCSPlaybooks:
+		return s.renderCSPlaybooks()
+	case FounderViewCompetitiveIntel:
+		return s.renderCompetitiveIntel()
+	case FounderViewReferralProgram:
+		return s.renderReferralProgram()
+	case FounderViewTechDebt:
+		return s.renderTechDebt()
+	case FounderViewEndAffiliate:
+		return s.renderEndAffiliate()
 	default:
 		return s.renderMain()
 	}
@@ -4035,6 +5003,220 @@ func (s *FounderGameScreen) renderBuybackConfirm() string {
 	b.WriteString("\n")
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
 	b.WriteString(helpStyle.Render("enter confirm • esc cancel"))
+
+	return b.String()
+}
+
+// ============================================================================
+// NEW FEATURE RENDER FUNCTIONS
+// ============================================================================
+
+func (s *FounderGameScreen) renderStrategicOpportunity() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Yellow).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("STRATEGIC OPPORTUNITY")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Yellow).
+		Padding(1, 2)
+
+	if s.strategicOpportunityMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.strategicOpportunityMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderContentMarketing() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("CONTENT MARKETING")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2)
+
+	if s.contentMarketingMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.contentMarketingMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderCSPlaybooks() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("CS PLAYBOOKS")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2)
+
+	if s.csPlaybooksMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.csPlaybooksMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderCompetitiveIntel() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Magenta).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("COMPETITIVE INTELLIGENCE")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Magenta).
+		Padding(1, 2)
+
+	if s.competitiveIntelMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.competitiveIntelMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderReferralProgram() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Magenta).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("REFERRAL PROGRAM")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Magenta).
+		Padding(1, 2)
+
+	if s.referralProgramMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.referralProgramMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderTechDebt() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Yellow).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("TECHNICAL DEBT")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Yellow).
+		Padding(1, 2)
+
+	if s.techDebtMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.techDebtMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderEndAffiliate() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Red).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("END AFFILIATE PROGRAM")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Red).
+		Padding(1, 2)
+
+	if s.endAffiliateMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.endAffiliateMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
 
 	return b.String()
 }
