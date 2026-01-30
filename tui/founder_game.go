@@ -2,11 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jamesacampbell/unicorn/founder"
 	"github.com/jamesacampbell/unicorn/tui/components"
 	"github.com/jamesacampbell/unicorn/tui/keys"
 	"github.com/jamesacampbell/unicorn/tui/styles"
@@ -19,8 +22,37 @@ const (
 	FounderViewMain FounderView = iota
 	FounderViewActions
 	FounderViewHiring
+	FounderViewHiringMarket
+	FounderViewFiring
+	FounderViewMarketing
 	FounderViewFunding
-	FounderViewMetrics
+	FounderViewFundingTerms
+	FounderViewPartnership
+	FounderViewAffiliate
+	FounderViewCompetitors
+	FounderViewExpansion
+	FounderViewPivot
+	FounderViewBoard
+	FounderViewBoardAction
+	FounderViewBuyback
+	FounderViewBuybackConfirm
+	FounderViewTeamRoster
+	FounderViewCustomers
+	FounderViewFinancials
+	FounderViewExit
+	FounderViewConfirmExit
+	// Phase 4: Advanced features
+	FounderViewRoadmap
+	FounderViewRoadmapStart
+	FounderViewSegments
+	FounderViewPricing
+	FounderViewAcquisitions
+	FounderViewPlatform
+	FounderViewSecurity
+	FounderViewPRCrisis
+	FounderViewEconomy
+	FounderViewSuccession
+	FounderViewSalesPipeline
 )
 
 // FounderGameScreen handles the founder game
@@ -34,28 +66,416 @@ type FounderGameScreen struct {
 	turnMessages []string
 
 	// Menus
-	actionsMenu *components.Menu
+	actionsMenu      *components.Menu
+	hiringMenu       *components.Menu
+	firingMenu       *components.Menu
+	partnershipMenu  *components.Menu
+	fundingMenu      *components.Menu
+	fundingTerms     []founder.TermSheetOption
+	exitMenu         *components.Menu
+	competitorMenu   *components.Menu
+	expansionMenu    *components.Menu
+	pivotMenu        *components.Menu
+	boardMenu        *components.Menu
+	buybackMenu      *components.Menu
+	competitorAction *components.Menu
+
+	// Input state
+	marketingInput textinput.Model
+	affiliateInput textinput.Model
+	inputMessage   string
+
+	// Selected state
+	selectedRole           founder.EmployeeRole
+	selectedIsExec         bool
+	selectedRoundName      string
+	selectedTermIndex      int
+	selectedExitType       string
+	selectedCompetitorIdx  int
+	selectedBuybackRound   string
+	selectedBuybackEquity  float64
+
+	// Market selection for hiring
+	marketOptions []string
+
+	// Input for buyback
+	buybackInput textinput.Model
+
+	// Phase 4: Advanced menus
+	roadmapMenu      *components.Menu
+	roadmapFeatures  []founder.ProductFeature
+	segmentsMenu     *components.Menu
+	pricingMenu      *components.Menu
+	acquisitionsMenu *components.Menu
+	platformMenu     *components.Menu
+	securityMenu     *components.Menu
+	prCrisisMenu     *components.Menu
+	economyMenu      *components.Menu
+	successionMenu   *components.Menu
+
+	// Advanced inputs
+	pricingInput    textinput.Model
+	securityInput   textinput.Model
+	successionInput textinput.Model
 }
 
 // NewFounderGameScreen creates a new founder game screen
 func NewFounderGameScreen(width, height int, gameData *GameData) *FounderGameScreen {
-	// Actions menu
-	actionItems := []components.MenuItem{
-		{ID: "continue", Title: "Continue to next month", Description: "Process this month's events", Icon: "⏭️"},
-		{ID: "hiring", Title: "View Team", Description: "See your team status", Icon: "👥"},
-		{ID: "exit", Title: "View Exit Options", Description: "See available exit strategies", Icon: "🚪"},
-	}
-	actionsMenu := components.NewMenu("ACTIONS", actionItems)
-	actionsMenu.SetSize(50, 15)
-	actionsMenu.SetHideHelp(true)
+	// Marketing input
+	marketingInput := textinput.New()
+	marketingInput.Placeholder = "Enter amount (e.g. 50000)"
+	marketingInput.CharLimit = 15
+	marketingInput.Width = 20
 
-	return &FounderGameScreen{
-		width:       width,
-		height:      height,
-		gameData:    gameData,
-		view:        FounderViewMain,
-		actionsMenu: actionsMenu,
+	// Affiliate input
+	affiliateInput := textinput.New()
+	affiliateInput.Placeholder = "Enter commission % (5-30)"
+	affiliateInput.CharLimit = 5
+	affiliateInput.Width = 10
+
+	// Buyback input
+	buybackInput := textinput.New()
+	buybackInput.Placeholder = "Enter equity % to buy back"
+	buybackInput.CharLimit = 10
+	buybackInput.Width = 15
+
+	// Pricing input
+	pricingInput := textinput.New()
+	pricingInput.Placeholder = "Enter discount %"
+	pricingInput.CharLimit = 5
+	pricingInput.Width = 10
+
+	// Security input
+	securityInput := textinput.New()
+	securityInput.Placeholder = "Monthly budget"
+	securityInput.CharLimit = 10
+	securityInput.Width = 15
+
+	// Succession input
+	successionInput := textinput.New()
+	successionInput.Placeholder = "Backup person name"
+	successionInput.CharLimit = 30
+	successionInput.Width = 25
+
+	s := &FounderGameScreen{
+		width:           width,
+		height:          height,
+		gameData:        gameData,
+		view:            FounderViewMain,
+		marketingInput:  marketingInput,
+		affiliateInput:  affiliateInput,
+		buybackInput:    buybackInput,
+		pricingInput:    pricingInput,
+		securityInput:   securityInput,
+		successionInput: successionInput,
 	}
+
+	s.rebuildActionsMenu()
+	s.rebuildHiringMenu()
+	s.rebuildFiringMenu()
+
+	return s
+}
+
+func (s *FounderGameScreen) rebuildActionsMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{
+		// Team & Operations
+		{ID: "header_team", Title: "── TEAM & OPERATIONS ──", Disabled: true, Icon: ""},
+		{ID: "hiring", Title: "Hire Team Member", Description: "Engineers, Sales, CS, Marketing, C-Suite", Icon: "💼"},
+		{ID: "firing", Title: "Let Go Team Member", Description: "Reduce headcount to cut costs", Icon: "⚠️"},
+		{ID: "marketing", Title: "Spend on Marketing", Description: "Acquire customers with ad spend", Icon: "📣"},
+
+		// Funding & Equity
+		{ID: "header_funding", Title: "── FUNDING & EQUITY ──", Disabled: true, Icon: ""},
+		{ID: "funding", Title: "Raise Funding Round", Description: "Seed, Series A, B, C", Icon: "💰"},
+	}
+
+	// Buyback only if profitable and have raised
+	if len(fg.FundingRounds) > 0 && fg.MRR > fg.MonthlyTeamCost {
+		items = append(items, components.MenuItem{
+			ID: "buyback", Title: "Buy Back Equity", Description: "Repurchase shares from investors", Icon: "📈",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "board", Title: "Manage Board & Equity", Description: "Advisors, cap table, equity pool", Icon: "👔",
+	})
+
+	// Strategic options
+	items = append(items, components.MenuItem{
+		ID: "header_strategic", Title: "── STRATEGIC ──", Disabled: true, Icon: "",
+	})
+	items = append(items, components.MenuItem{
+		ID: "partnership", Title: "Start Partnership", Description: "Distribution, tech, co-marketing", Icon: "🤝",
+	})
+
+	if fg.AffiliateProgram == nil {
+		items = append(items, components.MenuItem{
+			ID: "affiliate", Title: "Launch Affiliate Program", Description: "Let partners sell for commission", Icon: "💸",
+		})
+	} else {
+		items = append(items, components.MenuItem{
+			ID: "affiliate_view", Title: "View Affiliate Program", Description: fmt.Sprintf("%d affiliates, $%s/mo", fg.AffiliateProgram.Affiliates, formatCompactMoney(fg.AffiliateMRR)), Icon: "💸",
+		})
+	}
+
+	if len(fg.Competitors) > 0 {
+		items = append(items, components.MenuItem{
+			ID: "competitors", Title: "Handle Competitors", Description: fmt.Sprintf("%d active competitors", len(fg.Competitors)), Icon: "⚔️",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "expansion", Title: "Expand to New Market", Description: "EU, APAC, LATAM expansion", Icon: "🌍",
+	})
+	items = append(items, components.MenuItem{
+		ID: "pivot", Title: "Execute Pivot", Description: "Change market or strategy", Icon: "🔄",
+	})
+
+	// Advanced strategic options (Phase 4)
+	items = append(items, components.MenuItem{
+		ID: "roadmap", Title: "Product Roadmap", Description: "Manage feature development", Icon: "🔨",
+	})
+
+	if fg.Customers >= 50 {
+		items = append(items, components.MenuItem{
+			ID: "segments", Title: "Customer Segments", Description: "Target customer verticals", Icon: "🎯",
+		})
+	}
+
+	if len(fg.FundingRounds) > 0 || fg.MRR >= 100000 {
+		items = append(items, components.MenuItem{
+			ID: "pricing", Title: "Pricing Strategy", Description: "Adjust pricing model", Icon: "💲",
+		})
+	}
+
+	if fg.CanAcquire() {
+		items = append(items, components.MenuItem{
+			ID: "acquisitions", Title: "Acquisitions", Description: "Acquire other companies", Icon: "🏢",
+		})
+	}
+
+	if fg.CanLaunchPlatform() {
+		items = append(items, components.MenuItem{
+			ID: "platform", Title: "Platform Strategy", Description: "Build developer ecosystem", Icon: "🌐",
+		})
+	}
+
+	if fg.SecurityPosture != nil && fg.CanHaveSecurityIncidents() {
+		items = append(items, components.MenuItem{
+			ID: "security", Title: "Security & Compliance", Description: "Manage security posture", Icon: "🔒",
+		})
+	}
+
+	if fg.PRProgram != nil && fg.PRProgram.HasPRFirm {
+		items = append(items, components.MenuItem{
+			ID: "pr_crisis", Title: "PR Crisis Management", Description: "Handle PR issues", Icon: "📰",
+		})
+	}
+
+	if fg.Turn >= 12 {
+		items = append(items, components.MenuItem{
+			ID: "economy", Title: "Economic Strategy", Description: "Respond to market conditions", Icon: "📉",
+		})
+	}
+
+	if fg.CanHaveKeyPersonRisk() {
+		items = append(items, components.MenuItem{
+			ID: "succession", Title: "Succession Planning", Description: "Manage key person risk", Icon: "👤",
+		})
+	}
+
+	// View data
+	items = append(items, components.MenuItem{
+		ID: "header_view", Title: "── VIEW DATA ──", Disabled: true, Icon: "",
+	})
+	items = append(items, components.MenuItem{
+		ID: "team_roster", Title: "View Team Roster", Description: "See all employees and their impact", Icon: "👥",
+	})
+	items = append(items, components.MenuItem{
+		ID: "customers", Title: "View Customers", Description: "Customer deals and health", Icon: "🏢",
+	})
+	items = append(items, components.MenuItem{
+		ID: "financials", Title: "View Financials", Description: "Cash flow breakdown", Icon: "📊",
+	})
+
+	if fg.SalesPipeline != nil && len(fg.SalesPipeline.ActiveDeals) > 0 {
+		items = append(items, components.MenuItem{
+			ID: "pipeline", Title: "View Sales Pipeline", Description: "Track deal progress", Icon: "📈",
+		})
+	}
+
+	// Exit options
+	exits := fg.GetAvailableExits()
+	hasAvailableExit := false
+	for _, exit := range exits {
+		if exit.CanExit && exit.Type != "continue" {
+			hasAvailableExit = true
+			break
+		}
+	}
+	if hasAvailableExit {
+		items = append(items, components.MenuItem{
+			ID: "exit", Title: "Consider Exit Options", Description: "IPO, Acquisition, Secondary sale", Icon: "🚪",
+		})
+	}
+
+	// Continue / Skip
+	items = append(items, components.MenuItem{
+		ID: "header_action", Title: "── ACTION ──", Disabled: true, Icon: "",
+	})
+	items = append(items, components.MenuItem{
+		ID: "continue", Title: "Continue to Next Month", Description: "Process this month's events", Icon: "⏭️",
+	})
+
+	s.actionsMenu = components.NewMenu("DECISIONS", items)
+	s.actionsMenu.SetSize(55, 20)
+	s.actionsMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) rebuildHiringMenu() {
+	items := []components.MenuItem{
+		{ID: "header_ic", Title: "── INDIVIDUAL CONTRIBUTORS ($100k/yr) ──", Disabled: true},
+		{ID: "engineer", Title: "Engineer", Description: "Builds product, reduces churn", Icon: "👨‍💻"},
+		{ID: "sales", Title: "Sales Rep", Description: "Increases customer acquisition", Icon: "📞"},
+		{ID: "cs", Title: "Customer Success", Description: "Reduces churn rate", Icon: "🤝"},
+		{ID: "marketing", Title: "Marketing", Description: "Supports acquisition campaigns", Icon: "📢"},
+		{ID: "header_exec", Title: "── C-LEVEL EXECUTIVES ($300k/yr, 3x impact) ──", Disabled: true},
+		{ID: "cto", Title: "CTO", Description: "Like hiring 3 engineers", Icon: "⚡"},
+		{ID: "cgo", Title: "CGO (Growth)", Description: "Like hiring 3 sales reps", Icon: "📈"},
+		{ID: "coo", Title: "COO (Operations)", Description: "Like hiring 3 CS reps", Icon: "⚙️"},
+		{ID: "cfo", Title: "CFO (Finance)", Description: "Reduces burn by 10%", Icon: "💹"},
+		{ID: "cancel", Title: "Cancel", Description: "Go back", Icon: "←"},
+	}
+	s.hiringMenu = components.NewMenu("HIRE", items)
+	s.hiringMenu.SetSize(50, 15)
+	s.hiringMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) rebuildFiringMenu() {
+	fg := s.gameData.FounderState
+
+	execCount := make(map[founder.EmployeeRole]int)
+	for _, exec := range fg.Team.Executives {
+		execCount[exec.Role]++
+	}
+
+	items := []components.MenuItem{
+		{ID: "header_ic", Title: "── INDIVIDUAL CONTRIBUTORS ──", Disabled: true},
+		{ID: "engineer", Title: fmt.Sprintf("Engineer (current: %d)", len(fg.Team.Engineers)), Icon: "👨‍💻",
+			Disabled: len(fg.Team.Engineers) == 0},
+		{ID: "sales", Title: fmt.Sprintf("Sales Rep (current: %d)", len(fg.Team.Sales)), Icon: "📞",
+			Disabled: len(fg.Team.Sales) == 0},
+		{ID: "cs", Title: fmt.Sprintf("Customer Success (current: %d)", len(fg.Team.CustomerSuccess)), Icon: "🤝",
+			Disabled: len(fg.Team.CustomerSuccess) == 0},
+		{ID: "marketing", Title: fmt.Sprintf("Marketing (current: %d)", len(fg.Team.Marketing)), Icon: "📢",
+			Disabled: len(fg.Team.Marketing) == 0},
+		{ID: "header_exec", Title: "── EXECUTIVES ──", Disabled: true},
+		{ID: "cto", Title: fmt.Sprintf("CTO (current: %d)", execCount[founder.RoleCTO]), Icon: "⚡",
+			Disabled: execCount[founder.RoleCTO] == 0},
+		{ID: "cgo", Title: fmt.Sprintf("CGO (current: %d)", execCount[founder.RoleCGO]), Icon: "📈",
+			Disabled: execCount[founder.RoleCGO] == 0},
+		{ID: "coo", Title: fmt.Sprintf("COO (current: %d)", execCount[founder.RoleCOO]), Icon: "⚙️",
+			Disabled: execCount[founder.RoleCOO] == 0},
+		{ID: "cfo", Title: fmt.Sprintf("CFO (current: %d)", execCount[founder.RoleCFO]), Icon: "💹",
+			Disabled: execCount[founder.RoleCFO] == 0},
+		{ID: "cancel", Title: "Cancel", Description: "Go back", Icon: "←"},
+	}
+	s.firingMenu = components.NewMenu("LET GO", items)
+	s.firingMenu.SetSize(50, 15)
+	s.firingMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) rebuildFundingMenu() {
+	fg := s.gameData.FounderState
+
+	hasSeed := false
+	hasSeriesA := false
+	hasSeriesB := false
+
+	for _, round := range fg.FundingRounds {
+		switch round.RoundName {
+		case "Seed":
+			hasSeed = true
+		case "Series A":
+			hasSeriesA = true
+		case "Series B":
+			hasSeriesB = true
+		}
+	}
+
+	items := []components.MenuItem{}
+
+	if !hasSeed {
+		items = append(items, components.MenuItem{
+			ID: "seed", Title: "Seed Round ($2-5M)", Description: "Early stage funding", Icon: "🌱",
+		})
+	}
+	if hasSeed && !hasSeriesA {
+		items = append(items, components.MenuItem{
+			ID: "series_a", Title: "Series A ($10-20M)", Description: "Growth stage funding", Icon: "🚀",
+		})
+	}
+	if hasSeriesA && !hasSeriesB {
+		items = append(items, components.MenuItem{
+			ID: "series_b", Title: "Series B ($30-50M)", Description: "Scale stage funding", Icon: "📈",
+		})
+	}
+
+	if len(items) == 0 {
+		items = append(items, components.MenuItem{
+			ID: "none", Title: "No rounds available", Disabled: true, Icon: "❌",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Cancel", Icon: "←",
+	})
+
+	s.fundingMenu = components.NewMenu("RAISE FUNDING", items)
+	s.fundingMenu.SetSize(50, 12)
+	s.fundingMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) rebuildExitMenu() {
+	fg := s.gameData.FounderState
+	exits := fg.GetAvailableExits()
+
+	items := []components.MenuItem{}
+
+	for _, exit := range exits {
+		if exit.Type == "continue" {
+			continue
+		}
+		icon := "🔒"
+		if exit.CanExit {
+			switch exit.Type {
+			case "ipo":
+				icon = "🏛️"
+			case "acquisition":
+				icon = "🤝"
+			case "secondary":
+				icon = "💼"
+			}
+		}
+		items = append(items, components.MenuItem{
+			ID:          exit.Type,
+			Title:       fmt.Sprintf("%s: $%s valuation", strings.ToUpper(exit.Type), formatCompactMoney(exit.Valuation)),
+			Description: exit.Description,
+			Icon:        icon,
+			Disabled:    !exit.CanExit,
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Keep Building", Icon: "←",
+	})
+
+	s.exitMenu = components.NewMenu("EXIT OPTIONS", items)
+	s.exitMenu.SetSize(60, 15)
+	s.exitMenu.SetHideHelp(true)
 }
 
 // Init initializes the founder game screen
@@ -73,6 +493,7 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		case FounderViewMain:
 			switch {
 			case key.Matches(msg, keys.Global.Enter):
+				s.rebuildActionsMenu()
 				s.view = FounderViewActions
 				return s, nil
 			case key.Matches(msg, keys.Global.Back), msg.String() == "q":
@@ -84,17 +505,267 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				s.view = FounderViewMain
 				return s, nil
 			}
+
+		case FounderViewHiring:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewHiringMarket:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewHiring
+				return s, nil
+			}
+			// Handle number keys for market selection
+			keyStr := msg.String()
+			if len(keyStr) == 1 && keyStr[0] >= '1' && keyStr[0] <= '9' {
+				num := int(keyStr[0] - '0')
+				return s.handleMarketSelection(num)
+			}
+
+		case FounderViewFiring:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewMarketing:
+			switch {
+			case key.Matches(msg, keys.Global.Back):
+				s.view = FounderViewActions
+				s.inputMessage = ""
+				return s, nil
+			case key.Matches(msg, keys.Global.Enter):
+				return s.handleMarketingConfirm()
+			}
+
+		case FounderViewFunding:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewFundingTerms:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewFunding
+				return s, nil
+			}
+			// Handle number keys for term selection
+			keyStr := msg.String()
+			if len(keyStr) == 1 && keyStr[0] >= '1' && keyStr[0] <= '4' {
+				num := int(keyStr[0] - '0')
+				return s.handleTermSelection(num)
+			}
+
+		case FounderViewPartnership:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewAffiliate:
+			switch {
+			case key.Matches(msg, keys.Global.Back):
+				s.view = FounderViewActions
+				s.inputMessage = ""
+				return s, nil
+			case key.Matches(msg, keys.Global.Enter):
+				return s.handleAffiliateConfirm()
+			}
+
+		case FounderViewCompetitors:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+			// Handle number selection for competitor
+			keyStr := msg.String()
+			if len(keyStr) == 1 && keyStr[0] >= '1' && keyStr[0] <= '9' {
+				num := int(keyStr[0] - '0')
+				return s.handleCompetitorSelect(num)
+			}
+
+		case FounderViewExpansion:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewPivot:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewBoard:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewBuyback:
+			switch {
+			case key.Matches(msg, keys.Global.Back):
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewBuybackConfirm:
+			switch {
+			case key.Matches(msg, keys.Global.Back):
+				s.view = FounderViewBuyback
+				s.inputMessage = ""
+				return s, nil
+			case key.Matches(msg, keys.Global.Enter):
+				return s.handleBuybackConfirm()
+			}
+
+		case FounderViewTeamRoster, FounderViewCustomers, FounderViewFinancials:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewExit:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewRoadmap:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewRoadmapStart:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewRoadmap
+				return s, nil
+			}
+			// Handle number keys for feature selection
+			keyStr := msg.String()
+			if len(keyStr) == 1 && keyStr[0] >= '1' && keyStr[0] <= '9' {
+				num := int(keyStr[0] - '0')
+				return s.handleFeatureStart(num)
+			}
+
+		case FounderViewSegments:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewPricing:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewAcquisitions:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewPlatform:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewSecurity:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewPRCrisis:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewEconomy:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewSuccession:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewSalesPipeline:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
+		case FounderViewConfirmExit:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewExit
+				return s, nil
+			}
+			if msg.String() == "y" {
+				return s.handleExitConfirm()
+			}
+			if msg.String() == "n" {
+				s.view = FounderViewActions
+				return s, nil
+			}
 		}
 
 	case components.MenuSelectedMsg:
-		if s.view == FounderViewActions {
+		switch s.view {
+		case FounderViewActions:
 			return s.handleAction(msg.ID)
+		case FounderViewHiring:
+			return s.handleHiringSelection(msg.ID)
+		case FounderViewFiring:
+			return s.handleFiringSelection(msg.ID)
+		case FounderViewFunding:
+			return s.handleFundingSelection(msg.ID)
+		case FounderViewPartnership:
+			return s.handlePartnershipSelection(msg.ID)
+		case FounderViewExit:
+			return s.handleExitSelection(msg.ID)
+		case FounderViewCompetitors:
+			return s.handleCompetitorStrategy(msg.ID)
+		case FounderViewExpansion:
+			return s.handleExpansionSelection(msg.ID)
+		case FounderViewPivot:
+			return s.handlePivotSelection(msg.ID)
+		case FounderViewBoard:
+			return s.handleBoardSelection(msg.ID)
+		case FounderViewBuyback:
+			return s.handleBuybackSelection(msg.ID)
+		case FounderViewRoadmap:
+			return s.handleRoadmapSelection(msg.ID)
+		case FounderViewSegments:
+			return s.handleSegmentsSelection(msg.ID)
+		case FounderViewPricing:
+			return s.handlePricingSelection(msg.ID)
+		case FounderViewAcquisitions:
+			return s.handleAcquisitionsSelection(msg.ID)
+		case FounderViewPlatform:
+			return s.handlePlatformSelection(msg.ID)
+		case FounderViewSecurity:
+			return s.handleSecuritySelection(msg.ID)
+		case FounderViewPRCrisis:
+			return s.handlePRCrisisSelection(msg.ID)
+		case FounderViewEconomy:
+			return s.handleEconomySelection(msg.ID)
+		case FounderViewSuccession:
+			return s.handleSuccessionSelection(msg.ID)
 		}
 	}
 
 	// Check for game over
 	if fg != nil && fg.IsGameOver() {
-		// Show final results message and return to menu
 		return s, SwitchTo(ScreenMainMenu)
 	}
 
@@ -103,6 +774,78 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 	switch s.view {
 	case FounderViewActions:
 		s.actionsMenu, cmd = s.actionsMenu.Update(msg)
+	case FounderViewHiring:
+		s.hiringMenu, cmd = s.hiringMenu.Update(msg)
+	case FounderViewFiring:
+		s.firingMenu, cmd = s.firingMenu.Update(msg)
+	case FounderViewFunding:
+		s.fundingMenu, cmd = s.fundingMenu.Update(msg)
+	case FounderViewMarketing:
+		s.marketingInput, cmd = s.marketingInput.Update(msg)
+	case FounderViewAffiliate:
+		s.affiliateInput, cmd = s.affiliateInput.Update(msg)
+	case FounderViewPartnership:
+		s.partnershipMenu, cmd = s.partnershipMenu.Update(msg)
+	case FounderViewExit:
+		s.exitMenu, cmd = s.exitMenu.Update(msg)
+	case FounderViewCompetitors:
+		if s.competitorAction != nil {
+			s.competitorAction, cmd = s.competitorAction.Update(msg)
+		}
+	case FounderViewExpansion:
+		if s.expansionMenu != nil {
+			s.expansionMenu, cmd = s.expansionMenu.Update(msg)
+		}
+	case FounderViewPivot:
+		if s.pivotMenu != nil {
+			s.pivotMenu, cmd = s.pivotMenu.Update(msg)
+		}
+	case FounderViewBoard:
+		if s.boardMenu != nil {
+			s.boardMenu, cmd = s.boardMenu.Update(msg)
+		}
+	case FounderViewBuyback:
+		if s.buybackMenu != nil {
+			s.buybackMenu, cmd = s.buybackMenu.Update(msg)
+		}
+	case FounderViewBuybackConfirm:
+		s.buybackInput, cmd = s.buybackInput.Update(msg)
+	case FounderViewRoadmap:
+		if s.roadmapMenu != nil {
+			s.roadmapMenu, cmd = s.roadmapMenu.Update(msg)
+		}
+	case FounderViewSegments:
+		if s.segmentsMenu != nil {
+			s.segmentsMenu, cmd = s.segmentsMenu.Update(msg)
+		}
+	case FounderViewPricing:
+		if s.pricingMenu != nil {
+			s.pricingMenu, cmd = s.pricingMenu.Update(msg)
+		}
+	case FounderViewAcquisitions:
+		if s.acquisitionsMenu != nil {
+			s.acquisitionsMenu, cmd = s.acquisitionsMenu.Update(msg)
+		}
+	case FounderViewPlatform:
+		if s.platformMenu != nil {
+			s.platformMenu, cmd = s.platformMenu.Update(msg)
+		}
+	case FounderViewSecurity:
+		if s.securityMenu != nil {
+			s.securityMenu, cmd = s.securityMenu.Update(msg)
+		}
+	case FounderViewPRCrisis:
+		if s.prCrisisMenu != nil {
+			s.prCrisisMenu, cmd = s.prCrisisMenu.Update(msg)
+		}
+	case FounderViewEconomy:
+		if s.economyMenu != nil {
+			s.economyMenu, cmd = s.economyMenu.Update(msg)
+		}
+	case FounderViewSuccession:
+		if s.successionMenu != nil {
+			s.successionMenu, cmd = s.successionMenu.Update(msg)
+		}
 	}
 
 	return s, cmd
@@ -113,32 +856,1711 @@ func (s *FounderGameScreen) handleAction(id string) (ScreenModel, tea.Cmd) {
 
 	switch id {
 	case "continue":
-		// Process month using the actual FounderState method
-		msgs := fg.ProcessMonth()
+		// Capture MRR before processing
+		preDecisionMRR := fg.MRR
+		msgs := fg.ProcessMonthWithBaseline(preDecisionMRR)
 		s.turnMessages = msgs
 		s.view = FounderViewMain
+		return s, nil
 
 	case "hiring":
-		// Show team info in messages
-		teamInfo := fmt.Sprintf("Team: %d engineers, %d sales, %d CS. Monthly cost: $%s",
-			len(fg.Team.Engineers), len(fg.Team.Sales), len(fg.Team.CustomerSuccess),
-			formatCompactMoney(fg.MonthlyTeamCost))
-		s.turnMessages = []string{teamInfo}
+		s.rebuildHiringMenu()
+		s.view = FounderViewHiring
+		return s, nil
+
+	case "firing":
+		s.rebuildFiringMenu()
+		s.view = FounderViewFiring
+		return s, nil
+
+	case "marketing":
+		s.marketingInput.SetValue("")
+		s.marketingInput.Focus()
+		s.inputMessage = ""
+		s.view = FounderViewMarketing
+		return s, textinput.Blink
+
+	case "funding":
+		s.rebuildFundingMenu()
+		s.view = FounderViewFunding
+		return s, nil
+
+	case "buyback":
+		s.rebuildBuybackMenu()
+		s.view = FounderViewBuyback
+		return s, nil
+
+	case "board":
+		s.rebuildBoardMenu()
+		s.view = FounderViewBoard
+		return s, nil
+
+	case "partnership":
+		s.rebuildPartnershipMenu()
+		s.view = FounderViewPartnership
+		return s, nil
+
+	case "affiliate":
+		s.affiliateInput.SetValue("")
+		s.affiliateInput.Focus()
+		s.inputMessage = ""
+		s.view = FounderViewAffiliate
+		return s, textinput.Blink
+
+	case "affiliate_view":
+		s.turnMessages = []string{
+			fmt.Sprintf("Affiliate Program Active since month %d", fg.AffiliateProgram.LaunchedMonth),
+			fmt.Sprintf("Commission Rate: %.1f%%", fg.AffiliateProgram.Commission*100),
+			fmt.Sprintf("Active Affiliates: %d", fg.AffiliateProgram.Affiliates),
+			fmt.Sprintf("Affiliate MRR: $%s", formatCompactMoney(fg.AffiliateMRR)),
+			fmt.Sprintf("Affiliate Customers: %d", fg.AffiliateCustomers),
+		}
 		s.view = FounderViewMain
+		return s, nil
+
+	case "competitors":
+		s.rebuildCompetitorMenu()
+		s.view = FounderViewCompetitors
+		return s, nil
+
+	case "expansion":
+		s.rebuildExpansionMenu()
+		s.view = FounderViewExpansion
+		return s, nil
+
+	case "pivot":
+		s.rebuildPivotMenu()
+		s.view = FounderViewPivot
+		return s, nil
+
+	case "team_roster":
+		s.view = FounderViewTeamRoster
+		return s, nil
+
+	case "customers":
+		s.view = FounderViewCustomers
+		return s, nil
+
+	case "financials":
+		s.view = FounderViewFinancials
+		return s, nil
 
 	case "exit":
-		// Show exit options
-		exits := fg.GetAvailableExits()
-		var msgs []string
-		for _, exit := range exits {
-			status := "✓"
-			if !exit.CanExit {
-				status = "🔒"
+		s.rebuildExitMenu()
+		s.view = FounderViewExit
+		return s, nil
+
+	case "roadmap":
+		s.rebuildRoadmapMenu()
+		s.view = FounderViewRoadmap
+		return s, nil
+
+	case "segments":
+		s.rebuildSegmentsMenu()
+		s.view = FounderViewSegments
+		return s, nil
+
+	case "pricing":
+		s.rebuildPricingMenu()
+		s.view = FounderViewPricing
+		return s, nil
+
+	case "acquisitions":
+		s.rebuildAcquisitionsMenu()
+		s.view = FounderViewAcquisitions
+		return s, nil
+
+	case "platform":
+		s.rebuildPlatformMenu()
+		s.view = FounderViewPlatform
+		return s, nil
+
+	case "security":
+		s.rebuildSecurityMenu()
+		s.view = FounderViewSecurity
+		return s, nil
+
+	case "pr_crisis":
+		s.rebuildPRCrisisMenu()
+		s.view = FounderViewPRCrisis
+		return s, nil
+
+	case "economy":
+		s.rebuildEconomyMenu()
+		s.view = FounderViewEconomy
+		return s, nil
+
+	case "succession":
+		s.rebuildSuccessionMenu()
+		s.view = FounderViewSuccession
+		return s, nil
+
+	case "pipeline":
+		s.view = FounderViewSalesPipeline
+		return s, nil
+	}
+
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleHiringSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	var role founder.EmployeeRole
+	var isExec bool
+
+	switch id {
+	case "engineer":
+		role = founder.RoleEngineer
+	case "sales":
+		role = founder.RoleSales
+	case "cs":
+		role = founder.RoleCustomerSuccess
+	case "marketing":
+		role = founder.RoleMarketing
+	case "cto":
+		role = founder.RoleCTO
+		isExec = true
+	case "cgo":
+		role = founder.RoleCGO
+		isExec = true
+	case "coo":
+		role = founder.RoleCOO
+		isExec = true
+	case "cfo":
+		role = founder.RoleCFO
+		isExec = true
+	default:
+		return s, nil
+	}
+
+	s.selectedRole = role
+	s.selectedIsExec = isExec
+
+	// Check if market selection is needed
+	if !isExec && (role == founder.RoleSales || role == founder.RoleMarketing || role == founder.RoleCustomerSuccess) && len(fg.GlobalMarkets) > 0 {
+		s.marketOptions = []string{"USA"}
+		for _, m := range fg.GlobalMarkets {
+			s.marketOptions = append(s.marketOptions, m.Region)
+		}
+		s.marketOptions = append(s.marketOptions, "All")
+		s.view = FounderViewHiringMarket
+		return s, nil
+	}
+
+	// Direct hire
+	err := fg.HireEmployee(role)
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		cost := "$100k/year"
+		if isExec {
+			cost = "$300k/year (3x impact)"
+		}
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Hired a new %s!", role),
+			fmt.Sprintf("   Cost: %s", cost),
+			fmt.Sprintf("   New runway: %d months", fg.CashRunwayMonths),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleMarketSelection(num int) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if num < 1 || num > len(s.marketOptions) {
+		return s, nil
+	}
+
+	market := s.marketOptions[num-1]
+
+	var err error
+	if market != "USA" {
+		err = fg.HireEmployeeWithMarket(s.selectedRole, market)
+	} else {
+		err = fg.HireEmployee(s.selectedRole)
+	}
+
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Hired a new %s!", s.selectedRole),
+			fmt.Sprintf("   Assigned to: %s", market),
+			fmt.Sprintf("   New runway: %d months", fg.CashRunwayMonths),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleFiringSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	var role founder.EmployeeRole
+	switch id {
+	case "engineer":
+		role = founder.RoleEngineer
+	case "sales":
+		role = founder.RoleSales
+	case "cs":
+		role = founder.RoleCustomerSuccess
+	case "marketing":
+		role = founder.RoleMarketing
+	case "cto":
+		role = founder.RoleCTO
+	case "cgo":
+		role = founder.RoleCGO
+	case "coo":
+		role = founder.RoleCOO
+	case "cfo":
+		role = founder.RoleCFO
+	default:
+		return s, nil
+	}
+
+	err := fg.FireEmployee(role)
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		runway := fmt.Sprintf("%d months", fg.CashRunwayMonths)
+		if fg.CashRunwayMonths < 0 {
+			runway = "∞ (profitable!)"
+		}
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Let go one %s", role),
+			fmt.Sprintf("   New runway: %s", runway),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleMarketingConfirm() (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	amountStr := strings.TrimSpace(strings.ReplaceAll(s.marketingInput.Value(), ",", ""))
+	if amountStr == "" || amountStr == "0" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	amount, err := strconv.ParseInt(amountStr, 10, 64)
+	if err != nil || amount < 0 {
+		s.inputMessage = "Invalid amount"
+		return s, nil
+	}
+
+	if amount > fg.Cash {
+		s.inputMessage = "Not enough cash!"
+		return s, nil
+	}
+
+	newCustomers := fg.SpendOnMarketing(amount)
+	s.turnMessages = []string{
+		"✓ Marketing campaign launched!",
+		fmt.Sprintf("   Acquired %d new customers!", newCustomers),
+		fmt.Sprintf("   New MRR: $%s", formatCompactMoney(fg.MRR)),
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleFundingSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" || id == "none" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	var roundName string
+	switch id {
+	case "seed":
+		roundName = "Seed"
+	case "series_a":
+		roundName = "Series A"
+	case "series_b":
+		roundName = "Series B"
+	default:
+		return s, nil
+	}
+
+	s.selectedRoundName = roundName
+	s.fundingTerms = fg.GenerateTermSheetOptions(roundName)
+
+	if len(s.fundingTerms) == 0 {
+		s.turnMessages = []string{"❌ Unable to generate term sheets!"}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	s.view = FounderViewFundingTerms
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleTermSelection(num int) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if num < 1 || num > len(s.fundingTerms) {
+		return s, nil
+	}
+
+	selectedSheet := s.fundingTerms[num-1]
+	success := fg.RaiseFundingWithTerms(s.selectedRoundName, selectedSheet)
+
+	if !success {
+		s.turnMessages = []string{"❌ Failed to raise funding!"}
+	} else {
+		runway := fmt.Sprintf("%d months", fg.CashRunwayMonths)
+		if fg.CashRunwayMonths < 0 {
+			runway = "∞ (profitable!)"
+		}
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Successfully raised %s!", s.selectedRoundName),
+			fmt.Sprintf("   Amount: $%s", formatCompactMoney(selectedSheet.Amount)),
+			fmt.Sprintf("   Valuation: $%s", formatCompactMoney(selectedSheet.PostValuation)),
+			fmt.Sprintf("   Equity Given: %.1f%%", selectedSheet.Equity),
+			fmt.Sprintf("   Your equity: %.1f%%", 100.0-fg.EquityGivenAway-fg.EquityPool),
+			fmt.Sprintf("   New runway: %s", runway),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) rebuildPartnershipMenu() {
+	items := []components.MenuItem{
+		{ID: "distribution", Title: "Distribution Partnership ($50-150k)", Description: "10-30% MRR boost", Icon: "🚚"},
+		{ID: "technology", Title: "Technology Partnership ($30-100k)", Description: "Product integration, reduces churn", Icon: "🔧"},
+		{ID: "co-marketing", Title: "Co-Marketing Partnership ($25-75k)", Description: "15-40% MRR boost", Icon: "📣"},
+		{ID: "data", Title: "Data Partnership ($40-100k)", Description: "Analytics/insights, reduces churn", Icon: "📊"},
+		{ID: "cancel", Title: "Cancel", Icon: "←"},
+	}
+	s.partnershipMenu = components.NewMenu("PARTNERSHIPS", items)
+	s.partnershipMenu.SetSize(55, 12)
+	s.partnershipMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handlePartnershipSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	partnership, err := fg.StartPartnership(id)
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Partnership with %s started!", partnership.Partner),
+			fmt.Sprintf("   Type: %s", partnership.Type),
+			fmt.Sprintf("   Cost: $%s", formatCompactMoney(partnership.Cost)),
+			fmt.Sprintf("   Duration: %d months", partnership.Duration),
+			fmt.Sprintf("   Expected MRR Boost: $%s/mo", formatCompactMoney(partnership.MRRBoost)),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleAffiliateConfirm() (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	commStr := strings.TrimSpace(s.affiliateInput.Value())
+	commission, err := strconv.ParseFloat(commStr, 64)
+	if err != nil || commission < 5 || commission > 30 {
+		s.inputMessage = "Invalid commission rate (5-30%)"
+		return s, nil
+	}
+
+	err = fg.LaunchAffiliateProgram(commission)
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		s.turnMessages = []string{
+			"✓ Affiliate program launched!",
+			fmt.Sprintf("   Commission: %.1f%%", commission),
+			fmt.Sprintf("   Starting Affiliates: %d", fg.AffiliateProgram.Affiliates),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Competitor management
+func (s *FounderGameScreen) rebuildCompetitorMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+	for i, comp := range fg.Competitors {
+		if !comp.Active {
+			continue
+		}
+		threatIcon := "🟡"
+		if comp.Threat == "high" || comp.Threat == "critical" {
+			threatIcon = "🔴"
+		} else if comp.Threat == "low" {
+			threatIcon = "🟢"
+		}
+		items = append(items, components.MenuItem{
+			ID:          fmt.Sprintf("comp_%d", i),
+			Title:       comp.Name,
+			Description: fmt.Sprintf("%s | Market: %.1f%% | Strategy: %s", comp.Threat, comp.MarketShare*100, comp.Strategy),
+			Icon:        threatIcon,
+		})
+	}
+
+	if len(items) == 0 {
+		items = append(items, components.MenuItem{
+			ID:       "none",
+			Title:    "No active competitors",
+			Disabled: true,
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Back", Icon: "←",
+	})
+
+	s.competitorMenu = components.NewMenu("COMPETITORS", items)
+	s.competitorMenu.SetSize(55, 15)
+	s.competitorMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleCompetitorSelect(num int) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	activeCount := 0
+	for i, comp := range fg.Competitors {
+		if !comp.Active {
+			continue
+		}
+		activeCount++
+		if activeCount == num {
+			s.selectedCompetitorIdx = i
+			s.rebuildCompetitorActionMenu()
+			return s, nil
+		}
+	}
+	return s, nil
+}
+
+func (s *FounderGameScreen) rebuildCompetitorActionMenu() {
+	items := []components.MenuItem{
+		{ID: "ignore", Title: "Ignore", Description: "No cost, they may take market share", Icon: "😐"},
+		{ID: "compete", Title: "Compete Aggressively", Description: "$50-150k, reduce their threat", Icon: "⚔️"},
+		{ID: "partner", Title: "Partner With Them", Description: "$100-250k, merge customer bases", Icon: "🤝"},
+		{ID: "cancel", Title: "Cancel", Icon: "←"},
+	}
+	s.competitorAction = components.NewMenu("STRATEGY", items)
+	s.competitorAction.SetSize(50, 10)
+	s.competitorAction.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleCompetitorStrategy(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" || id == "none" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	// If it's a competitor selection
+	if strings.HasPrefix(id, "comp_") {
+		idxStr := strings.TrimPrefix(id, "comp_")
+		idx, _ := strconv.Atoi(idxStr)
+		s.selectedCompetitorIdx = idx
+		s.rebuildCompetitorActionMenu()
+		return s, nil
+	}
+
+	// Handle strategy selection
+	message, err := fg.HandleCompetitor(s.selectedCompetitorIdx, id)
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		s.turnMessages = []string{fmt.Sprintf("✓ %s", message)}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Global expansion
+func (s *FounderGameScreen) rebuildExpansionMenu() {
+	fg := s.gameData.FounderState
+
+	activeMarkets := make(map[string]bool)
+	for _, m := range fg.GlobalMarkets {
+		activeMarkets[m.Region] = true
+	}
+
+	type marketOption struct {
+		region, cost, monthlyCost, competition string
+	}
+	allMarkets := []marketOption{
+		{"Europe", "$200k", "$30k/mo", "high"},
+		{"Asia", "$250k", "$40k/mo", "very high"},
+		{"LATAM", "$150k", "$20k/mo", "medium"},
+		{"Middle East", "$180k", "$25k/mo", "low"},
+		{"Africa", "$120k", "$15k/mo", "low"},
+		{"Australia", "$100k", "$18k/mo", "medium"},
+	}
+
+	items := []components.MenuItem{}
+	for _, m := range allMarkets {
+		if activeMarkets[m.region] {
+			continue
+		}
+		items = append(items, components.MenuItem{
+			ID:          strings.ToLower(strings.ReplaceAll(m.region, " ", "_")),
+			Title:       m.region,
+			Description: fmt.Sprintf("%s setup, %s, %s competition", m.cost, m.monthlyCost, m.competition),
+			Icon:        "🌍",
+		})
+	}
+
+	if len(items) == 0 {
+		items = append(items, components.MenuItem{
+			ID:       "none",
+			Title:    "All markets expanded!",
+			Disabled: true,
+			Icon:     "✓",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Cancel", Icon: "←",
+	})
+
+	s.expansionMenu = components.NewMenu("EXPAND TO", items)
+	s.expansionMenu.SetSize(55, 12)
+	s.expansionMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleExpansionSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" || id == "none" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	regionMap := map[string]string{
+		"europe":      "Europe",
+		"asia":        "Asia",
+		"latam":       "LATAM",
+		"middle_east": "Middle East",
+		"africa":      "Africa",
+		"australia":   "Australia",
+	}
+
+	region := regionMap[id]
+	if region == "" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	market, err := fg.ExpandToMarket(region)
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Launched in %s!", market.Region),
+			fmt.Sprintf("   Setup Cost: $%s", formatCompactMoney(market.SetupCost)),
+			fmt.Sprintf("   Initial Customers: %d", market.CustomerCount),
+			fmt.Sprintf("   Monthly Cost: $%s", formatCompactMoney(market.MonthlyCost)),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Pivot
+func (s *FounderGameScreen) rebuildPivotMenu() {
+	items := []components.MenuItem{
+		{ID: "header", Title: "⚠️ WARNING: Pivots are risky!", Disabled: true},
+		{ID: "enterprise_b2b", Title: "Enterprise B2B", Icon: "🏢"},
+		{ID: "smb_b2b", Title: "SMB B2B", Icon: "🏪"},
+		{ID: "b2c", Title: "B2C", Icon: "👤"},
+		{ID: "marketplace", Title: "Marketplace", Icon: "🛒"},
+		{ID: "platform", Title: "Platform", Icon: "🔧"},
+		{ID: "vertical_saas", Title: "Vertical SaaS", Icon: "📊"},
+		{ID: "horizontal_saas", Title: "Horizontal SaaS", Icon: "📈"},
+		{ID: "deep_tech", Title: "Deep Tech", Icon: "🔬"},
+		{ID: "consumer_apps", Title: "Consumer Apps", Icon: "📱"},
+		{ID: "cancel", Title: "Cancel", Icon: "←"},
+	}
+
+	s.pivotMenu = components.NewMenu("PIVOT TO", items)
+	s.pivotMenu.SetSize(50, 15)
+	s.pivotMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handlePivotSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" || id == "header" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	strategyMap := map[string]string{
+		"enterprise_b2b":  "Enterprise B2B",
+		"smb_b2b":         "SMB B2B",
+		"b2c":             "B2C",
+		"marketplace":     "Marketplace",
+		"platform":        "Platform",
+		"vertical_saas":   "Vertical SaaS",
+		"horizontal_saas": "Horizontal SaaS",
+		"deep_tech":       "Deep Tech",
+		"consumer_apps":   "Consumer Apps",
+	}
+
+	toStrategy := strategyMap[id]
+	if toStrategy == "" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	pivot, err := fg.ExecutePivot(toStrategy, "Strategic repositioning")
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		if pivot.Success {
+			s.turnMessages = []string{
+				"🎉 Pivot SUCCESSFUL!",
+				fmt.Sprintf("   New Strategy: %s", pivot.ToStrategy),
+				fmt.Sprintf("   Cost: $%s", formatCompactMoney(pivot.Cost)),
+				fmt.Sprintf("   Customers Lost: %d", pivot.CustomersLost),
 			}
-			msgs = append(msgs, fmt.Sprintf("%s %s: $%s", status, exit.Type, formatCompactMoney(exit.Valuation)))
+		} else {
+			s.turnMessages = []string{
+				"😞 Pivot FAILED",
+				"   The market didn't respond well",
+				fmt.Sprintf("   Cost: $%s", formatCompactMoney(pivot.Cost)),
+				fmt.Sprintf("   Customers Lost: %d", pivot.CustomersLost),
+			}
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Board management
+func (s *FounderGameScreen) rebuildBoardMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Board & Advisors", Description: "See current board members", Icon: "👁️"},
+		{ID: "add_seat", Title: "Add Board Seat", Description: "~2% from equity pool", Icon: "➕"},
+		{ID: "expand_pool", Title: "Expand Equity Pool", Description: "Dilute 1-10%", Icon: "📊"},
+		{ID: "add_advisor", Title: "Add Advisor", Description: "0.25-1% equity for guidance", Icon: "🧠"},
+	}
+
+	if len(fg.BoardMembers) > 0 {
+		items = append(items, components.MenuItem{
+			ID: "remove_advisor", Title: "Remove Advisor", Description: "With equity buyback option", Icon: "❌",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Cancel", Icon: "←",
+	})
+
+	s.boardMenu = components.NewMenu("BOARD & EQUITY", items)
+	s.boardMenu.SetSize(55, 12)
+	s.boardMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	switch id {
+	case "cancel":
+		s.view = FounderViewActions
+		return s, nil
+
+	case "view":
+		var msgs []string
+		msgs = append(msgs, fmt.Sprintf("Board Seats: %d", fg.BoardSeats))
+		msgs = append(msgs, fmt.Sprintf("Equity Pool: %.1f%%", fg.EquityPool))
+		msgs = append(msgs, fmt.Sprintf("Your Equity: %.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway))
+
+		if len(fg.BoardMembers) > 0 {
+			msgs = append(msgs, "")
+			msgs = append(msgs, "Board Members:")
+			for _, m := range fg.BoardMembers {
+				if m.IsActive {
+					role := "Advisor"
+					if m.IsChairman {
+						role = "Chairman"
+					}
+					msgs = append(msgs, fmt.Sprintf("  • %s (%s, %s) - %.2f%%", m.Name, m.Expertise, role, m.EquityCost))
+				}
+			}
 		}
 		s.turnMessages = msgs
 		s.view = FounderViewMain
+		return s, nil
+
+	case "add_seat":
+		fg.AddBoardSeat("Strategic advisor")
+		s.turnMessages = []string{
+			"✓ Added board seat",
+			fmt.Sprintf("   New board seats: %d", fg.BoardSeats),
+			fmt.Sprintf("   Remaining equity pool: %.1f%%", fg.EquityPool),
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "expand_pool":
+		pct := 2.0 // Default 2%
+		fg.ExpandEquityPool(pct)
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Expanded equity pool by %.1f%%", pct),
+			fmt.Sprintf("   New equity pool: %.1f%%", fg.EquityPool),
+			fmt.Sprintf("   Your equity: %.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway),
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "add_advisor":
+		// Create a new advisor directly
+		advisorNames := []string{"Sarah Chen", "Michael Ross", "Jennifer Liu", "David Kim", "Amanda Torres"}
+		name := advisorNames[len(fg.BoardMembers)%len(advisorNames)]
+		equityCost := 0.25 + float64(len(fg.BoardMembers))*0.1
+		if equityCost > 1.0 {
+			equityCost = 1.0
+		}
+		advisor := founder.BoardMember{
+			Name:       name,
+			Type:       "advisor",
+			Expertise:  "strategy",
+			MonthAdded: fg.Turn,
+			EquityCost: equityCost,
+			IsActive:   true,
+		}
+		fg.BoardMembers = append(fg.BoardMembers, advisor)
+		fg.EquityPool -= equityCost
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Added advisor: %s", advisor.Name),
+			fmt.Sprintf("   Expertise: %s", advisor.Expertise),
+			fmt.Sprintf("   Equity cost: %.2f%%", advisor.EquityCost),
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "remove_advisor":
+		if len(fg.BoardMembers) > 0 {
+			for i := range fg.BoardMembers {
+				if fg.BoardMembers[i].IsActive && fg.BoardMembers[i].Type == "advisor" {
+					fg.BoardMembers[i].IsActive = false
+					s.turnMessages = []string{
+						fmt.Sprintf("✓ Removed advisor: %s", fg.BoardMembers[i].Name),
+					}
+					break
+				}
+			}
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+// Buyback
+func (s *FounderGameScreen) rebuildBuybackMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+
+	for _, round := range fg.FundingRounds {
+		if round.EquityGiven > 0 {
+			items = append(items, components.MenuItem{
+				ID:          round.RoundName,
+				Title:       round.RoundName,
+				Description: fmt.Sprintf("%.1f%% equity available", round.EquityGiven),
+				Icon:        "💰",
+			})
+		}
+	}
+
+	if len(items) == 0 {
+		items = append(items, components.MenuItem{
+			ID:       "none",
+			Title:    "No rounds to buy back from",
+			Disabled: true,
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Cancel", Icon: "←",
+	})
+
+	s.buybackMenu = components.NewMenu("BUY BACK FROM", items)
+	s.buybackMenu.SetSize(50, 10)
+	s.buybackMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleBuybackSelection(id string) (ScreenModel, tea.Cmd) {
+	if id == "cancel" || id == "none" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	s.selectedBuybackRound = id
+	s.buybackInput.SetValue("")
+	s.buybackInput.Focus()
+	s.inputMessage = ""
+	s.view = FounderViewBuybackConfirm
+	return s, textinput.Blink
+}
+
+func (s *FounderGameScreen) handleBuybackConfirm() (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	equityStr := strings.TrimSpace(s.buybackInput.Value())
+	equity, err := strconv.ParseFloat(equityStr, 64)
+	if err != nil || equity <= 0 {
+		s.inputMessage = "Invalid equity percentage"
+		return s, nil
+	}
+
+	buyback, err := fg.BuybackEquity(s.selectedBuybackRound, equity)
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Bought back %.1f%% equity!", buyback.EquityBought),
+			fmt.Sprintf("   Paid: $%s", formatCompactMoney(buyback.PricePaid)),
+			fmt.Sprintf("   Your new ownership: %.1f%%", 100.0-fg.EquityGivenAway-fg.EquityPool),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleExitSelection(id string) (ScreenModel, tea.Cmd) {
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	s.selectedExitType = id
+	s.view = FounderViewConfirmExit
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleExitConfirm() (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	fg.ExecuteExit(s.selectedExitType)
+
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	payout := int64(float64(fg.ExitValuation) * founderEquity / 100.0)
+
+	s.turnMessages = []string{
+		fmt.Sprintf("🎉 Congratulations! %s exit completed!", strings.ToUpper(s.selectedExitType)),
+		fmt.Sprintf("   Exit Valuation: $%s", formatCompactMoney(fg.ExitValuation)),
+		fmt.Sprintf("   Your Equity: %.1f%%", founderEquity),
+		fmt.Sprintf("   Your Payout: $%s", formatCompactMoney(payout)),
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// ============================================================================
+// PHASE 4: ADVANCED FEATURES
+// ============================================================================
+
+// Product Roadmap
+func (s *FounderGameScreen) rebuildRoadmapMenu() {
+	fg := s.gameData.FounderState
+
+	// Initialize roadmap if needed
+	if fg.ProductRoadmap == nil {
+		fg.InitializeProductRoadmap()
+	}
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Roadmap Status", Description: "See in-progress and completed features", Icon: "👁️"},
+		{ID: "start", Title: "Start New Feature", Description: "Assign engineers to build features", Icon: "🚀"},
+	}
+
+	inProgress := fg.GetInProgressFeatures()
+	if len(inProgress) > 0 {
+		items = append(items, components.MenuItem{
+			ID: "reallocate", Title: "Reallocate Engineers", Description: "Adjust team assignments", Icon: "👥",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Back", Icon: "←",
+	})
+
+	s.roadmapMenu = components.NewMenu("PRODUCT ROADMAP", items)
+	s.roadmapMenu.SetSize(55, 12)
+	s.roadmapMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleRoadmapSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	switch id {
+	case "cancel":
+		s.view = FounderViewActions
+		return s, nil
+
+	case "view":
+		var msgs []string
+		inProgress := fg.GetInProgressFeatures()
+		completed := fg.GetCompletedFeatures()
+
+		if len(inProgress) > 0 {
+			msgs = append(msgs, "🔨 IN PROGRESS:")
+			for _, f := range inProgress {
+				msgs = append(msgs, fmt.Sprintf("  • %s (%d%% done, %d engineers)", f.Name, f.DevelopmentProgress, f.AllocatedEngineers))
+			}
+		}
+
+		if len(completed) > 0 {
+			msgs = append(msgs, "✅ COMPLETED:")
+			for _, f := range completed {
+				msgs = append(msgs, fmt.Sprintf("  • %s (Category: %s)", f.Name, f.Category))
+			}
+		}
+
+		if len(msgs) == 0 {
+			msgs = append(msgs, "No features in roadmap yet. Start building!")
+		}
+
+		s.turnMessages = msgs
+		s.view = FounderViewMain
+		return s, nil
+
+	case "start":
+		s.roadmapFeatures = fg.GetAvailableFeaturesToStart()
+		s.view = FounderViewRoadmapStart
+		return s, nil
+
+	case "reallocate":
+		s.turnMessages = []string{"Engineer reallocation not yet implemented in TUI"}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleFeatureStart(num int) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if num < 1 || num > len(s.roadmapFeatures) {
+		return s, nil
+	}
+
+	feature := s.roadmapFeatures[num-1]
+	engineers := 1 // Start with 1 engineer
+	if len(fg.Team.Engineers) > 1 {
+		engineers = 2
+	}
+
+	err := fg.StartFeature(feature.Name, engineers)
+	if err != nil {
+		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+	} else {
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Started feature: %s", feature.Name),
+			fmt.Sprintf("   Engineers assigned: %d", engineers),
+			fmt.Sprintf("   Estimated time: %d months", feature.EngineerMonths/engineers),
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+// Customer Segments
+func (s *FounderGameScreen) rebuildSegmentsMenu() {
+	fg := s.gameData.FounderState
+
+	if fg.CustomerSegments == nil {
+		fg.InitializeSegments()
+	}
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Current Segments", Description: "See customer distribution", Icon: "👁️"},
+	}
+
+	// Add segment options
+	segments := []string{"SMB", "Mid-Market", "Enterprise", "Strategic"}
+	for _, seg := range segments {
+		items = append(items, components.MenuItem{
+			ID:    "focus_" + strings.ToLower(strings.ReplaceAll(seg, "-", "_")),
+			Title: fmt.Sprintf("Focus on %s", seg),
+			Icon:  "🎯",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Back", Icon: "←",
+	})
+
+	s.segmentsMenu = components.NewMenu("CUSTOMER SEGMENTS", items)
+	s.segmentsMenu.SetSize(55, 15)
+	s.segmentsMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleSegmentsSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	if id == "view" {
+		var msgs []string
+		if fg.CustomerSegments != nil {
+			msgs = append(msgs, fmt.Sprintf("Current ICP: %s", fg.SelectedICP))
+			msgs = append(msgs, "")
+			for name, seg := range fg.CustomerSegments {
+				msgs = append(msgs, fmt.Sprintf("%s: %d customers, $%s/mo avg",
+					name, seg.Volume, formatCompactMoney(seg.AvgDealSize)))
+			}
+		} else {
+			msgs = append(msgs, "No segment data available")
+		}
+		s.turnMessages = msgs
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	if strings.HasPrefix(id, "focus_") {
+		segmentMap := map[string]string{
+			"focus_smb":        "SMB",
+			"focus_mid_market": "Mid-Market",
+			"focus_enterprise": "Enterprise",
+			"focus_strategic":  "Strategic",
+		}
+		segment := segmentMap[id]
+		if segment != "" {
+			err := fg.ChangeICP(segment)
+			if err != nil {
+				s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+			} else {
+				s.turnMessages = []string{
+					fmt.Sprintf("✓ Now focusing on %s segment!", segment),
+					"This will affect future customer acquisition and deal sizes",
+				}
+			}
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+// Pricing Strategy
+func (s *FounderGameScreen) rebuildPricingMenu() {
+	fg := s.gameData.FounderState
+
+	if fg.PricingStrategy == nil {
+		fg.InitializePricingStrategy()
+	}
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Current Pricing", Description: "See pricing model details", Icon: "👁️"},
+		{ID: "monthly", Title: "Switch to Monthly", Description: "No discount, higher churn", Icon: "📅"},
+		{ID: "annual", Title: "Switch to Annual", Description: "Discount for commitment", Icon: "📆"},
+		{ID: "usage", Title: "Usage-Based Pricing", Description: "Pay-as-you-go model", Icon: "📊"},
+		{ID: "cancel", Title: "Back", Icon: "←"},
+	}
+
+	s.pricingMenu = components.NewMenu("PRICING STRATEGY", items)
+	s.pricingMenu.SetSize(55, 12)
+	s.pricingMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handlePricingSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	switch id {
+	case "cancel":
+		s.view = FounderViewActions
+		return s, nil
+
+	case "view":
+		var msgs []string
+		if fg.PricingStrategy != nil {
+			msgs = append(msgs, fmt.Sprintf("Current Model: %s", fg.PricingStrategy.Model))
+			msgs = append(msgs, fmt.Sprintf("Annual Billing: %v", fg.PricingStrategy.IsAnnual))
+			msgs = append(msgs, fmt.Sprintf("Discount: %.0f%%", fg.PricingStrategy.Discount*100))
+		} else {
+			msgs = append(msgs, "No pricing strategy configured")
+		}
+		s.turnMessages = msgs
+		s.view = FounderViewMain
+		return s, nil
+
+	case "monthly":
+		err := fg.ChangePricingModel("subscription", false, 0)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Switched to monthly billing"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "annual":
+		err := fg.ChangePricingModel("subscription", true, 0.15)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Switched to annual billing with 15% discount"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "usage":
+		err := fg.ChangePricingModel("usage", false, 0)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Switched to usage-based pricing"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+// Acquisitions
+func (s *FounderGameScreen) rebuildAcquisitionsMenu() {
+	fg := s.gameData.FounderState
+
+	// Generate targets if needed
+	if len(fg.AcquisitionTargets) == 0 {
+		fg.GenerateAcquisitionTargets()
+	}
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Acquisition History", Description: "Past and in-progress acquisitions", Icon: "👁️"},
+	}
+
+	for i, target := range fg.AcquisitionTargets {
+		items = append(items, components.MenuItem{
+			ID:          fmt.Sprintf("acquire_%d", i),
+			Title:       fmt.Sprintf("Acquire %s", target.Name),
+			Description: fmt.Sprintf("$%s, +$%s MRR, %s", formatCompactMoney(target.AcquisitionCost), formatCompactMoney(target.MRR), target.Category),
+			Icon:        "🏢",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Back", Icon: "←",
+	})
+
+	s.acquisitionsMenu = components.NewMenu("ACQUISITIONS", items)
+	s.acquisitionsMenu.SetSize(60, 15)
+	s.acquisitionsMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleAcquisitionsSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	if id == "view" {
+		completed, inProgress, totalMRR, totalCost := fg.GetAcquisitionSummary()
+		s.turnMessages = []string{
+			fmt.Sprintf("Completed: %d acquisitions", completed),
+			fmt.Sprintf("In Progress: %d integrations", inProgress),
+			fmt.Sprintf("Total MRR Gained: $%s", formatCompactMoney(totalMRR)),
+			fmt.Sprintf("Total Spent: $%s", formatCompactMoney(totalCost)),
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	if strings.HasPrefix(id, "acquire_") {
+		idxStr := strings.TrimPrefix(id, "acquire_")
+		idx, _ := strconv.Atoi(idxStr)
+
+		acq, err := fg.AcquireCompany(idx)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				fmt.Sprintf("✓ Acquired %s!", acq.TargetName),
+				fmt.Sprintf("   Paid: $%s", formatCompactMoney(acq.Cost)),
+				fmt.Sprintf("   MRR Added: $%s", formatCompactMoney(acq.MRRGained)),
+				fmt.Sprintf("   Integration: %d months", acq.IntegrationMonths),
+			}
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+// Platform Strategy
+func (s *FounderGameScreen) rebuildPlatformMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+
+	if fg.PlatformMetrics == nil {
+		items = append(items, components.MenuItem{
+			ID: "launch_api", Title: "Launch API Platform", Description: "Open APIs for developers", Icon: "🔌",
+		})
+		items = append(items, components.MenuItem{
+			ID: "launch_marketplace", Title: "Launch Marketplace", Description: "Third-party app ecosystem", Icon: "🛒",
+		})
+	} else {
+		items = append(items, components.MenuItem{
+			ID: "view", Title: "View Platform Metrics", Description: "Developer stats and API usage", Icon: "👁️",
+		})
+		items = append(items, components.MenuItem{
+			ID: "invest", Title: "Invest in Developer Program", Description: "Increase platform adoption", Icon: "💰",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Back", Icon: "←",
+	})
+
+	s.platformMenu = components.NewMenu("PLATFORM STRATEGY", items)
+	s.platformMenu.SetSize(55, 12)
+	s.platformMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handlePlatformSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	switch id {
+	case "cancel":
+		s.view = FounderViewActions
+		return s, nil
+
+	case "view":
+		isPlatform, devs, apps, apiUsage, revenue, networkScore := fg.GetPlatformSummary()
+		if isPlatform {
+			s.turnMessages = []string{
+				fmt.Sprintf("Developers: %d", devs),
+				fmt.Sprintf("Apps: %d", apps),
+				fmt.Sprintf("API Calls/mo: %d", apiUsage),
+				fmt.Sprintf("Marketplace Revenue: $%s/mo", formatCompactMoney(revenue)),
+				fmt.Sprintf("Network Score: %.2f", networkScore),
+			}
+		} else {
+			s.turnMessages = []string{"Platform not launched yet"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "launch_api":
+		err := fg.LaunchPlatform("api")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ API Platform launched!", "Developers can now build on your platform"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "launch_marketplace":
+		err := fg.LaunchPlatform("marketplace")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Marketplace launched!", "Third-party apps can now be sold"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "invest":
+		budget := int64(50000)
+		err := fg.InvestInDeveloperProgram(budget)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{fmt.Sprintf("✓ Invested $%s/mo in developer program", formatCompactMoney(budget))}
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+// Security & Compliance
+func (s *FounderGameScreen) rebuildSecurityMenu() {
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Security Posture", Description: "Current security status", Icon: "👁️"},
+		{ID: "invest", Title: "Increase Security Budget", Description: "More resources for security", Icon: "💰"},
+		{ID: "hire", Title: "Hire Security Team", Description: "Dedicated security engineers", Icon: "👥"},
+		{ID: "soc2", Title: "Get SOC2 Certification", Description: "Enterprise compliance ($150k)", Icon: "📜"},
+		{ID: "iso27001", Title: "Get ISO 27001", Description: "International security standard ($200k)", Icon: "🌐"},
+		{ID: "cancel", Title: "Back", Icon: "←"},
+	}
+
+	s.securityMenu = components.NewMenu("SECURITY & COMPLIANCE", items)
+	s.securityMenu.SetSize(55, 15)
+	s.securityMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleSecuritySelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	switch id {
+	case "cancel":
+		s.view = FounderViewActions
+		return s, nil
+
+	case "view":
+		if fg.SecurityPosture != nil {
+			s.turnMessages = []string{
+				fmt.Sprintf("Security Score: %d/100", fg.SecurityPosture.SecurityScore),
+				fmt.Sprintf("Monthly Budget: $%s", formatCompactMoney(fg.SecurityPosture.SecurityBudget)),
+				fmt.Sprintf("Security Team: %d", fg.SecurityPosture.SecurityTeamSize),
+				fmt.Sprintf("Vulnerabilities: %d", fg.SecurityPosture.Vulnerabilities),
+			}
+			if len(fg.SecurityPosture.ComplianceCerts) > 0 {
+				s.turnMessages = append(s.turnMessages, fmt.Sprintf("Certifications: %v", fg.SecurityPosture.ComplianceCerts))
+			}
+		} else {
+			s.turnMessages = []string{"No security posture established"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "invest":
+		budget := int64(25000)
+		err := fg.InvestInSecurity(budget)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{fmt.Sprintf("✓ Security budget set to $%s/mo", formatCompactMoney(budget))}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "hire":
+		err := fg.HireSecurityTeam(1)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Hired 1 security engineer"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "soc2":
+		err := fg.GetComplianceCertification("SOC2")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ SOC2 certification obtained!", "Enterprise customers now more likely to buy"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "iso27001":
+		err := fg.GetComplianceCertification("ISO27001")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ ISO 27001 certification obtained!", "International sales now easier"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+// PR Crisis Management
+func (s *FounderGameScreen) rebuildPRCrisisMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View PR Status", Description: "Current PR situation", Icon: "👁️"},
+	}
+
+	if fg.ActivePRCrisis != nil {
+		items = append(items, components.MenuItem{
+			ID: "respond_apologize", Title: "Issue Public Apology", Description: "Accept responsibility", Icon: "🙏",
+		})
+		items = append(items, components.MenuItem{
+			ID: "respond_deny", Title: "Deny Allegations", Description: "Dispute the claims", Icon: "❌",
+		})
+		items = append(items, components.MenuItem{
+			ID: "respond_ignore", Title: "No Comment", Description: "Wait for it to blow over", Icon: "🤐",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Back", Icon: "←",
+	})
+
+	s.prCrisisMenu = components.NewMenu("PR CRISIS MANAGEMENT", items)
+	s.prCrisisMenu.SetSize(55, 12)
+	s.prCrisisMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handlePRCrisisSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	switch id {
+	case "cancel":
+		s.view = FounderViewActions
+		return s, nil
+
+	case "view":
+		if fg.ActivePRCrisis != nil {
+			s.turnMessages = []string{
+				fmt.Sprintf("Crisis: %s", fg.ActivePRCrisis.Type),
+				fmt.Sprintf("Severity: %s", fg.ActivePRCrisis.Severity),
+				fmt.Sprintf("Duration: %d months", fg.ActivePRCrisis.DurationMonths),
+			}
+		} else {
+			s.turnMessages = []string{"No active PR crisis. Good news!"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "respond_apologize":
+		err := fg.RespondToPRCrisis("apologize")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Public apology issued", "Reputation impact minimized"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "respond_deny":
+		err := fg.RespondToPRCrisis("deny")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Allegations denied", "May backfire if evidence surfaces"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "respond_ignore":
+		err := fg.RespondToPRCrisis("ignore")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ No comment issued", "Crisis may escalate or fade away"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+// Economic Strategy
+func (s *FounderGameScreen) rebuildEconomyMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Economic Conditions", Description: "Current market situation", Icon: "👁️"},
+	}
+
+	if fg.EconomicEvent != nil && fg.EconomicEvent.Active {
+		items = append(items, components.MenuItem{
+			ID: "survive_cut", Title: "Cut Costs Aggressively", Description: "Reduce burn by 40%", Icon: "✂️",
+		})
+		items = append(items, components.MenuItem{
+			ID: "survive_raise", Title: "Emergency Fundraise", Description: "Down round if needed", Icon: "💰",
+		})
+		items = append(items, components.MenuItem{
+			ID: "survive_pivot", Title: "Pivot to Profitability", Description: "Focus on unit economics", Icon: "📈",
+		})
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Back", Icon: "←",
+	})
+
+	s.economyMenu = components.NewMenu("ECONOMIC STRATEGY", items)
+	s.economyMenu.SetSize(55, 12)
+	s.economyMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleEconomySelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	switch id {
+	case "cancel":
+		s.view = FounderViewActions
+		return s, nil
+
+	case "view":
+		if fg.EconomicEvent != nil && fg.EconomicEvent.Active {
+			s.turnMessages = []string{
+				fmt.Sprintf("Event: %s", fg.EconomicEvent.Type),
+				fmt.Sprintf("Severity: %s", fg.EconomicEvent.Severity),
+				fmt.Sprintf("Duration: %d months", fg.EconomicEvent.DurationMonths),
+			}
+		} else {
+			s.turnMessages = []string{"Economy is stable. No major events."}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "survive_cut":
+		err := fg.ExecuteSurvivalStrategy("cut_costs")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Cost cutting measures implemented", "Burn rate reduced significantly"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "survive_raise":
+		err := fg.ExecuteSurvivalStrategy("emergency_raise")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Emergency funding secured", "May have taken dilution"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "survive_pivot":
+		err := fg.ExecuteSurvivalStrategy("profitability_pivot")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Pivoted to profitability focus", "Growth may slow but runway extended"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	return s, nil
+}
+
+// Succession Planning
+func (s *FounderGameScreen) rebuildSuccessionMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{
+		{ID: "view", Title: "View Key Person Risks", Description: "Identify critical dependencies", Icon: "👁️"},
+		{ID: "assess", Title: "Assess Risks", Description: "Evaluate key person dependencies", Icon: "🔍"},
+	}
+
+	if fg.KeyPersonRisks != nil && len(fg.KeyPersonRisks) > 0 {
+		for i, risk := range fg.KeyPersonRisks {
+			if risk.SuccessionReady {
+				continue
+			}
+			items = append(items, components.MenuItem{
+				ID:          fmt.Sprintf("plan_%d", i),
+				Title:       fmt.Sprintf("Create Plan for %s", risk.PersonName),
+				Description: fmt.Sprintf("Risk: %s", risk.RiskLevel),
+				Icon:        "📋",
+			})
+		}
+	}
+
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Back", Icon: "←",
+	})
+
+	s.successionMenu = components.NewMenu("SUCCESSION PLANNING", items)
+	s.successionMenu.SetSize(55, 15)
+	s.successionMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleSuccessionSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	switch id {
+	case "cancel":
+		s.view = FounderViewActions
+		return s, nil
+
+	case "view":
+		if fg.KeyPersonRisks != nil && len(fg.KeyPersonRisks) > 0 {
+			var msgs []string
+			for _, risk := range fg.KeyPersonRisks {
+				status := "⚠️ No plan"
+				if risk.SuccessionReady {
+					status = "✓ Plan in place"
+				}
+				msgs = append(msgs, fmt.Sprintf("%s (%s): %s - %s", risk.PersonName, risk.Role, risk.RiskLevel, status))
+			}
+			s.turnMessages = msgs
+		} else {
+			s.turnMessages = []string{"No key person risks identified yet"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "assess":
+		fg.AssessKeyPersonRisks()
+		s.turnMessages = []string{"✓ Key person risks assessed", "Check View for details"}
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	if strings.HasPrefix(id, "plan_") {
+		idxStr := strings.TrimPrefix(id, "plan_")
+		idx, _ := strconv.Atoi(idxStr)
+		if idx >= 0 && idx < len(fg.KeyPersonRisks) {
+			risk := fg.KeyPersonRisks[idx]
+			err := fg.CreateSuccessionPlan(risk.PersonName, "Hired backup")
+			if err != nil {
+				s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+			} else {
+				s.turnMessages = []string{fmt.Sprintf("✓ Succession plan created for %s", risk.PersonName)}
+			}
+		}
+		s.view = FounderViewMain
+		return s, nil
 	}
 
 	return s, nil
@@ -149,6 +2571,67 @@ func (s *FounderGameScreen) View() string {
 	switch s.view {
 	case FounderViewActions:
 		return s.renderActions()
+	case FounderViewHiring:
+		return s.renderHiring()
+	case FounderViewHiringMarket:
+		return s.renderHiringMarket()
+	case FounderViewFiring:
+		return s.renderFiring()
+	case FounderViewMarketing:
+		return s.renderMarketing()
+	case FounderViewFunding:
+		return s.renderFunding()
+	case FounderViewFundingTerms:
+		return s.renderFundingTerms()
+	case FounderViewPartnership:
+		return s.renderPartnership()
+	case FounderViewAffiliate:
+		return s.renderAffiliate()
+	case FounderViewCompetitors:
+		return s.renderCompetitors()
+	case FounderViewExpansion:
+		return s.renderExpansion()
+	case FounderViewPivot:
+		return s.renderPivot()
+	case FounderViewBoard:
+		return s.renderBoard()
+	case FounderViewBuyback:
+		return s.renderBuyback()
+	case FounderViewBuybackConfirm:
+		return s.renderBuybackConfirm()
+	case FounderViewTeamRoster:
+		return s.renderTeamRoster()
+	case FounderViewCustomers:
+		return s.renderCustomers()
+	case FounderViewFinancials:
+		return s.renderFinancials()
+	case FounderViewExit:
+		return s.renderExit()
+	case FounderViewConfirmExit:
+		return s.renderConfirmExit()
+	// Phase 4: Advanced views
+	case FounderViewRoadmap:
+		return s.renderRoadmap()
+	case FounderViewRoadmapStart:
+		return s.renderRoadmapStart()
+	case FounderViewSegments:
+		return s.renderSegments()
+	case FounderViewPricing:
+		return s.renderPricing()
+	case FounderViewAcquisitions:
+		return s.renderAcquisitions()
+	case FounderViewPlatform:
+		return s.renderPlatform()
+	case FounderViewSecurity:
+		return s.renderSecurity()
+	case FounderViewPRCrisis:
+		return s.renderPRCrisis()
+	case FounderViewEconomy:
+		return s.renderEconomy()
+	case FounderViewSuccession:
+		return s.renderSuccession()
+	case FounderViewSalesPipeline:
+		return s.renderSalesPipeline()
 	default:
 		return s.renderMain()
 	}
@@ -191,7 +2674,7 @@ func (s *FounderGameScreen) renderMain() string {
 		Width(70).
 		Padding(0, 2)
 
-	// Calculate valuation (simplified ARR * multiple)
+	// Calculate valuation
 	arr := fg.MRR * 12
 	multiple := 10.0
 	if fg.MonthlyGrowthRate > 0.05 {
@@ -199,10 +2682,15 @@ func (s *FounderGameScreen) renderMain() string {
 	}
 	valuation := int64(float64(arr) * multiple)
 
-	status := fmt.Sprintf("💰 Cash: $%s  |  📊 Valuation: $%s  |  ⏳ Runway: %d mo",
+	runway := fmt.Sprintf("%d mo", fg.CashRunwayMonths)
+	if fg.CashRunwayMonths < 0 {
+		runway = "∞"
+	}
+
+	status := fmt.Sprintf("💰 Cash: $%s  |  📊 Valuation: $%s  |  ⏳ Runway: %s",
 		formatCompactMoney(fg.Cash),
 		formatCompactMoney(valuation),
-		fg.CashRunwayMonths)
+		runway)
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(statusStyle.Render(status)))
 	b.WriteString("\n\n")
 
@@ -237,16 +2725,16 @@ func (s *FounderGameScreen) renderCompanyPanel() string {
 	b.WriteString(fg.Category)
 	b.WriteString("\n")
 
-	b.WriteString(labelStyle.Render("Type: "))
-	b.WriteString(fg.StartupType)
-	b.WriteString("\n")
-
 	b.WriteString(labelStyle.Render("Team Size: "))
 	b.WriteString(fmt.Sprintf("%d", fg.Team.TotalEmployees))
 	b.WriteString("\n")
 
 	b.WriteString(labelStyle.Render("MRR: "))
 	b.WriteString(fmt.Sprintf("$%s", formatCompactMoney(fg.MRR)))
+	b.WriteString("\n")
+
+	b.WriteString(labelStyle.Render("Your Equity: "))
+	b.WriteString(fmt.Sprintf("%.1f%%", 100.0-fg.EquityGivenAway-fg.EquityPool))
 	b.WriteString("\n")
 
 	return panelStyle.Render(b.String())
@@ -281,7 +2769,7 @@ func (s *FounderGameScreen) renderMetricsPanel() string {
 	b.WriteString("\n")
 
 	b.WriteString(labelStyle.Render("Churn: "))
-	b.WriteString(fmt.Sprintf("%.1f%%/mo", fg.ChurnRate*100))
+	b.WriteString(fmt.Sprintf("%.1f%%/mo", fg.CustomerChurnRate*100))
 	b.WriteString("\n")
 
 	b.WriteString(labelStyle.Render("Product Maturity: "))
@@ -303,8 +2791,7 @@ func (s *FounderGameScreen) renderNews() string {
 	b.WriteString(titleStyle.Render("📰 NEWS"))
 	b.WriteString("\n")
 
-	// Show up to 5 messages
-	limit := 5
+	limit := 6
 	if len(s.turnMessages) < limit {
 		limit = len(s.turnMessages)
 	}
@@ -322,7 +2809,6 @@ func (s *FounderGameScreen) renderNews() string {
 func (s *FounderGameScreen) renderActions() string {
 	var b strings.Builder
 
-	// Header
 	headerStyle := lipgloss.NewStyle().
 		Foreground(styles.Black).
 		Background(styles.Cyan).
@@ -330,10 +2816,9 @@ func (s *FounderGameScreen) renderActions() string {
 		Width(60).
 		Align(lipgloss.Center)
 
-	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("⚡ CHOOSE ACTION")))
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("⚡ MONTHLY DECISIONS")))
 	b.WriteString("\n\n")
 
-	// Menu
 	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
 	menuBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -343,9 +2828,1213 @@ func (s *FounderGameScreen) renderActions() string {
 	b.WriteString(menuContainer.Render(menuBox.Render(s.actionsMenu.View())))
 	b.WriteString("\n\n")
 
-	// Help
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
 	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderHiring() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("💼 HIRE TEAM MEMBER")))
+	b.WriteString("\n\n")
+
+	// Cash info
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Cash: $%s | Runway: %d months", formatCompactMoney(fg.Cash), fg.CashRunwayMonths)))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2)
+
+	b.WriteString(menuContainer.Render(menuBox.Render(s.hiringMenu.View())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderHiringMarket() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📍 SELECT MARKET ASSIGNMENT")))
+	b.WriteString("\n\n")
+
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Hiring: %s", s.selectedRole)))
+	b.WriteString("\n\n")
+
+	marketBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2).
+		Width(50)
+
+	var markets strings.Builder
+	for i, m := range s.marketOptions {
+		markets.WriteString(fmt.Sprintf("%d. %s\n", i+1, m))
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(marketBox.Render(markets.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("1-9 select market • esc back"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderFiring() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Red).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("⚠️ LET GO TEAM MEMBER")))
+	b.WriteString("\n\n")
+
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Team Size: %d | Monthly Cost: $%s", fg.Team.TotalEmployees, formatCompactMoney(fg.MonthlyTeamCost))))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Red).
+		Padding(1, 2)
+
+	b.WriteString(menuContainer.Render(menuBox.Render(s.firingMenu.View())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderMarketing() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Orange).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📣 MARKETING SPEND")))
+	b.WriteString("\n\n")
+
+	// Info
+	infoBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Orange).
+		Padding(1, 2).
+		Width(55)
+
+	var info strings.Builder
+	info.WriteString(fmt.Sprintf("Current Cash: $%s\n", formatCompactMoney(fg.Cash)))
+	info.WriteString(fmt.Sprintf("Base CAC: $%s\n", formatCompactMoney(fg.BaseCAC)))
+	info.WriteString(fmt.Sprintf("Effective CAC: $%s\n", formatCompactMoney(fg.CustomerAcquisitionCost)))
+	info.WriteString(fmt.Sprintf("Product Maturity: %.0f%% (reduces CAC up to 40%%)\n", fg.ProductMaturity*100))
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(infoBox.Render(info.String())))
+	b.WriteString("\n\n")
+
+	// Input
+	inputLabel := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(inputLabel.Render("ENTER MARKETING BUDGET"))
+	b.WriteString("\n")
+
+	inputBox := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(0, 1).
+		Width(30)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(inputBox.Render("$ " + s.marketingInput.View())))
+	b.WriteString("\n")
+
+	// Error message
+	if s.inputMessage != "" {
+		msgStyle := lipgloss.NewStyle().Foreground(styles.Red).Width(s.width).Align(lipgloss.Center)
+		b.WriteString(msgStyle.Render(s.inputMessage))
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("enter confirm • esc cancel"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderFunding() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("💰 RAISE FUNDING")))
+	b.WriteString("\n\n")
+
+	// Current status
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	currentEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Your Equity: %.1f%% | Rounds Raised: %d", currentEquity, len(fg.FundingRounds))))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2)
+
+	b.WriteString(menuContainer.Render(menuBox.Render(s.fundingMenu.View())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderFundingTerms() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render(fmt.Sprintf("📄 %s TERM SHEETS", strings.ToUpper(s.selectedRoundName)))))
+	b.WriteString("\n\n")
+
+	currentEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Your Current Equity: %.2f%%", currentEquity)))
+	if currentEquity >= 50.0 {
+		b.WriteString(lipgloss.NewStyle().Foreground(styles.Green).Width(s.width).Align(lipgloss.Center).Render(" ✓ Majority control"))
+	}
+	b.WriteString("\n\n")
+
+	// Term sheets
+	termsBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2).
+		Width(65)
+
+	var terms strings.Builder
+	for i, sheet := range s.fundingTerms {
+		newEquity := currentEquity - sheet.Equity
+		terms.WriteString(fmt.Sprintf("%d. %s\n", i+1, sheet.Terms))
+		terms.WriteString(fmt.Sprintf("   Amount: $%s | Valuation: $%s\n", formatCompactMoney(sheet.Amount), formatCompactMoney(sheet.PostValuation)))
+		terms.WriteString(fmt.Sprintf("   Equity: %.1f%% | Your equity after: %.1f%%", sheet.Equity, newEquity))
+		if newEquity < 50.0 && currentEquity >= 50.0 {
+			terms.WriteString(" ⚠️ LOSES CONTROL")
+		}
+		terms.WriteString("\n\n")
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(termsBox.Render(terms.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("1-4 select term sheet • esc back"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderPartnership() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🤝 STRATEGIC PARTNERSHIPS")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2)
+
+	b.WriteString(menuContainer.Render(menuBox.Render(s.partnershipMenu.View())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderAffiliate() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Magenta).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("💸 LAUNCH AFFILIATE PROGRAM")))
+	b.WriteString("\n\n")
+
+	// Info
+	infoBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Magenta).
+		Padding(1, 2).
+		Width(55)
+
+	var info strings.Builder
+	info.WriteString("Affiliate programs let partners sell for commission.\n\n")
+	info.WriteString(fmt.Sprintf("Setup Cost: $20-50k | Monthly Fees: $5-10k\n"))
+	info.WriteString(fmt.Sprintf("Your Cash: $%s\n\n", formatCompactMoney(fg.Cash)))
+	info.WriteString("Recommended rates:\n")
+	info.WriteString("  • 10-15% for SaaS products\n")
+	info.WriteString("  • 15-20% for marketplaces\n")
+	info.WriteString("  • 20-30% for high-margin products\n")
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(infoBox.Render(info.String())))
+	b.WriteString("\n\n")
+
+	// Input
+	inputLabel := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(inputLabel.Render("ENTER COMMISSION RATE (5-30%)"))
+	b.WriteString("\n")
+
+	inputBox := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(0, 1).
+		Width(20)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(inputBox.Render(s.affiliateInput.View() + "%")))
+	b.WriteString("\n")
+
+	if s.inputMessage != "" {
+		msgStyle := lipgloss.NewStyle().Foreground(styles.Red).Width(s.width).Align(lipgloss.Center)
+		b.WriteString(msgStyle.Render(s.inputMessage))
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("enter confirm • esc cancel"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderCompetitors() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Red).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("⚔️ COMPETITOR MANAGEMENT")))
+	b.WriteString("\n\n")
+
+	// Show competitor list and/or action menu
+	if s.competitorAction != nil && s.selectedCompetitorIdx >= 0 && s.selectedCompetitorIdx < len(fg.Competitors) {
+		comp := fg.Competitors[s.selectedCompetitorIdx]
+		infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+		b.WriteString(infoStyle.Render(fmt.Sprintf("Handling: %s (Threat: %s)", comp.Name, comp.Threat)))
+		b.WriteString("\n\n")
+
+		menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+		menuBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Red).
+			Padding(1, 2)
+		b.WriteString(menuContainer.Render(menuBox.Render(s.competitorAction.View())))
+	} else {
+		// Show competitors list
+		compBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Red).
+			Padding(1, 2).
+			Width(60)
+
+		var comps strings.Builder
+		activeNum := 0
+		for _, c := range fg.Competitors {
+			if !c.Active {
+				continue
+			}
+			activeNum++
+			threatColor := styles.Green
+			if c.Threat == "high" || c.Threat == "critical" {
+				threatColor = styles.Red
+			} else if c.Threat == "medium" {
+				threatColor = styles.Yellow
+			}
+			threatStyle := lipgloss.NewStyle().Foreground(threatColor)
+			comps.WriteString(fmt.Sprintf("%d. %s\n", activeNum, c.Name))
+			comps.WriteString(fmt.Sprintf("   Threat: %s | Share: %.1f%%\n", threatStyle.Render(c.Threat), c.MarketShare*100))
+			comps.WriteString(fmt.Sprintf("   Strategy: %s\n\n", c.Strategy))
+		}
+
+		if activeNum == 0 {
+			comps.WriteString("No active competitors at this time")
+		}
+
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(compBox.Render(comps.String())))
+	}
+
+	b.WriteString("\n\n")
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	if s.competitorAction != nil {
+		b.WriteString(helpStyle.Render("enter select • esc back"))
+	} else {
+		b.WriteString(helpStyle.Render("1-9 select competitor • esc back"))
+	}
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderExpansion() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🌍 GLOBAL EXPANSION")))
+	b.WriteString("\n\n")
+
+	// Show active markets info
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Markets: %d | Cash: $%s", len(fg.GlobalMarkets)+1, formatCompactMoney(fg.Cash))))
+	b.WriteString("\n\n")
+
+	// Show menu for expansion
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2)
+
+	if s.expansionMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.expansionMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderTeamRoster() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("👥 TEAM ROSTER")))
+	b.WriteString("\n\n")
+
+	teamBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2).
+		Width(65)
+
+	var team strings.Builder
+	team.WriteString(fmt.Sprintf("Total Employees: %d | Monthly Cost: $%s\n\n", fg.Team.TotalEmployees, formatCompactMoney(fg.MonthlyTeamCost)))
+
+	team.WriteString(fmt.Sprintf("Engineers: %d\n", len(fg.Team.Engineers)))
+	for _, e := range fg.Team.Engineers {
+		team.WriteString(fmt.Sprintf("  • %s (Impact: %.1fx)\n", e.Name, e.Impact))
+	}
+
+	team.WriteString(fmt.Sprintf("\nSales: %d\n", len(fg.Team.Sales)))
+	for _, e := range fg.Team.Sales {
+		team.WriteString(fmt.Sprintf("  • %s (Impact: %.1fx)\n", e.Name, e.Impact))
+	}
+
+	team.WriteString(fmt.Sprintf("\nCustomer Success: %d\n", len(fg.Team.CustomerSuccess)))
+	for _, e := range fg.Team.CustomerSuccess {
+		team.WriteString(fmt.Sprintf("  • %s (Impact: %.1fx)\n", e.Name, e.Impact))
+	}
+
+	team.WriteString(fmt.Sprintf("\nMarketing: %d\n", len(fg.Team.Marketing)))
+	for _, e := range fg.Team.Marketing {
+		team.WriteString(fmt.Sprintf("  • %s (Impact: %.1fx)\n", e.Name, e.Impact))
+	}
+
+	if len(fg.Team.Executives) > 0 {
+		team.WriteString(fmt.Sprintf("\nExecutives: %d\n", len(fg.Team.Executives)))
+		for _, e := range fg.Team.Executives {
+			team.WriteString(fmt.Sprintf("  • %s - %s (Impact: %.1fx)\n", e.Name, e.Role, e.Impact))
+		}
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(teamBox.Render(team.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderCustomers() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🏢 CUSTOMERS")))
+	b.WriteString("\n\n")
+
+	custBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2).
+		Width(60)
+
+	var cust strings.Builder
+	cust.WriteString(fmt.Sprintf("Active Customers: %d\n", fg.Customers))
+	cust.WriteString(fmt.Sprintf("Total Ever: %d | Churned: %d\n", fg.TotalCustomersEver, fg.TotalChurned))
+	cust.WriteString(fmt.Sprintf("MRR: $%s | Avg Deal: $%s/mo\n\n", formatCompactMoney(fg.MRR), formatCompactMoney(fg.AvgDealSize)))
+
+	if fg.AffiliateProgram != nil {
+		cust.WriteString(fmt.Sprintf("Direct: %d | Affiliate: %d\n", fg.DirectCustomers, fg.AffiliateCustomers))
+		cust.WriteString(fmt.Sprintf("Direct MRR: $%s | Affiliate MRR: $%s\n\n", formatCompactMoney(fg.DirectMRR), formatCompactMoney(fg.AffiliateMRR)))
+	}
+
+	cust.WriteString(fmt.Sprintf("Churn Rate: %.1f%%/mo\n", fg.CustomerChurnRate*100))
+
+	// Customer health if available
+	healthy, atRisk, critical, _, _ := fg.GetCustomerHealthSegments()
+	if healthy > 0 || atRisk > 0 || critical > 0 {
+		cust.WriteString(fmt.Sprintf("\nHealth: 🟢 %d healthy | 🟡 %d at risk | 🔴 %d critical\n", healthy, atRisk, critical))
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(custBox.Render(cust.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderFinancials() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📊 FINANCIALS")))
+	b.WriteString("\n\n")
+
+	finBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2).
+		Width(60)
+
+	var fin strings.Builder
+	fin.WriteString(fmt.Sprintf("Cash: $%s\n", formatCompactMoney(fg.Cash)))
+
+	runway := fmt.Sprintf("%d months", fg.CashRunwayMonths)
+	if fg.CashRunwayMonths < 0 {
+		runway = "∞ (profitable!)"
+	}
+	fin.WriteString(fmt.Sprintf("Runway: %s\n\n", runway))
+
+	fin.WriteString("MONTHLY REVENUE:\n")
+	fin.WriteString(fmt.Sprintf("  MRR: $%s\n", formatCompactMoney(fg.MRR)))
+	netMRR := int64(float64(fg.MRR) * 0.67)
+	fin.WriteString(fmt.Sprintf("  After deductions (33%%): $%s\n\n", formatCompactMoney(netMRR)))
+
+	fin.WriteString("MONTHLY EXPENSES:\n")
+	fin.WriteString(fmt.Sprintf("  Team: $%s\n", formatCompactMoney(fg.MonthlyTeamCost)))
+	fin.WriteString(fmt.Sprintf("  Compute: $%s\n", formatCompactMoney(fg.MonthlyComputeCost)))
+	fin.WriteString(fmt.Sprintf("  ODC: $%s\n", formatCompactMoney(fg.MonthlyODCCost)))
+
+	totalExpenses := fg.MonthlyTeamCost + fg.MonthlyComputeCost + fg.MonthlyODCCost
+	fin.WriteString(fmt.Sprintf("  Total: $%s\n\n", formatCompactMoney(totalExpenses)))
+
+	netIncome := netMRR - totalExpenses
+	if netIncome >= 0 {
+		fin.WriteString(fmt.Sprintf("NET INCOME: +$%s/mo 🟢\n", formatCompactMoney(netIncome)))
+	} else {
+		fin.WriteString(fmt.Sprintf("NET BURN: -$%s/mo 🔴\n", formatCompactMoney(-netIncome)))
+	}
+
+	if len(fg.FundingRounds) > 0 {
+		fin.WriteString("\nFUNDING HISTORY:\n")
+		totalRaised := int64(0)
+		for _, r := range fg.FundingRounds {
+			fin.WriteString(fmt.Sprintf("  %s: $%s (%.1f%% equity)\n", r.RoundName, formatCompactMoney(r.Amount), r.EquityGiven))
+			totalRaised += r.Amount
+		}
+		fin.WriteString(fmt.Sprintf("  Total Raised: $%s\n", formatCompactMoney(totalRaised)))
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(finBox.Render(fin.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderExit() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Magenta).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🚪 EXIT OPTIONS")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Magenta).
+		Padding(1, 2)
+
+	b.WriteString(menuContainer.Render(menuBox.Render(s.exitMenu.View())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderConfirmExit() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Red).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("⚠️ CONFIRM EXIT")))
+	b.WriteString("\n\n")
+
+	exits := fg.GetAvailableExits()
+	var selectedExit *founder.ExitOption
+	for _, e := range exits {
+		if e.Type == s.selectedExitType {
+			selectedExit = &e
+			break
+		}
+	}
+
+	if selectedExit == nil {
+		return b.String()
+	}
+
+	confirmBox := lipgloss.NewStyle().
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(styles.Red).
+		Padding(1, 2).
+		Width(60)
+
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	payout := int64(float64(selectedExit.Valuation) * founderEquity / 100.0)
+
+	var confirm strings.Builder
+	confirm.WriteString(fmt.Sprintf("Exit Type: %s\n", strings.ToUpper(s.selectedExitType)))
+	confirm.WriteString(fmt.Sprintf("Valuation: $%s\n", formatCompactMoney(selectedExit.Valuation)))
+	confirm.WriteString(fmt.Sprintf("Your Equity: %.1f%%\n", founderEquity))
+	confirm.WriteString(fmt.Sprintf("Your Payout: $%s\n\n", formatCompactMoney(payout)))
+	confirm.WriteString(selectedExit.Description)
+	confirm.WriteString("\n\nThis action is PERMANENT. Are you sure?")
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(confirmBox.Render(confirm.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("y confirm • n cancel • esc back"))
+
+	return b.String()
+}
+
+// ============================================================================
+// PHASE 4: ADVANCED RENDER FUNCTIONS
+// ============================================================================
+
+func (s *FounderGameScreen) renderRoadmap() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Orange).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🔨 PRODUCT ROADMAP")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Orange).
+		Padding(1, 2)
+
+	if s.roadmapMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.roadmapMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderRoadmapStart() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Orange).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🚀 START NEW FEATURE")))
+	b.WriteString("\n\n")
+
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	allocated := fg.GetAllocatedEngineers()
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Engineers: %d total, %d allocated", len(fg.Team.Engineers), allocated)))
+	b.WriteString("\n\n")
+
+	featureBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Orange).
+		Padding(1, 2).
+		Width(65)
+
+	var features strings.Builder
+	for i, f := range s.roadmapFeatures {
+		features.WriteString(fmt.Sprintf("%d. %s\n", i+1, f.Name))
+		features.WriteString(fmt.Sprintf("   Category: %s | Cost: $%s | Engineer-months: %d\n\n", f.Category, formatCompactMoney(f.Cost), f.EngineerMonths))
+	}
+
+	if len(s.roadmapFeatures) == 0 {
+		features.WriteString("No features available to start")
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(featureBox.Render(features.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("1-9 select feature • esc back"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderSegments() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Magenta).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🎯 CUSTOMER SEGMENTS")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Magenta).
+		Padding(1, 2)
+
+	if s.segmentsMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.segmentsMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderPricing() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("💲 PRICING STRATEGY")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2)
+
+	if s.pricingMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.pricingMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderAcquisitions() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🏢 ACQUISITIONS")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2)
+
+	if s.acquisitionsMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.acquisitionsMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderPlatform() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🌐 PLATFORM STRATEGY")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2)
+
+	if s.platformMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.platformMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderSecurity() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Red).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🔒 SECURITY & COMPLIANCE")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Red).
+		Padding(1, 2)
+
+	if s.securityMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.securityMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderPRCrisis() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Yellow).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📰 PR CRISIS MANAGEMENT")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Yellow).
+		Padding(1, 2)
+
+	if s.prCrisisMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.prCrisisMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderEconomy() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Orange).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📉 ECONOMIC STRATEGY")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Orange).
+		Padding(1, 2)
+
+	if s.economyMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.economyMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderSuccession() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Magenta).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("👤 SUCCESSION PLANNING")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Magenta).
+		Padding(1, 2)
+
+	if s.successionMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.successionMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderSalesPipeline() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📈 SALES PIPELINE")))
+	b.WriteString("\n\n")
+
+	pipeBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2).
+		Width(65)
+
+	var pipe strings.Builder
+
+	if fg.SalesPipeline != nil {
+		metrics := fg.GetPipelineMetrics()
+		if totalDeals, ok := metrics["total_deals"].(int); ok {
+			pipe.WriteString(fmt.Sprintf("Active Deals: %d\n", totalDeals))
+		}
+		if totalValue, ok := metrics["total_value"].(int64); ok {
+			pipe.WriteString(fmt.Sprintf("Total Pipeline Value: $%s\n", formatCompactMoney(totalValue)))
+		}
+		if avgDeal, ok := metrics["avg_deal_size"].(int64); ok {
+			pipe.WriteString(fmt.Sprintf("Avg Deal Size: $%s\n", formatCompactMoney(avgDeal)))
+		}
+		if closeRate, ok := metrics["close_rate"].(float64); ok {
+			pipe.WriteString(fmt.Sprintf("Close Rate: %.0f%%\n", closeRate*100))
+		}
+
+		pipe.WriteString("\nDeals by Stage:\n")
+		for _, deal := range fg.SalesPipeline.ActiveDeals {
+			pipe.WriteString(fmt.Sprintf("  • %s: $%s (%s)\n", deal.CompanyName, formatCompactMoney(deal.DealSize), deal.Stage))
+		}
+	} else {
+		pipe.WriteString("No active sales pipeline")
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(pipeBox.Render(pipe.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderPivot() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Orange).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🔄 EXECUTE PIVOT")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Orange).
+		Padding(1, 2)
+
+	if s.pivotMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.pivotMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderBoard() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("👔 BOARD & EQUITY")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2)
+
+	if s.boardMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.boardMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderBuyback() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📈 EQUITY BUYBACK")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2)
+
+	if s.buybackMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.buybackMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderBuybackConfirm() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render(fmt.Sprintf("📈 BUYBACK FROM %s", s.selectedBuybackRound))))
+	b.WriteString("\n\n")
+
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Cash: $%s", formatCompactMoney(fg.Cash))))
+	b.WriteString("\n\n")
+
+	inputLabel := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(inputLabel.Render("ENTER EQUITY % TO BUY BACK"))
+	b.WriteString("\n")
+
+	inputBox := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(0, 1).
+		Width(20)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(inputBox.Render(s.buybackInput.View() + "%")))
+	b.WriteString("\n")
+
+	if s.inputMessage != "" {
+		msgStyle := lipgloss.NewStyle().Foreground(styles.Red).Width(s.width).Align(lipgloss.Center)
+		b.WriteString(msgStyle.Render(s.inputMessage))
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("enter confirm • esc cancel"))
 
 	return b.String()
 }
