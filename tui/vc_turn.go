@@ -634,9 +634,15 @@ func (s *VCTurnScreen) renderTurnSummary() string {
 	leftPanel := s.renderPortfolioPanel()
 	rightPanel := s.renderStandingsPanel()
 
-	// Join panels side by side
-	content := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
-	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(content))
+	// Join panels side by side. Center with margin only so we never reflow the
+	// bordered boxes (reflow would break the left box's bottom border).
+	panelRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
+	rowWidth := 35 + 2 + 35
+	margin := (s.width - rowWidth) / 2
+	if margin < 0 {
+		margin = 0
+	}
+	b.WriteString(lipgloss.NewStyle().MarginLeft(margin).Render(panelRow))
 	b.WriteString("\n")
 
 	// News as full-width panel below

@@ -167,8 +167,14 @@ func (s *LeaderboardScreen) View() string {
 	leftPanel := menuBox.Render(s.menu.View())
 	rightPanel := tableBox.Render(s.table.View())
 
-	content := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
-	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(content))
+	// Center with margin only so bordered boxes never reflow (avoids disjointed bottom border).
+	panelRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
+	rowWidth := lipgloss.Width(panelRow)
+	margin := (s.width - rowWidth) / 2
+	if margin < 0 {
+		margin = 0
+	}
+	b.WriteString(lipgloss.NewStyle().MarginLeft(margin).Render(panelRow))
 	b.WriteString("\n\n")
 
 	// Help

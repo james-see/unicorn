@@ -94,14 +94,14 @@ type FounderGameScreen struct {
 	inputMessage   string
 
 	// Selected state
-	selectedRole           founder.EmployeeRole
-	selectedIsExec         bool
-	selectedRoundName      string
-	selectedTermIndex      int
-	selectedExitType       string
-	selectedCompetitorIdx  int
-	selectedBuybackRound   string
-	selectedBuybackEquity  float64
+	selectedRole          founder.EmployeeRole
+	selectedIsExec        bool
+	selectedRoundName     string
+	selectedTermIndex     int
+	selectedExitType      string
+	selectedCompetitorIdx int
+	selectedBuybackRound  string
+	selectedBuybackEquity float64
 
 	// Market selection for hiring
 	marketOptions []string
@@ -136,10 +136,10 @@ type FounderGameScreen struct {
 	endAffiliateMenu         *components.Menu
 
 	// New inputs
-	contentBudgetInput   textinput.Model
-	csPlaybookInput      textinput.Model
-	referralRewardInput  textinput.Model
-	intelReportInput     textinput.Model
+	contentBudgetInput    textinput.Model
+	csPlaybookInput       textinput.Model
+	referralRewardInput   textinput.Model
+	intelReportInput      textinput.Model
 	techDebtRefactorInput textinput.Model
 }
 
@@ -3621,12 +3621,16 @@ func (s *FounderGameScreen) renderMain() string {
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render(header)))
 	b.WriteString("\n\n")
 
-	// Main layout
+	// Main layout. Center with margin only so bordered boxes never reflow (avoids disjointed bottom border).
 	leftPanel := s.renderCompanyPanel()
 	rightPanel := s.renderMetricsPanel()
-
-	content := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
-	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(content))
+	panelRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
+	rowWidth := 35 + 2 + 35
+	margin := (s.width - rowWidth) / 2
+	if margin < 0 {
+		margin = 0
+	}
+	b.WriteString(lipgloss.NewStyle().MarginLeft(margin).Render(panelRow))
 	b.WriteString("\n")
 
 	// News
