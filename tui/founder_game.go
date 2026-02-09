@@ -562,21 +562,48 @@ func (s *FounderGameScreen) rebuildActionsMenu() {
 }
 
 func (s *FounderGameScreen) rebuildHiringMenu() {
+	fg := s.gameData.FounderState
+
+	// Check which execs are already hired
+	hasExec := make(map[founder.EmployeeRole]bool)
+	for _, exec := range fg.Team.Executives {
+		hasExec[exec.Role] = true
+	}
+
+	availPool := fg.EquityPool - fg.EquityAllocated
+	if availPool < 0 {
+		availPool = 0
+	}
+
+	execDesc := func(role founder.EmployeeRole, desc string) string {
+		if hasExec[role] {
+			return "Already hired ✓"
+		}
+		if availPool < 0.5 {
+			return desc + " (expand equity pool first)"
+		}
+		return desc
+	}
+
 	items := []components.MenuItem{
 		{ID: "header_ic", Title: "── INDIVIDUAL CONTRIBUTORS ($100k/yr) ──", Disabled: true},
 		{ID: "engineer", Title: "Engineer", Description: "Builds product, reduces churn", Icon: "👨‍💻"},
 		{ID: "sales", Title: "Sales Rep", Description: "Increases customer acquisition", Icon: "📞"},
 		{ID: "cs", Title: "Customer Success", Description: "Reduces churn rate", Icon: "🤝"},
 		{ID: "marketing", Title: "Marketing", Description: "Supports acquisition campaigns", Icon: "📢"},
-		{ID: "header_exec", Title: "── C-LEVEL EXECUTIVES ($300k/yr, 3x impact) ──", Disabled: true},
-		{ID: "cto", Title: "CTO", Description: "Like hiring 3 engineers", Icon: "⚡"},
-		{ID: "cgo", Title: "CGO (Growth)", Description: "Like hiring 3 sales reps", Icon: "📈"},
-		{ID: "coo", Title: "COO (Operations)", Description: "Like hiring 3 CS reps", Icon: "⚙️"},
-		{ID: "cfo", Title: "CFO (Finance)", Description: "Reduces burn by 10%", Icon: "💹"},
+		{ID: "header_exec", Title: fmt.Sprintf("── C-LEVEL EXECUTIVES (equity pool: %.1f%% available) ──", availPool), Disabled: true},
+		{ID: "cto", Title: "CTO", Description: execDesc(founder.RoleCTO, "Like hiring 3 engineers"), Icon: "⚡",
+			Disabled: hasExec[founder.RoleCTO]},
+		{ID: "cgo", Title: "CGO (Growth)", Description: execDesc(founder.RoleCGO, "Like hiring 3 sales reps"), Icon: "📈",
+			Disabled: hasExec[founder.RoleCGO]},
+		{ID: "coo", Title: "COO (Operations)", Description: execDesc(founder.RoleCOO, "Like hiring 3 CS reps"), Icon: "⚙️",
+			Disabled: hasExec[founder.RoleCOO]},
+		{ID: "cfo", Title: "CFO (Finance)", Description: execDesc(founder.RoleCFO, "Reduces burn by 10%"), Icon: "💹",
+			Disabled: hasExec[founder.RoleCFO]},
 		{ID: "cancel", Title: "Cancel", Description: "Go back", Icon: "←"},
 	}
 	s.hiringMenu = components.NewMenu("HIRE", items)
-	s.hiringMenu.SetSize(50, 15)
+	s.hiringMenu.SetSize(55, 15)
 	s.hiringMenu.SetHideHelp(true)
 }
 
