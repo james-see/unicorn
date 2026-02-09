@@ -5,7 +5,17 @@ text based startup adventure - play as vc and make bets on startups **OR** build
 
 ## Install
 
-`go get github.com/jamesacampbell/unicorn`
+### Homebrew (macOS/Linux)
+
+```bash
+brew install james-see/tap/unicorn
+```
+
+### From Source
+
+```bash
+go get github.com/jamesacampbell/unicorn
+```
 
 ## Nutshell
 
