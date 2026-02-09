@@ -366,6 +366,11 @@ func NewFounderGame(founderName string, template StartupTemplate, playerUpgrades
 	InitializeSecurity(fs)
 	InitializeKeyPersonRisks(fs)
 
+	// Initialize customer segments and verticals so ICP/pricing views work from the start
+	fs.InitializeSegments()
+	fs.InitializeVerticals()
+	fs.UpdateSegmentVolumes()
+
 	return fs
 }
 

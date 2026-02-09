@@ -5,7 +5,6 @@ import (
 	"math/rand"
 )
 
-
 func (fs *FounderState) SpawnCompetitor() *Competitor {
 	// 8% chance per month after month 6 (increased from 3% after month 12)
 	// This ensures competitors spawn more reliably
@@ -42,10 +41,10 @@ func (fs *FounderState) SpawnCompetitor() *Competitor {
 	}
 
 	selected := siliconValleyStartups[rand.Intn(len(siliconValleyStartups))]
-	
+
 	// Determine threat level based on bias and randomness
 	threat := selected.ThreatBias
-	
+
 	// 30% chance to deviate from bias
 	if rand.Float64() < 0.3 {
 		// Can go up or down one level
@@ -84,7 +83,6 @@ func (fs *FounderState) SpawnCompetitor() *Competitor {
 	fs.Competitors = append(fs.Competitors, comp)
 	return &comp
 }
-
 
 func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string, error) {
 	if compIndex < 0 || compIndex >= len(fs.Competitors) {
@@ -170,7 +168,6 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 	}
 }
 
-
 func (fs *FounderState) UpdateCompetitors() []string {
 	var messages []string
 
@@ -206,7 +203,7 @@ func (fs *FounderState) UpdateCompetitors() []string {
 		// AI Competitor Actions - Silicon Valley companies are strategic
 		if rand.Float64() < 0.15 { // 15% chance per month of competitor action
 			actionType := rand.Float64()
-			
+
 			if actionType < 0.4 {
 				// Steal customers (40% chance)
 				customersStolen := int(float64(fs.Customers) * comp.MarketShare * (0.05 + rand.Float64()*0.10)) // 5-15% of their market share
@@ -215,19 +212,19 @@ func (fs *FounderState) UpdateCompetitors() []string {
 					if customersStolen > fs.Customers/10 {
 						customersStolen = fs.Customers / 10
 					}
-					
+
 					mrrLost := int64(customersStolen) * fs.AvgDealSize
 					fs.Customers -= customersStolen
 					fs.DirectCustomers -= customersStolen
 					fs.MRR -= mrrLost
 					fs.DirectMRR -= mrrLost
-					
+
 					// Hooli is especially aggressive
 					if comp.Name == "Hooli" || comp.Name == "Hooli Search" {
 						customersStolen = int(float64(customersStolen) * 1.5)
 						mrrLost = int64(float64(mrrLost) * 1.5)
 					}
-					
+
 					messages = append(messages, fmt.Sprintf("🔥 %s stole %d customers from you! (-$%s MRR)",
 						comp.Name, customersStolen, formatCurrency(mrrLost)))
 					comp.MarketShare *= 1.1 // Competitor gains market share
@@ -239,10 +236,10 @@ func (fs *FounderState) UpdateCompetitors() []string {
 					comp.Threat = "high"
 				}
 				comp.MarketShare *= 1.15
-				
+
 				// Your CAC increases due to competition
 				fs.BaseCAC = int64(float64(fs.BaseCAC) * 1.1)
-				
+
 				// Hooli launches "Box" style competing products
 				if comp.Name == "Hooli" || comp.Name == "Hooli Box" {
 					messages = append(messages, fmt.Sprintf("🚨 %s launched a competing product! Your CAC increased by 10%%",
@@ -256,7 +253,7 @@ func (fs *FounderState) UpdateCompetitors() []string {
 				// Competitor undercuts you, reducing your growth
 				growthReduction := 0.05 + rand.Float64()*0.10 // 5-15% growth reduction
 				fs.MonthlyGrowthRate *= (1.0 - growthReduction)
-				
+
 				if comp.Name == "Hooli" {
 					messages = append(messages, fmt.Sprintf("💰 %s launched aggressive pricing! Your growth rate reduced by %.0f%%",
 						comp.Name, growthReduction*100))
@@ -272,17 +269,21 @@ func (fs *FounderState) UpdateCompetitors() []string {
 					if fs.Team.TotalEmployees > 10 {
 						employeesPoached = 1 + rand.Intn(2)
 					}
-					
+
 					// Remove employees (simplified - just reduce team cost)
 					costReduction := int64(employeesPoached) * 8333 // ~$100k/year per employee
 					fs.MonthlyTeamCost -= costReduction
 					if fs.MonthlyTeamCost < 0 {
 						fs.MonthlyTeamCost = 0
 					}
-					
-					// Reduce productivity
+
+					// Reduce productivity (but don't drop below 95% if product was fully mature)
+					prevMaturity := fs.ProductMaturity
 					fs.ProductMaturity *= 0.98 // Slight reduction
-					
+					if prevMaturity >= 1.0 && fs.ProductMaturity < 0.95 {
+						fs.ProductMaturity = 0.95
+					}
+
 					if comp.Name == "Hooli" || comp.Name == "Action Jack's Company" {
 						messages = append(messages, fmt.Sprintf("👔 %s poached %d employee(s) from you! Team productivity reduced",
 							comp.Name, employeesPoached))
@@ -304,7 +305,7 @@ func (fs *FounderState) UpdateCompetitors() []string {
 				"filed a patent lawsuit",
 			}
 			action := hooliActions[rand.Intn(len(hooliActions))]
-			
+
 			switch action {
 			case "launched a massive marketing campaign":
 				comp.MarketShare *= 1.2
@@ -316,7 +317,11 @@ func (fs *FounderState) UpdateCompetitors() []string {
 				messages = append(messages, fmt.Sprintf("🎤 Hooli %s! Market competition intensified", action))
 			case "hired away a key executive":
 				fs.MonthlyTeamCost -= 25000 // Executive salary
+				prevMaturity := fs.ProductMaturity
 				fs.ProductMaturity *= 0.95
+				if prevMaturity >= 1.0 && fs.ProductMaturity < 0.95 {
+					fs.ProductMaturity = 0.95
+				}
 				messages = append(messages, fmt.Sprintf("💼 Hooli %s! Product development slowed", action))
 			case "filed a patent lawsuit":
 				legalCost := int64(50000 + rand.Int63n(100000))
@@ -332,7 +337,6 @@ func (fs *FounderState) UpdateCompetitors() []string {
 // ============================================================================
 // GLOBAL MARKETS
 // ============================================================================
-
 
 func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 	// Check if already in this market
@@ -525,7 +529,6 @@ func (fs *FounderState) ExpandToMarket(region string) (*Market, error) {
 
 	return &market, nil
 }
-
 
 func (fs *FounderState) UpdateGlobalMarkets() []string {
 	var messages []string
@@ -773,7 +776,6 @@ func (fs *FounderState) UpdateGlobalMarkets() []string {
 // PIVOTS
 // ============================================================================
 
-
 func (fs *FounderState) ExecutePivot(toStrategy string, reason string) (*Pivot, error) {
 	cost := int64(100000 + rand.Int63n(200000)) // $100-300k
 	if cost > fs.Cash {
@@ -842,7 +844,6 @@ func (fs *FounderState) ExecutePivot(toStrategy string, reason string) (*Pivot, 
 // EQUITY BUYBACKS
 // ============================================================================
 
-
 func (fs *FounderState) SpawnRandomEvent() *RandomEvent {
 	// Don't spawn events in first 6 months
 	if fs.Turn < 6 {
@@ -880,7 +881,7 @@ func (fs *FounderState) SpawnRandomEvent() *RandomEvent {
 	if event != nil {
 		event.Month = fs.Turn
 		event.Type = eventType
-		
+
 		// Check if chairman can mitigate negative events
 		if !event.IsPositive {
 			if fs.MitigateCrisis(event) {
@@ -1187,7 +1188,6 @@ func (fs *FounderState) generatePressEvent(isPositive bool) *RandomEvent {
 	}
 }
 
-
 func (fs *FounderState) ProcessRandomEvents() []string {
 	var messages []string
 
@@ -1216,7 +1216,6 @@ func (fs *FounderState) ProcessRandomEvents() []string {
 
 	return messages
 }
-
 
 func (fs *FounderState) handleEmployeeLoss(count int) {
 	for i := 0; i < count; i++ {

@@ -6,7 +6,6 @@ import (
 	"math/rand"
 )
 
-
 func (fs *FounderState) addCustomer(dealSize int64, source string) Customer {
 	// Determine if contract is perpetual (80% chance) or fixed term (20% chance)
 	termMonths := 0 // Default to perpetual
@@ -165,7 +164,6 @@ func (fs *FounderState) UpdateCAC() {
 	fs.CustomerAcquisitionCost = int64(effectiveCAC)
 }
 
-
 func (fs *FounderState) SpendOnMarketing(amount int64) int {
 	if amount > fs.Cash {
 		return 0
@@ -177,6 +175,18 @@ func (fs *FounderState) SpendOnMarketing(amount int64) int {
 	fs.UpdateCAC()
 
 	newCustomers := int(amount / fs.CustomerAcquisitionCost)
+
+	// Guarantee at least 1 customer when spending >= CAC
+	if newCustomers == 0 && amount >= fs.CustomerAcquisitionCost {
+		newCustomers = 1
+	}
+
+	// Even partial CAC spend should occasionally yield a customer (25% chance)
+	if newCustomers == 0 && amount > 0 && amount < fs.CustomerAcquisitionCost {
+		if rand.Float64() < 0.25 {
+			newCustomers = 1
+		}
+	}
 
 	// Calculate MRR with variable deal sizes
 	// Use category-based defaults if AvgDealSize is 0 (no customers yet)

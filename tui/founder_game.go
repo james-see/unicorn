@@ -61,6 +61,13 @@ const (
 	FounderViewReferralProgram
 	FounderViewTechDebt
 	FounderViewEndAffiliate
+	FounderViewAcquisitionOffer
+	FounderViewAdvisorExpertise
+	FounderViewAdvisorConfirm
+	FounderViewRemoveAdvisor
+	FounderViewBoardTable
+	FounderViewConfirmQuit
+	FounderViewEngineerRealloc
 )
 
 // FounderGameScreen handles the founder game
@@ -141,6 +148,32 @@ type FounderGameScreen struct {
 	referralRewardInput   textinput.Model
 	intelReportInput      textinput.Model
 	techDebtRefactorInput textinput.Model
+
+	// Acquisition offer state
+	pendingAcquisition *founder.AcquisitionOffer
+	acquisitionMenu    *components.Menu
+
+	// Board management state
+	advisorExpertiseMenu *components.Menu
+	advisorConfirmMenu   *components.Menu
+	removeAdvisorMenu    *components.Menu
+	selectedExpertise    string
+	pendingAdvisorName   string
+	pendingAdvisorCost   float64
+	pendingAdvisorSetup  int64
+
+	// Equity pool input
+	equityPoolInput textinput.Model
+
+	// Engineer reallocation state
+	reallocMenu     *components.Menu
+	reallocFeatures []founder.ProductFeature
+
+	// Confirm quit state
+	confirmQuitMenu *components.Menu
+
+	// Board sub-action tracking (for chairman selection vs fire)
+	pendingBoardSubAction string
 }
 
 // NewFounderGameScreen creates a new founder game screen
@@ -211,6 +244,12 @@ func NewFounderGameScreen(width, height int, gameData *GameData) *FounderGameScr
 	techDebtRefactorInput.CharLimit = 10
 	techDebtRefactorInput.Width = 15
 
+	// Equity pool input
+	equityPoolInput := textinput.New()
+	equityPoolInput.Placeholder = "Enter % (1-10)"
+	equityPoolInput.CharLimit = 5
+	equityPoolInput.Width = 10
+
 	s := &FounderGameScreen{
 		width:                 width,
 		height:                height,
@@ -227,11 +266,39 @@ func NewFounderGameScreen(width, height int, gameData *GameData) *FounderGameScr
 		referralRewardInput:   referralRewardInput,
 		intelReportInput:      intelReportInput,
 		techDebtRefactorInput: techDebtRefactorInput,
+		equityPoolInput:       equityPoolInput,
 	}
 
 	s.rebuildActionsMenu()
 	s.rebuildHiringMenu()
 	s.rebuildFiringMenu()
+
+	// Generate initial founding story
+	fg := gameData.FounderState
+	totalTeam := len(fg.Team.Engineers) + len(fg.Team.Sales) + len(fg.Team.CustomerSuccess) + len(fg.Team.Marketing) + len(fg.Team.Executives)
+	runwayMonths := 0
+	if fg.MonthlyTeamCost+fg.FounderSalary > 0 {
+		totalBurn := fg.MonthlyTeamCost + fg.FounderSalary
+		runwayMonths = int(fg.Cash / totalBurn)
+	}
+
+	story := []string{
+		fmt.Sprintf("🚀 FOUNDING STORY: %s", fg.CompanyName),
+		"",
+		fmt.Sprintf("   %s and a small team of %d co-founders pooled their resources", fg.FounderName, totalTeam),
+		fmt.Sprintf("   to bootstrap %s, a %s startup.", fg.CompanyName, fg.Category),
+		fmt.Sprintf("   \"%s\"", fg.Description),
+		"",
+		fmt.Sprintf("   💰 Initial Capital: $%s (self-funded)", formatCompactMoney(fg.Cash)),
+		fmt.Sprintf("   👥 Founding Team: %d members", totalTeam),
+		fmt.Sprintf("   📊 Starting Customers: %d", fg.Customers),
+		fmt.Sprintf("   💵 Monthly Burn: $%s/mo", formatCompactMoney(fg.MonthlyTeamCost+fg.FounderSalary)),
+		fmt.Sprintf("   ⏱️  Estimated Runway: %d months", runwayMonths),
+		"",
+		"   The journey begins. Build your product, grow your team, and scale to unicorn status!",
+		"   Press ENTER for actions or N to advance to next month.",
+	}
+	s.turnMessages = story
 
 	return s
 }
@@ -639,8 +706,27 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				s.rebuildActionsMenu()
 				s.view = FounderViewActions
 				return s, nil
+			case msg.String() == "n":
+				// Quick shortcut: advance to next month
+				fg := s.gameData.FounderState
+				preDecisionMRR := fg.MRR
+				msgs := fg.ProcessMonthWithBaseline(preDecisionMRR)
+				s.turnMessages = msgs
+				// Check for acquisition offers
+				offer := fg.CheckForAcquisition()
+				if offer != nil {
+					s.pendingAcquisition = offer
+					s.rebuildAcquisitionMenu()
+					s.view = FounderViewAcquisitionOffer
+					return s, nil
+				}
+				s.view = FounderViewMain
+				return s, nil
 			case key.Matches(msg, keys.Global.Back), msg.String() == "q":
-				return s, SwitchTo(ScreenMainMenu)
+				// Show confirmation instead of immediately quitting
+				s.rebuildConfirmQuitMenu()
+				s.view = FounderViewConfirmQuit
+				return s, nil
 			}
 
 		case FounderViewActions:
@@ -745,6 +831,31 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 			if key.Matches(msg, keys.Global.Back) {
 				s.view = FounderViewActions
 				return s, nil
+			}
+
+		case FounderViewBoardAction:
+			if key.Matches(msg, keys.Global.Back) {
+				s.rebuildBoardMenu()
+				s.view = FounderViewBoard
+				return s, nil
+			}
+			// Handle equity pool input enter
+			if msg.Type == tea.KeyEnter {
+				val := strings.TrimSpace(s.equityPoolInput.Value())
+				if val != "" {
+					pct, err := strconv.ParseFloat(val, 64)
+					if err == nil && pct >= 1 && pct <= 10 {
+						fg := s.gameData.FounderState
+						fg.ExpandEquityPool(pct)
+						s.turnMessages = []string{
+							fmt.Sprintf("✓ Expanded equity pool by %.1f%%", pct),
+							fmt.Sprintf("   New equity pool: %.1f%%", fg.EquityPool),
+							fmt.Sprintf("   Your equity: %.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway),
+						}
+						s.view = FounderViewMain
+						return s, nil
+					}
+				}
 			}
 
 		case FounderViewBuyback:
@@ -885,6 +996,53 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				return s, nil
 			}
 
+		case FounderViewAcquisitionOffer:
+			if key.Matches(msg, keys.Global.Back) {
+				s.pendingAcquisition = nil
+				s.view = FounderViewMain
+				return s, nil
+			}
+
+		case FounderViewAdvisorExpertise:
+			if key.Matches(msg, keys.Global.Back) {
+				s.rebuildBoardMenu()
+				s.view = FounderViewBoard
+				return s, nil
+			}
+
+		case FounderViewAdvisorConfirm:
+			if key.Matches(msg, keys.Global.Back) {
+				s.rebuildAdvisorExpertiseMenu()
+				s.view = FounderViewAdvisorExpertise
+				return s, nil
+			}
+
+		case FounderViewRemoveAdvisor:
+			if key.Matches(msg, keys.Global.Back) {
+				s.rebuildBoardMenu()
+				s.view = FounderViewBoard
+				return s, nil
+			}
+
+		case FounderViewBoardTable:
+			if key.Matches(msg, keys.Global.Back) || key.Matches(msg, keys.Global.Enter) {
+				s.rebuildBoardMenu()
+				s.view = FounderViewBoard
+				return s, nil
+			}
+
+		case FounderViewConfirmQuit:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewMain
+				return s, nil
+			}
+
+		case FounderViewEngineerRealloc:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewRoadmap
+				return s, nil
+			}
+
 		case FounderViewEndAffiliate:
 			if key.Matches(msg, keys.Global.Back) {
 				s.view = FounderViewActions
@@ -962,12 +1120,24 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 			return s.handleTechDebtSelection(msg.ID)
 		case FounderViewEndAffiliate:
 			return s.handleEndAffiliateSelection(msg.ID)
+		case FounderViewAcquisitionOffer:
+			return s.handleAcquisitionSelection(msg.ID)
+		case FounderViewAdvisorExpertise:
+			return s.handleAdvisorExpertiseSelection(msg.ID)
+		case FounderViewAdvisorConfirm:
+			return s.handleAdvisorConfirmSelection(msg.ID)
+		case FounderViewRemoveAdvisor:
+			return s.handleRemoveAdvisorSelection(msg.ID)
+		case FounderViewConfirmQuit:
+			return s.handleConfirmQuitSelection(msg.ID)
+		case FounderViewEngineerRealloc:
+			return s.handleEngineerReallocSelection(msg.ID)
 		}
 	}
 
 	// Check for game over
 	if fg != nil && fg.IsGameOver() {
-		return s, SwitchTo(ScreenMainMenu)
+		return s, SwitchTo(ScreenFounderResults)
 	}
 
 	// Update current component
@@ -1005,6 +1175,8 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		if s.boardMenu != nil {
 			s.boardMenu, cmd = s.boardMenu.Update(msg)
 		}
+	case FounderViewBoardAction:
+		s.equityPoolInput, cmd = s.equityPoolInput.Update(msg)
 	case FounderViewBuyback:
 		if s.buybackMenu != nil {
 			s.buybackMenu, cmd = s.buybackMenu.Update(msg)
@@ -1072,9 +1244,33 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		if s.techDebtMenu != nil {
 			s.techDebtMenu, cmd = s.techDebtMenu.Update(msg)
 		}
+	case FounderViewAcquisitionOffer:
+		if s.acquisitionMenu != nil {
+			s.acquisitionMenu, cmd = s.acquisitionMenu.Update(msg)
+		}
+	case FounderViewAdvisorExpertise:
+		if s.advisorExpertiseMenu != nil {
+			s.advisorExpertiseMenu, cmd = s.advisorExpertiseMenu.Update(msg)
+		}
+	case FounderViewAdvisorConfirm:
+		if s.advisorConfirmMenu != nil {
+			s.advisorConfirmMenu, cmd = s.advisorConfirmMenu.Update(msg)
+		}
+	case FounderViewRemoveAdvisor:
+		if s.removeAdvisorMenu != nil {
+			s.removeAdvisorMenu, cmd = s.removeAdvisorMenu.Update(msg)
+		}
 	case FounderViewEndAffiliate:
 		if s.endAffiliateMenu != nil {
 			s.endAffiliateMenu, cmd = s.endAffiliateMenu.Update(msg)
+		}
+	case FounderViewConfirmQuit:
+		if s.confirmQuitMenu != nil {
+			s.confirmQuitMenu, cmd = s.confirmQuitMenu.Update(msg)
+		}
+	case FounderViewEngineerRealloc:
+		if s.reallocMenu != nil {
+			s.reallocMenu, cmd = s.reallocMenu.Update(msg)
 		}
 	}
 
@@ -1090,6 +1286,16 @@ func (s *FounderGameScreen) handleAction(id string) (ScreenModel, tea.Cmd) {
 		preDecisionMRR := fg.MRR
 		msgs := fg.ProcessMonthWithBaseline(preDecisionMRR)
 		s.turnMessages = msgs
+
+		// Check for acquisition offers
+		offer := fg.CheckForAcquisition()
+		if offer != nil {
+			s.pendingAcquisition = offer
+			s.rebuildAcquisitionMenu()
+			s.view = FounderViewAcquisitionOffer
+			return s, nil
+		}
+
 		s.view = FounderViewMain
 		return s, nil
 
@@ -1138,12 +1344,24 @@ func (s *FounderGameScreen) handleAction(id string) (ScreenModel, tea.Cmd) {
 		return s, textinput.Blink
 
 	case "affiliate_view":
+		monthsActive := fg.Turn - fg.AffiliateProgram.LaunchedMonth
+		avgPerAffiliate := int64(0)
+		if fg.AffiliateProgram.Affiliates > 0 {
+			avgPerAffiliate = fg.AffiliateMRR / int64(fg.AffiliateProgram.Affiliates)
+		}
 		s.turnMessages = []string{
-			fmt.Sprintf("Affiliate Program Active since month %d", fg.AffiliateProgram.LaunchedMonth),
-			fmt.Sprintf("Commission Rate: %.1f%%", fg.AffiliateProgram.Commission*100),
-			fmt.Sprintf("Active Affiliates: %d", fg.AffiliateProgram.Affiliates),
-			fmt.Sprintf("Affiliate MRR: $%s", formatCompactMoney(fg.AffiliateMRR)),
-			fmt.Sprintf("Affiliate Customers: %d", fg.AffiliateCustomers),
+			"┌─────────── AFFILIATE PROGRAM STATS ───────────┐",
+			fmt.Sprintf("│ Launched: Month %d (%d months active)", fg.AffiliateProgram.LaunchedMonth, monthsActive),
+			fmt.Sprintf("│ Commission Rate: %.1f%%", fg.AffiliateProgram.Commission*100),
+			fmt.Sprintf("│ Active Affiliates: %d", fg.AffiliateProgram.Affiliates),
+			fmt.Sprintf("│ Setup Cost: $%s", formatCompactMoney(fg.AffiliateProgram.SetupCost)),
+			fmt.Sprintf("│ Monthly Platform Fee: $%s", formatCompactMoney(fg.AffiliateProgram.MonthlyPlatformFee)),
+			"│",
+			fmt.Sprintf("│ Customers Acquired: %d", fg.AffiliateProgram.CustomersAcquired),
+			fmt.Sprintf("│ Affiliate MRR: $%s", formatCompactMoney(fg.AffiliateMRR)),
+			fmt.Sprintf("│ Monthly Revenue: $%s", formatCompactMoney(fg.AffiliateProgram.MonthlyRevenue)),
+			fmt.Sprintf("│ Avg Revenue/Affiliate: $%s", formatCompactMoney(avgPerAffiliate)),
+			"└────────────────────────────────────────────────┘",
 		}
 		s.view = FounderViewMain
 		return s, nil
@@ -1675,7 +1893,10 @@ func (s *FounderGameScreen) handleCompetitorStrategy(id string) (ScreenModel, te
 	fg := s.gameData.FounderState
 
 	if id == "cancel" || id == "none" {
-		s.view = FounderViewActions
+		// Go back to competitor list, not main menu
+		s.competitorAction = nil
+		s.selectedCompetitorIdx = -1
+		s.view = FounderViewCompetitors
 		return s, nil
 	}
 
@@ -1683,8 +1904,23 @@ func (s *FounderGameScreen) handleCompetitorStrategy(id string) (ScreenModel, te
 	if strings.HasPrefix(id, "comp_") {
 		idxStr := strings.TrimPrefix(id, "comp_")
 		idx, _ := strconv.Atoi(idxStr)
-		s.selectedCompetitorIdx = idx
-		s.rebuildCompetitorActionMenu()
+		// Validate competitor is still active
+		if idx >= 0 && idx < len(fg.Competitors) && fg.Competitors[idx].Active {
+			s.selectedCompetitorIdx = idx
+			s.rebuildCompetitorActionMenu()
+		} else {
+			s.turnMessages = []string{"⚠️ That competitor is no longer active"}
+			s.view = FounderViewCompetitors
+		}
+		return s, nil
+	}
+
+	// Validate competitor is still active before taking action
+	if s.selectedCompetitorIdx < 0 || s.selectedCompetitorIdx >= len(fg.Competitors) || !fg.Competitors[s.selectedCompetitorIdx].Active {
+		s.turnMessages = []string{"⚠️ That competitor is no longer active"}
+		s.competitorAction = nil
+		s.selectedCompetitorIdx = -1
+		s.view = FounderViewCompetitors
 		return s, nil
 	}
 
@@ -1696,7 +1932,10 @@ func (s *FounderGameScreen) handleCompetitorStrategy(id string) (ScreenModel, te
 		s.turnMessages = []string{fmt.Sprintf("✓ %s", message)}
 	}
 
-	s.view = FounderViewMain
+	// Return to competitor list after action, not main view
+	s.competitorAction = nil
+	s.selectedCompetitorIdx = -1
+	s.view = FounderViewCompetitors
 	return s, nil
 }
 
@@ -1888,11 +2127,17 @@ func (s *FounderGameScreen) rebuildBoardMenu() {
 
 	if hasActiveAdvisor && !hasChairman {
 		items = append(items, components.MenuItem{
-			ID: "set_chairman", Title: "Set Chairman", Description: "Promote advisor to chairman", Icon: "👑",
+			ID: "set_chairman", Title: "Set Chairman", Description: "Promote advisor to chairman (2x impact, +0.25% equity)", Icon: "👑",
 		})
 	}
 
-	if len(fg.BoardMembers) > 0 {
+	if hasChairman {
+		items = append(items, components.MenuItem{
+			ID: "remove_chairman", Title: "Remove Chairman", Description: "Demote chairman (board pressure increase)", Icon: "⬇️",
+		})
+	}
+
+	if hasActiveAdvisor {
 		items = append(items, components.MenuItem{
 			ID: "remove_advisor", Title: "Remove Advisor", Description: "With equity buyback option", Icon: "❌",
 		})
@@ -1931,26 +2176,7 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 		return s, nil
 
 	case "view":
-		var msgs []string
-		msgs = append(msgs, fmt.Sprintf("Board Seats: %d", fg.BoardSeats))
-		msgs = append(msgs, fmt.Sprintf("Equity Pool: %.1f%%", fg.EquityPool))
-		msgs = append(msgs, fmt.Sprintf("Your Equity: %.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway))
-
-		if len(fg.BoardMembers) > 0 {
-			msgs = append(msgs, "")
-			msgs = append(msgs, "Board Members:")
-			for _, m := range fg.BoardMembers {
-				if m.IsActive {
-					role := "Advisor"
-					if m.IsChairman {
-						role = "Chairman"
-					}
-					msgs = append(msgs, fmt.Sprintf("  • %s (%s, %s) - %.2f%%", m.Name, m.Expertise, role, m.EquityCost))
-				}
-			}
-		}
-		s.turnMessages = msgs
-		s.view = FounderViewMain
+		s.view = FounderViewBoardTable
 		return s, nil
 
 	case "add_seat":
@@ -1964,93 +2190,159 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 		return s, nil
 
 	case "expand_pool":
-		pct := 2.0 // Default 2%
-		fg.ExpandEquityPool(pct)
-		s.turnMessages = []string{
-			fmt.Sprintf("✓ Expanded equity pool by %.1f%%", pct),
-			fmt.Sprintf("   New equity pool: %.1f%%", fg.EquityPool),
-			fmt.Sprintf("   Your equity: %.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway),
-		}
-		s.view = FounderViewMain
-		return s, nil
+		s.equityPoolInput.SetValue("")
+		s.equityPoolInput.Focus()
+		s.inputMessage = fmt.Sprintf("Current pool: %.1f%% | Your equity: %.1f%%",
+			fg.EquityPool, 100.0-fg.EquityPool-fg.EquityGivenAway)
+		s.view = FounderViewBoardAction
+		return s, textinput.Blink
 
 	case "add_advisor":
-		// Create a new advisor directly
-		advisorNames := []string{"Sarah Chen", "Michael Ross", "Jennifer Liu", "David Kim", "Amanda Torres"}
-		name := advisorNames[len(fg.BoardMembers)%len(advisorNames)]
-		equityCost := 0.25 + float64(len(fg.BoardMembers))*0.1
-		if equityCost > 1.0 {
-			equityCost = 1.0
-		}
-		advisor := founder.BoardMember{
-			Name:       name,
-			Type:       "advisor",
-			Expertise:  "strategy",
-			MonthAdded: fg.Turn,
-			EquityCost: equityCost,
-			IsActive:   true,
-		}
-		fg.BoardMembers = append(fg.BoardMembers, advisor)
-		fg.EquityPool -= equityCost
-		s.turnMessages = []string{
-			fmt.Sprintf("✓ Added advisor: %s", advisor.Name),
-			fmt.Sprintf("   Expertise: %s", advisor.Expertise),
-			fmt.Sprintf("   Equity cost: %.2f%%", advisor.EquityCost),
-		}
-		s.view = FounderViewMain
+		// Show expertise selection
+		s.rebuildAdvisorExpertiseMenu()
+		s.view = FounderViewAdvisorExpertise
 		return s, nil
 
 	case "remove_advisor":
-		if len(fg.BoardMembers) > 0 {
-			for i := range fg.BoardMembers {
-				if fg.BoardMembers[i].IsActive && fg.BoardMembers[i].Type == "advisor" {
-					fg.BoardMembers[i].IsActive = false
-					s.turnMessages = []string{
-						fmt.Sprintf("✓ Removed advisor: %s", fg.BoardMembers[i].Name),
-					}
-					break
-				}
+		s.rebuildRemoveAdvisorMenu()
+		s.view = FounderViewRemoveAdvisor
+		return s, nil
+
+	case "remove_chairman":
+		chairman := fg.GetChairman()
+		if chairman != nil {
+			fg.RemoveChairman()
+			s.turnMessages = []string{
+				fmt.Sprintf("✓ Removed %s as Chairman", chairman.Name),
+				"   ⚠️  Board pressure increased",
+				"   ⚠️  Possible negative PR impact",
 			}
 		}
 		s.view = FounderViewMain
 		return s, nil
 
 	case "set_chairman":
-		// Find the first active advisor and promote to chairman
+		// Build menu of advisors to pick from
+		items := []components.MenuItem{}
 		for _, m := range fg.BoardMembers {
-			if m.IsActive && !m.IsChairman {
-				err := fg.SetChairman(m.Name)
-				if err != nil {
-					s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
-				} else {
-					s.turnMessages = []string{
-						fmt.Sprintf("✓ %s promoted to Chairman of the Board", m.Name),
-						"   Chairman can mitigate legal/press/regulatory crises",
-					}
-				}
-				break
+			if m.IsActive && !m.IsChairman && m.Type == "advisor" {
+				items = append(items, components.MenuItem{
+					ID:          "chairman_" + m.Name,
+					Title:       m.Name,
+					Description: fmt.Sprintf("Expertise: %s | Score: %.0f%%", m.Expertise, m.ContributionScore*100),
+					Icon:        "👑",
+				})
 			}
 		}
-		s.view = FounderViewMain
+		if len(items) == 1 {
+			// Only one advisor, promote directly
+			name := fg.BoardMembers[0].Name
+			for _, m := range fg.BoardMembers {
+				if m.IsActive && !m.IsChairman && m.Type == "advisor" {
+					name = m.Name
+					break
+				}
+			}
+			err := fg.SetChairman(name)
+			if err != nil {
+				s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+			} else {
+				s.turnMessages = []string{
+					fmt.Sprintf("✓ %s promoted to Chairman of the Board", name),
+					"   Chairman has 2x impact and can mitigate crises",
+					"   Additional 0.25% equity granted",
+				}
+			}
+			s.view = FounderViewMain
+			return s, nil
+		}
+		if len(items) == 0 {
+			s.turnMessages = []string{"⚠️ No eligible advisors to set as chairman. Hire an advisor first."}
+			s.view = FounderViewMain
+			return s, nil
+		}
+		// Multiple advisors - show menu
+		s.pendingBoardSubAction = "set_chairman"
+		items = append(items, components.MenuItem{ID: "cancel", Title: "Cancel", Icon: "←"})
+		s.boardMenu = components.NewMenu("SELECT CHAIRMAN", items)
+		s.boardMenu.SetSize(55, 15)
+		s.boardMenu.SetHideHelp(true)
+		// Stay in Board view with new menu
 		return s, nil
 
 	case "fire_board_member":
-		// Find and fire the first active investor board member
+		// Build menu of investor board members
+		items := []components.MenuItem{}
 		for _, m := range fg.BoardMembers {
 			if m.IsActive && m.Type == "investor" {
-				err := fg.FireBoardMember(m.Name)
-				if err != nil {
-					s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
-				} else {
-					s.turnMessages = []string{
-						fmt.Sprintf("✓ Fired board member: %s", m.Name),
-						"   ⚠️  Board pressure increased significantly",
-						"   ⚠️  Board sentiment worsened",
-					}
-				}
-				break
+				items = append(items, components.MenuItem{
+					ID:          "fire_" + m.Name,
+					Title:       m.Name,
+					Description: fmt.Sprintf("Equity: %.2f%% | ⚠️ Serious consequences", m.EquityCost),
+					Icon:        "🔥",
+				})
 			}
 		}
+		if len(items) == 1 {
+			name := strings.TrimPrefix(items[0].ID, "fire_")
+			err := fg.FireBoardMember(name)
+			if err != nil {
+				s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+			} else {
+				s.turnMessages = []string{
+					fmt.Sprintf("✓ Fired board member: %s", name),
+					"   ⚠️  Board pressure increased significantly",
+					"   ⚠️  Board sentiment worsened",
+				}
+			}
+			s.view = FounderViewMain
+			return s, nil
+		}
+		if len(items) == 0 {
+			s.turnMessages = []string{"⚠️ No investor board members to fire"}
+			s.view = FounderViewMain
+			return s, nil
+		}
+		s.pendingBoardSubAction = "fire_board_member"
+		items = append(items, components.MenuItem{ID: "cancel", Title: "Cancel", Icon: "←"})
+		s.boardMenu = components.NewMenu("FIRE BOARD MEMBER", items)
+		s.boardMenu.SetSize(55, 15)
+		s.boardMenu.SetHideHelp(true)
+		// Stay in Board view with new menu
+		return s, nil
+	}
+
+	// Handle chairman/fire sub-menu selections
+	if strings.HasPrefix(id, "chairman_") {
+		name := strings.TrimPrefix(id, "chairman_")
+		err := fg.SetChairman(name)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				fmt.Sprintf("✓ %s promoted to Chairman of the Board", name),
+				"   Chairman has 2x impact and can mitigate crises",
+				"   Additional 0.25% equity granted",
+			}
+		}
+		s.pendingBoardSubAction = ""
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	if strings.HasPrefix(id, "fire_") {
+		name := strings.TrimPrefix(id, "fire_")
+		err := fg.FireBoardMember(name)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{
+				fmt.Sprintf("✓ Fired board member: %s", name),
+				"   ⚠️  Board pressure increased significantly",
+				"   ⚠️  Board sentiment worsened",
+			}
+		}
+		s.pendingBoardSubAction = ""
 		s.view = FounderViewMain
 		return s, nil
 	}
@@ -2236,8 +2528,13 @@ func (s *FounderGameScreen) handleRoadmapSelection(id string) (ScreenModel, tea.
 		return s, nil
 
 	case "reallocate":
-		s.turnMessages = []string{"Engineer reallocation not yet implemented in TUI"}
-		s.view = FounderViewMain
+		s.rebuildEngineerReallocMenu()
+		if s.reallocMenu == nil {
+			s.turnMessages = []string{"⚠️ No features currently in progress to reallocate engineers"}
+			s.view = FounderViewMain
+			return s, nil
+		}
+		s.view = FounderViewEngineerRealloc
 		return s, nil
 	}
 
@@ -2312,13 +2609,23 @@ func (s *FounderGameScreen) handleSegmentsSelection(id string) (ScreenModel, tea
 	}
 
 	if id == "view" {
+		// Ensure segments are initialized and volumes are up to date
+		if fg.CustomerSegments == nil {
+			fg.InitializeSegments()
+		}
+		fg.UpdateSegmentVolumes()
+
 		var msgs []string
 		if len(fg.CustomerSegments) > 0 {
-			msgs = append(msgs, fmt.Sprintf("Current ICP: %s", fg.SelectedICP))
+			icp := fg.SelectedICP
+			if icp == "" {
+				icp = "Not Set"
+			}
+			msgs = append(msgs, fmt.Sprintf("Current ICP: %s", icp))
 			msgs = append(msgs, "")
 			for _, seg := range fg.CustomerSegments {
-				msgs = append(msgs, fmt.Sprintf("%s: %d customers, $%s/mo avg",
-					seg.Name, seg.Volume, formatCompactMoney(seg.AvgDealSize)))
+				msgs = append(msgs, fmt.Sprintf("%s: %d customers, $%s/mo avg, %.0f%% churn",
+					seg.Name, seg.Volume, formatCompactMoney(seg.AvgDealSize), seg.ChurnRate*100))
 			}
 		} else {
 			msgs = append(msgs, "No segment data available")
@@ -2507,16 +2814,35 @@ func (s *FounderGameScreen) handleAcquisitionsSelection(id string) (ScreenModel,
 func (s *FounderGameScreen) rebuildPlatformMenu() {
 	fg := s.gameData.FounderState
 
+	// Initialize platform if needed
+	if fg.PlatformMetrics == nil {
+		founder.InitializePlatform(fg)
+	}
+
 	items := []components.MenuItem{}
 
-	if fg.PlatformMetrics == nil {
-		items = append(items, components.MenuItem{
-			ID: "launch_api", Title: "Launch API Platform", Description: "Open APIs for developers", Icon: "🔌",
-		})
-		items = append(items, components.MenuItem{
-			ID: "launch_marketplace", Title: "Launch Marketplace", Description: "Third-party app ecosystem", Icon: "🛒",
-		})
+	if !fg.PlatformMetrics.IsPlatform {
+		// Platform not yet launched - show launch options
+		if fg.CanLaunchPlatform() {
+			items = append(items, components.MenuItem{
+				ID: "launch_marketplace", Title: "Launch Marketplace", Description: "Third-party app ecosystem", Icon: "🛒",
+			})
+			items = append(items, components.MenuItem{
+				ID: "launch_social", Title: "Launch Social Platform", Description: "Community-driven network effects", Icon: "👥",
+			})
+			items = append(items, components.MenuItem{
+				ID: "launch_data", Title: "Launch Data Platform", Description: "Data exchange and insights", Icon: "📊",
+			})
+			items = append(items, components.MenuItem{
+				ID: "launch_infrastructure", Title: "Launch Infrastructure Platform", Description: "Developer tools and APIs", Icon: "🔌",
+			})
+		} else {
+			items = append(items, components.MenuItem{
+				ID: "locked", Title: "Platform Locked", Description: "Requires $1M+ ARR or 500+ customers", Icon: "🔒", Disabled: true,
+			})
+		}
 	} else {
+		// Platform launched - show management options
 		items = append(items, components.MenuItem{
 			ID: "view", Title: "View Platform Metrics", Description: "Developer stats and API usage", Icon: "👁️",
 		})
@@ -2558,22 +2884,42 @@ func (s *FounderGameScreen) handlePlatformSelection(id string) (ScreenModel, tea
 		s.view = FounderViewMain
 		return s, nil
 
-	case "launch_api":
-		err := fg.LaunchPlatform("api")
-		if err != nil {
-			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
-		} else {
-			s.turnMessages = []string{"✓ API Platform launched!", "Developers can now build on your platform"}
-		}
-		s.view = FounderViewMain
-		return s, nil
-
 	case "launch_marketplace":
 		err := fg.LaunchPlatform("marketplace")
 		if err != nil {
 			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
 		} else {
 			s.turnMessages = []string{"✓ Marketplace launched!", "Third-party apps can now be sold"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "launch_social":
+		err := fg.LaunchPlatform("social")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Social Platform launched!", "Community-driven network effects activated"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "launch_data":
+		err := fg.LaunchPlatform("data")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Data Platform launched!", "Data exchange and insights marketplace active"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "launch_infrastructure":
+		err := fg.LaunchPlatform("infrastructure")
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Infrastructure Platform launched!", "Developers can now build on your APIs"}
 		}
 		s.view = FounderViewMain
 		return s, nil
@@ -3548,6 +3894,8 @@ func (s *FounderGameScreen) View() string {
 		return s.renderPivot()
 	case FounderViewBoard:
 		return s.renderBoard()
+	case FounderViewBoardAction:
+		return s.renderExpandPool()
 	case FounderViewBuyback:
 		return s.renderBuyback()
 	case FounderViewBuybackConfirm:
@@ -3598,8 +3946,22 @@ func (s *FounderGameScreen) View() string {
 		return s.renderReferralProgram()
 	case FounderViewTechDebt:
 		return s.renderTechDebt()
+	case FounderViewAcquisitionOffer:
+		return s.renderAcquisitionOffer()
+	case FounderViewAdvisorExpertise:
+		return s.renderAdvisorExpertise()
+	case FounderViewAdvisorConfirm:
+		return s.renderAdvisorConfirm()
+	case FounderViewRemoveAdvisor:
+		return s.renderRemoveAdvisor()
+	case FounderViewBoardTable:
+		return s.renderBoardTable()
 	case FounderViewEndAffiliate:
 		return s.renderEndAffiliate()
+	case FounderViewConfirmQuit:
+		return s.renderConfirmQuit()
+	case FounderViewEngineerRealloc:
+		return s.renderEngineerRealloc()
 	default:
 		return s.renderMain()
 	}
@@ -3619,7 +3981,20 @@ func (s *FounderGameScreen) renderMain() string {
 
 	header := fmt.Sprintf("🚀 %s - MONTH %d", fg.CompanyName, fg.Turn)
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render(header)))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
+
+	// Low cash warning
+	if fg.NeedsLowCashWarning() {
+		warnBox := lipgloss.NewStyle().
+			Foreground(styles.Red).
+			Bold(true).
+			Width(70).
+			Align(lipgloss.Center)
+		warnText := fmt.Sprintf("⚠️ LOW CASH WARNING: $%s remaining | %d months runway",
+			formatCompactMoney(fg.Cash), fg.CashRunwayMonths)
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(warnBox.Render(warnText)))
+	}
+	b.WriteString("\n")
 
 	// Main layout. Center with margin only so bordered boxes never reflow (avoids disjointed bottom border).
 	leftPanel := s.renderCompanyPanel()
@@ -3633,9 +4008,31 @@ func (s *FounderGameScreen) renderMain() string {
 	b.WriteString(lipgloss.NewStyle().MarginLeft(margin).Render(panelRow))
 	b.WriteString("\n")
 
+	// SaaS Metrics + Board Sentiment row
+	saasPanel := s.renderSaaSMetricsPanel()
+	boardPanel := s.renderBoardSentimentPanel()
+	row2 := lipgloss.JoinHorizontal(lipgloss.Top, saasPanel, "  ", boardPanel)
+	b.WriteString(lipgloss.NewStyle().MarginLeft(margin).Render(row2))
+	b.WriteString("\n")
+
+	// Monthly highlights
+	highlights := fg.GenerateMonthlyHighlights()
+	if len(highlights) > 0 {
+		b.WriteString(s.renderHighlights(highlights))
+		b.WriteString("\n")
+	}
+
 	// News
 	if len(s.turnMessages) > 0 {
 		b.WriteString(s.renderNews())
+		b.WriteString("\n")
+	}
+
+	// Strategic opportunity notice
+	if fg.PendingOpportunity != nil {
+		oppStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true).Width(s.width).Align(lipgloss.Center)
+		b.WriteString(oppStyle.Render(fmt.Sprintf("💡 Strategic Opportunity: %s (expires in %d mo)",
+			fg.PendingOpportunity.Title, fg.PendingOpportunity.ExpiresIn)))
 		b.WriteString("\n")
 	}
 
@@ -3668,7 +4065,7 @@ func (s *FounderGameScreen) renderMain() string {
 
 	// Help
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
-	b.WriteString(helpStyle.Render("enter actions • q quit"))
+	b.WriteString(helpStyle.Render("enter actions • n next month • esc/q quit"))
 
 	return b.String()
 }
@@ -3708,6 +4105,37 @@ func (s *FounderGameScreen) renderCompanyPanel() string {
 	b.WriteString(labelStyle.Render("Your Equity: "))
 	b.WriteString(fmt.Sprintf("%.1f%%", 100.0-fg.EquityGivenAway-fg.EquityPool))
 	b.WriteString("\n")
+
+	// Customer health summary
+	healthy, atRisk, critical, _, criticalMRR := fg.GetCustomerHealthSegments()
+	if fg.Customers > 0 {
+		b.WriteString("\n")
+		healthStyle := lipgloss.NewStyle().Foreground(styles.Green)
+		riskStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+		critStyle := lipgloss.NewStyle().Foreground(styles.Red)
+		b.WriteString(healthStyle.Render(fmt.Sprintf("✓%d", healthy)))
+		b.WriteString(" ")
+		b.WriteString(riskStyle.Render(fmt.Sprintf("⚠%d", atRisk)))
+		b.WriteString(" ")
+		b.WriteString(critStyle.Render(fmt.Sprintf("✗%d", critical)))
+		if criticalMRR > 0 {
+			b.WriteString(critStyle.Render(fmt.Sprintf(" ($%s risk)", formatCompactMoney(criticalMRR))))
+		}
+		b.WriteString("\n")
+	}
+
+	// Active partnerships
+	activePartners := 0
+	for _, p := range fg.Partnerships {
+		if p.Status == "active" {
+			activePartners++
+		}
+	}
+	if activePartners > 0 {
+		b.WriteString(labelStyle.Render("Partnerships: "))
+		b.WriteString(fmt.Sprintf("%d active", activePartners))
+		b.WriteString("\n")
+	}
 
 	return panelStyle.Render(b.String())
 }
@@ -3751,6 +4179,229 @@ func (s *FounderGameScreen) renderMetricsPanel() string {
 	return panelStyle.Render(b.String())
 }
 
+func (s *FounderGameScreen) renderSaaSMetricsPanel() string {
+	fg := s.gameData.FounderState
+
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(0, 1).
+		Width(35)
+
+	var b strings.Builder
+	titleStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+	b.WriteString(titleStyle.Render("📈 SaaS METRICS"))
+	b.WriteString("\n\n")
+
+	labelStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+
+	// LTV:CAC
+	ltvCac := fg.CalculateLTVToCAC()
+	b.WriteString(labelStyle.Render("LTV:CAC: "))
+	ltvStyle := lipgloss.NewStyle().Foreground(styles.Red)
+	if ltvCac > 3 {
+		ltvStyle = lipgloss.NewStyle().Foreground(styles.Green)
+	} else if ltvCac > 1 {
+		ltvStyle = lipgloss.NewStyle().Foreground(styles.Yellow)
+	}
+	b.WriteString(ltvStyle.Render(fmt.Sprintf("%.1fx", ltvCac)))
+	b.WriteString("\n")
+
+	// CAC Payback
+	cacPayback := fg.CalculateCACPayback()
+	b.WriteString(labelStyle.Render("CAC Payback: "))
+	paybackStyle := lipgloss.NewStyle().Foreground(styles.Red)
+	if cacPayback > 0 && cacPayback < 12 {
+		paybackStyle = lipgloss.NewStyle().Foreground(styles.Green)
+	} else if cacPayback > 0 && cacPayback < 24 {
+		paybackStyle = lipgloss.NewStyle().Foreground(styles.Yellow)
+	}
+	if cacPayback > 0 {
+		b.WriteString(paybackStyle.Render(fmt.Sprintf("%.0f mo", cacPayback)))
+	} else {
+		b.WriteString(lipgloss.NewStyle().Foreground(styles.Gray).Render("N/A"))
+	}
+	b.WriteString("\n")
+
+	// Rule of 40
+	ruleOf40 := fg.CalculateRuleOf40()
+	b.WriteString(labelStyle.Render("Rule of 40: "))
+	ro40Style := lipgloss.NewStyle().Foreground(styles.Red)
+	if ruleOf40 > 40 {
+		ro40Style = lipgloss.NewStyle().Foreground(styles.Green)
+	} else if ruleOf40 > 20 {
+		ro40Style = lipgloss.NewStyle().Foreground(styles.Yellow)
+	}
+	b.WriteString(ro40Style.Render(fmt.Sprintf("%.0f%%", ruleOf40)))
+	b.WriteString("\n")
+
+	// Burn Multiple
+	burnMult := fg.CalculateBurnMultiple()
+	b.WriteString(labelStyle.Render("Burn Multiple: "))
+	burnStyle := lipgloss.NewStyle().Foreground(styles.Red)
+	if burnMult > 0 && burnMult < 1 {
+		burnStyle = lipgloss.NewStyle().Foreground(styles.Green)
+	} else if burnMult > 0 && burnMult < 2 {
+		burnStyle = lipgloss.NewStyle().Foreground(styles.Yellow)
+	}
+	if burnMult > 0 {
+		b.WriteString(burnStyle.Render(fmt.Sprintf("%.1fx", burnMult)))
+	} else {
+		b.WriteString(lipgloss.NewStyle().Foreground(styles.Green).Render("Profitable"))
+	}
+	b.WriteString("\n")
+
+	// Magic Number
+	magicNum := fg.CalculateMagicNumber()
+	b.WriteString(labelStyle.Render("Magic Number: "))
+	magicStyle := lipgloss.NewStyle().Foreground(styles.Red)
+	if magicNum > 1 {
+		magicStyle = lipgloss.NewStyle().Foreground(styles.Green)
+	} else if magicNum > 0.5 {
+		magicStyle = lipgloss.NewStyle().Foreground(styles.Yellow)
+	}
+	if magicNum > 0 {
+		b.WriteString(magicStyle.Render(fmt.Sprintf("%.2f", magicNum)))
+	} else {
+		b.WriteString(lipgloss.NewStyle().Foreground(styles.Gray).Render("N/A"))
+	}
+	b.WriteString("\n")
+
+	return panelStyle.Render(b.String())
+}
+
+func (s *FounderGameScreen) renderBoardSentimentPanel() string {
+	fg := s.gameData.FounderState
+
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Yellow).
+		Padding(0, 1).
+		Width(35)
+
+	var b strings.Builder
+	titleStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
+	b.WriteString(titleStyle.Render("🏛️ BOARD"))
+	b.WriteString("\n\n")
+
+	labelStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+
+	// Board sentiment
+	sentiment := fg.BoardSentiment
+	if sentiment == "" {
+		sentiment = "neutral"
+	}
+
+	sentimentIcon := "😐"
+	sentimentStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+	switch sentiment {
+	case "happy":
+		sentimentIcon = "😊"
+		sentimentStyle = lipgloss.NewStyle().Foreground(styles.Green)
+	case "pleased":
+		sentimentIcon = "🙂"
+		sentimentStyle = lipgloss.NewStyle().Foreground(styles.Green)
+	case "concerned":
+		sentimentIcon = "😟"
+		sentimentStyle = lipgloss.NewStyle().Foreground(styles.Yellow)
+	case "angry":
+		sentimentIcon = "😡"
+		sentimentStyle = lipgloss.NewStyle().Foreground(styles.Red)
+	}
+
+	b.WriteString(labelStyle.Render("Sentiment: "))
+	b.WriteString(sentimentStyle.Render(fmt.Sprintf("%s %s", sentimentIcon, sentiment)))
+	b.WriteString("\n")
+
+	// Board pressure
+	b.WriteString(labelStyle.Render("Pressure: "))
+	pressureStyle := lipgloss.NewStyle().Foreground(styles.Green)
+	if fg.BoardPressure > 70 {
+		pressureStyle = lipgloss.NewStyle().Foreground(styles.Red)
+	} else if fg.BoardPressure > 40 {
+		pressureStyle = lipgloss.NewStyle().Foreground(styles.Yellow)
+	}
+	pressureBar := ""
+	filled := fg.BoardPressure / 10
+	for i := 0; i < 10; i++ {
+		if i < filled {
+			pressureBar += "█"
+		} else {
+			pressureBar += "░"
+		}
+	}
+	b.WriteString(pressureStyle.Render(fmt.Sprintf("%s %d%%", pressureBar, fg.BoardPressure)))
+	b.WriteString("\n")
+
+	// Board members count
+	activeMembers := 0
+	var chairman string
+	for _, m := range fg.BoardMembers {
+		if m.IsActive {
+			activeMembers++
+			if m.IsChairman {
+				chairman = m.Name
+			}
+		}
+	}
+	b.WriteString(labelStyle.Render("Members: "))
+	b.WriteString(fmt.Sprintf("%d", activeMembers))
+	if chairman != "" {
+		b.WriteString(fmt.Sprintf(" (Chair: %s)", truncate(chairman, 12)))
+	}
+	b.WriteString("\n")
+
+	// Board seats
+	b.WriteString(labelStyle.Render("Board Seats: "))
+	b.WriteString(fmt.Sprintf("%d", fg.BoardSeats))
+	b.WriteString("\n")
+
+	// Warning if board pressure high
+	if fg.BoardPressure > 70 {
+		warnStyle := lipgloss.NewStyle().Foreground(styles.Red)
+		b.WriteString(warnStyle.Render("⚠ Board may force exit!"))
+		b.WriteString("\n")
+	}
+
+	return panelStyle.Render(b.String())
+}
+
+func (s *FounderGameScreen) renderHighlights(highlights []founder.MonthlyHighlight) string {
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(0, 1).
+		Width(72)
+
+	var b strings.Builder
+	titleStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+	b.WriteString(titleStyle.Render("📋 MONTHLY HIGHLIGHTS"))
+	b.WriteString("\n")
+
+	winStyle := lipgloss.NewStyle().Foreground(styles.Green)
+	concernStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+
+	shown := 0
+	for _, h := range highlights {
+		if shown >= 4 {
+			break
+		}
+		msg := h.Message
+		if len(msg) > 60 {
+			msg = msg[:57] + "..."
+		}
+		if h.Type == "win" {
+			b.WriteString(winStyle.Render(fmt.Sprintf("%s %s", h.Icon, msg)))
+		} else {
+			b.WriteString(concernStyle.Render(fmt.Sprintf("%s %s", h.Icon, msg)))
+		}
+		b.WriteString("\n")
+		shown++
+	}
+
+	return lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(panelStyle.Render(b.String()))
+}
+
 func (s *FounderGameScreen) renderNews() string {
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -3763,15 +4414,12 @@ func (s *FounderGameScreen) renderNews() string {
 	b.WriteString(titleStyle.Render("📰 NEWS"))
 	b.WriteString("\n")
 
-	limit := 6
+	limit := 8
 	if len(s.turnMessages) < limit {
 		limit = len(s.turnMessages)
 	}
 	for i := 0; i < limit; i++ {
 		msg := s.turnMessages[i]
-		if len(msg) > 65 {
-			msg = msg[:62] + "..."
-		}
 		b.WriteString("• " + msg + "\n")
 	}
 
@@ -4268,35 +4916,66 @@ func (s *FounderGameScreen) renderTeamRoster() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Green).
 		Padding(1, 2).
-		Width(65)
+		Width(72)
 
 	var team strings.Builder
 	team.WriteString(fmt.Sprintf("Total Employees: %d | Monthly Cost: $%s\n\n", fg.Team.TotalEmployees, formatCompactMoney(fg.MonthlyTeamCost)))
 
-	team.WriteString(fmt.Sprintf("Engineers: %d\n", len(fg.Team.Engineers)))
-	for _, e := range fg.Team.Engineers {
-		team.WriteString(fmt.Sprintf("  • %s (Impact: %.1fx)\n", e.Name, e.Impact))
+	renderEmployeeList := func(employees []founder.Employee, title string) {
+		if len(employees) == 0 {
+			return
+		}
+		team.WriteString(fmt.Sprintf("%s: %d\n", title, len(employees)))
+		for _, e := range employees {
+			// Vesting info
+			vestInfo := ""
+			if e.VestingMonths > 0 {
+				if !e.HasCliff {
+					vestInfo = fmt.Sprintf(" [cliff: %dmo]", e.CliffMonths-e.VestedMonths)
+				} else {
+					vestInfo = fmt.Sprintf(" [vested: %d/%dmo]", e.VestedMonths, e.VestingMonths)
+				}
+			}
+
+			// Equity info
+			eqInfo := ""
+			if e.Equity > 0 {
+				eqInfo = fmt.Sprintf(" %.2f%%eq", e.Equity)
+			}
+
+			// Market assignment
+			marketInfo := ""
+			if e.AssignedMarket != "" && e.AssignedMarket != "USA" {
+				marketInfo = fmt.Sprintf(" [%s]", e.AssignedMarket)
+			}
+
+			// Salary
+			salary := fmt.Sprintf("$%s/mo", formatCompactMoney(e.MonthlyCost))
+
+			team.WriteString(fmt.Sprintf("  • %s %.1fx %s%s%s%s\n",
+				truncate(e.Name, 15), e.Impact, salary, eqInfo, vestInfo, marketInfo))
+		}
+		team.WriteString("\n")
 	}
 
-	team.WriteString(fmt.Sprintf("\nSales: %d\n", len(fg.Team.Sales)))
-	for _, e := range fg.Team.Sales {
-		team.WriteString(fmt.Sprintf("  • %s (Impact: %.1fx)\n", e.Name, e.Impact))
-	}
-
-	team.WriteString(fmt.Sprintf("\nCustomer Success: %d\n", len(fg.Team.CustomerSuccess)))
-	for _, e := range fg.Team.CustomerSuccess {
-		team.WriteString(fmt.Sprintf("  • %s (Impact: %.1fx)\n", e.Name, e.Impact))
-	}
-
-	team.WriteString(fmt.Sprintf("\nMarketing: %d\n", len(fg.Team.Marketing)))
-	for _, e := range fg.Team.Marketing {
-		team.WriteString(fmt.Sprintf("  • %s (Impact: %.1fx)\n", e.Name, e.Impact))
-	}
+	renderEmployeeList(fg.Team.Engineers, "Engineers")
+	renderEmployeeList(fg.Team.Sales, "Sales")
+	renderEmployeeList(fg.Team.CustomerSuccess, "Customer Success")
+	renderEmployeeList(fg.Team.Marketing, "Marketing")
 
 	if len(fg.Team.Executives) > 0 {
-		team.WriteString(fmt.Sprintf("\nExecutives: %d\n", len(fg.Team.Executives)))
+		team.WriteString(fmt.Sprintf("Executives: %d\n", len(fg.Team.Executives)))
 		for _, e := range fg.Team.Executives {
-			team.WriteString(fmt.Sprintf("  • %s - %s (Impact: %.1fx)\n", e.Name, e.Role, e.Impact))
+			vestInfo := ""
+			if e.VestingMonths > 0 {
+				vestInfo = fmt.Sprintf(" [vested: %d/%dmo]", e.VestedMonths, e.VestingMonths)
+			}
+			eqInfo := ""
+			if e.Equity > 0 {
+				eqInfo = fmt.Sprintf(" %.2f%%eq", e.Equity)
+			}
+			team.WriteString(fmt.Sprintf("  • %s (%s) %.1fx $%s/mo%s%s\n",
+				e.Name, e.Role, e.Impact, formatCompactMoney(e.MonthlyCost), eqInfo, vestInfo))
 		}
 	}
 
@@ -4323,28 +5002,67 @@ func (s *FounderGameScreen) renderCustomers() string {
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🏢 CUSTOMERS")))
 	b.WriteString("\n\n")
 
+	// Summary box
 	custBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Cyan).
 		Padding(1, 2).
-		Width(60)
+		Width(72)
 
 	var cust strings.Builder
 	cust.WriteString(fmt.Sprintf("Active Customers: %d\n", fg.Customers))
 	cust.WriteString(fmt.Sprintf("Total Ever: %d | Churned: %d\n", fg.TotalCustomersEver, fg.TotalChurned))
-	cust.WriteString(fmt.Sprintf("MRR: $%s | Avg Deal: $%s/mo\n\n", formatCompactMoney(fg.MRR), formatCompactMoney(fg.AvgDealSize)))
+	cust.WriteString(fmt.Sprintf("MRR: $%s | Avg Deal: $%s/mo\n", formatCompactMoney(fg.MRR), formatCompactMoney(fg.AvgDealSize)))
+	cust.WriteString(fmt.Sprintf("Deal Range: $%s - $%s\n\n", formatCompactMoney(fg.MinDealSize), formatCompactMoney(fg.MaxDealSize)))
 
 	if fg.AffiliateProgram != nil {
-		cust.WriteString(fmt.Sprintf("Direct: %d | Affiliate: %d\n", fg.DirectCustomers, fg.AffiliateCustomers))
-		cust.WriteString(fmt.Sprintf("Direct MRR: $%s | Affiliate MRR: $%s\n\n", formatCompactMoney(fg.DirectMRR), formatCompactMoney(fg.AffiliateMRR)))
+		cust.WriteString(fmt.Sprintf("Direct: %d ($%s MRR) | Affiliate: %d ($%s MRR)\n\n",
+			fg.DirectCustomers, formatCompactMoney(fg.DirectMRR),
+			fg.AffiliateCustomers, formatCompactMoney(fg.AffiliateMRR)))
 	}
 
 	cust.WriteString(fmt.Sprintf("Churn Rate: %.1f%%/mo\n", fg.CustomerChurnRate*100))
 
-	// Customer health if available
-	healthy, atRisk, critical, _, _ := fg.GetCustomerHealthSegments()
+	// Customer health
+	healthy, atRisk, critical, atRiskMRR, criticalMRR := fg.GetCustomerHealthSegments()
 	if healthy > 0 || atRisk > 0 || critical > 0 {
-		cust.WriteString(fmt.Sprintf("\nHealth: 🟢 %d healthy | 🟡 %d at risk | 🔴 %d critical\n", healthy, atRisk, critical))
+		cust.WriteString(fmt.Sprintf("\nHealth: 🟢 %d healthy | 🟡 %d at risk ($%s) | 🔴 %d critical ($%s)\n",
+			healthy, atRisk, formatCompactMoney(atRiskMRR), critical, formatCompactMoney(criticalMRR)))
+	}
+
+	// Individual customer table (show up to 10 recent)
+	activeCustomers := []founder.Customer{}
+	for _, c := range fg.CustomerList {
+		if c.IsActive {
+			activeCustomers = append(activeCustomers, c)
+		}
+	}
+
+	if len(activeCustomers) > 0 {
+		cust.WriteString("\n── CUSTOMER DEALS ──\n")
+		tableHeader := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+		cust.WriteString(tableHeader.Render(fmt.Sprintf("%-6s %-10s %-10s %-8s %-8s\n", "ID", "Source", "MRR", "Term", "Health")))
+
+		shown := 0
+		for i := len(activeCustomers) - 1; i >= 0 && shown < 10; i-- {
+			c := activeCustomers[i]
+			termStr := "∞"
+			if c.TermMonths > 0 {
+				termStr = fmt.Sprintf("%dmo", c.TermMonths)
+			}
+			healthStr := "🟢"
+			if c.HealthScore < 0.3 {
+				healthStr = "🔴"
+			} else if c.HealthScore < 0.7 {
+				healthStr = "🟡"
+			}
+			cust.WriteString(fmt.Sprintf("%-6d %-10s $%-9s %-8s %s %.0f%%\n",
+				c.ID, truncate(c.Source, 10), formatCompactMoney(c.DealSize), termStr, healthStr, c.HealthScore*100))
+			shown++
+		}
+		if len(activeCustomers) > 10 {
+			cust.WriteString(fmt.Sprintf("  ... and %d more customers\n", len(activeCustomers)-10))
+		}
 	}
 
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(custBox.Render(cust.String())))
@@ -4374,7 +5092,7 @@ func (s *FounderGameScreen) renderFinancials() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Green).
 		Padding(1, 2).
-		Width(60)
+		Width(68)
 
 	var fin strings.Builder
 	fin.WriteString(fmt.Sprintf("Cash: $%s\n", formatCompactMoney(fg.Cash)))
@@ -4385,31 +5103,100 @@ func (s *FounderGameScreen) renderFinancials() string {
 	}
 	fin.WriteString(fmt.Sprintf("Runway: %s\n\n", runway))
 
-	fin.WriteString("MONTHLY REVENUE:\n")
-	fin.WriteString(fmt.Sprintf("  MRR: $%s\n", formatCompactMoney(fg.MRR)))
-	netMRR := int64(float64(fg.MRR) * 0.67)
-	fin.WriteString(fmt.Sprintf("  After deductions (33%%): $%s\n\n", formatCompactMoney(netMRR)))
+	// Revenue breakdown with deduction detail
+	sectionStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+	fin.WriteString(sectionStyle.Render("── MONTHLY REVENUE ──"))
+	fin.WriteString("\n")
+	fin.WriteString(fmt.Sprintf("  Gross MRR:           $%s\n", formatCompactMoney(fg.MRR)))
 
-	fin.WriteString("MONTHLY EXPENSES:\n")
-	fin.WriteString(fmt.Sprintf("  Team: $%s\n", formatCompactMoney(fg.MonthlyTeamCost)))
-	fin.WriteString(fmt.Sprintf("  Compute: $%s\n", formatCompactMoney(fg.MonthlyComputeCost)))
-	fin.WriteString(fmt.Sprintf("  ODC: $%s\n", formatCompactMoney(fg.MonthlyODCCost)))
+	// Revenue deductions detail
+	taxes := int64(float64(fg.MRR) * 0.20)
+	processing := int64(float64(fg.MRR) * 0.03)
+	overhead := int64(float64(fg.MRR) * 0.05)
+	savings := int64(float64(fg.MRR) * 0.05)
+	totalDeductions := taxes + processing + overhead + savings
+	netMRR := fg.MRR - totalDeductions
 
-	totalExpenses := fg.MonthlyTeamCost + fg.MonthlyComputeCost + fg.MonthlyODCCost
-	fin.WriteString(fmt.Sprintf("  Total: $%s\n\n", formatCompactMoney(totalExpenses)))
+	deductStyle := lipgloss.NewStyle().Foreground(styles.Red)
+	fin.WriteString(deductStyle.Render(fmt.Sprintf("  Taxes (20%%):         -$%s\n", formatCompactMoney(taxes))))
+	fin.WriteString(deductStyle.Render(fmt.Sprintf("  Processing (3%%):     -$%s\n", formatCompactMoney(processing))))
+	fin.WriteString(deductStyle.Render(fmt.Sprintf("  Overhead (5%%):       -$%s\n", formatCompactMoney(overhead))))
+	fin.WriteString(deductStyle.Render(fmt.Sprintf("  Savings (5%%):        -$%s\n", formatCompactMoney(savings))))
 
-	netIncome := netMRR - totalExpenses
-	if netIncome >= 0 {
-		fin.WriteString(fmt.Sprintf("NET INCOME: +$%s/mo 🟢\n", formatCompactMoney(netIncome)))
-	} else {
-		fin.WriteString(fmt.Sprintf("NET BURN: -$%s/mo 🔴\n", formatCompactMoney(-netIncome)))
+	// Affiliate costs if applicable
+	if fg.AffiliateProgram != nil {
+		affCost := int64(float64(fg.AffiliateMRR) * fg.AffiliateProgram.Commission)
+		fin.WriteString(deductStyle.Render(fmt.Sprintf("  Affiliate Comm:      -$%s\n", formatCompactMoney(affCost))))
+		netMRR -= affCost
 	}
 
+	// Global market costs
+	for _, market := range fg.GlobalMarkets {
+		if market.MonthlyCost > 0 {
+			fin.WriteString(deductStyle.Render(fmt.Sprintf("  %s ops:         -$%s\n", truncate(market.Region, 10), formatCompactMoney(market.MonthlyCost))))
+			netMRR -= market.MonthlyCost
+		}
+	}
+
+	netStyle := lipgloss.NewStyle().Foreground(styles.Green)
+	fin.WriteString(netStyle.Render(fmt.Sprintf("  Net Revenue:         $%s\n", formatCompactMoney(netMRR))))
+
+	// Gross margin
+	if fg.MRR > 0 {
+		grossMargin := float64(netMRR) / float64(fg.MRR) * 100.0
+		fin.WriteString(fmt.Sprintf("  Gross Margin:        %.0f%%\n", grossMargin))
+	}
+	fin.WriteString("\n")
+
+	// Expenses
+	fin.WriteString(sectionStyle.Render("── MONTHLY EXPENSES ──"))
+	fin.WriteString("\n")
+	fin.WriteString(fmt.Sprintf("  Team Salaries:       $%s\n", formatCompactMoney(fg.MonthlyTeamCost)))
+	fin.WriteString(fmt.Sprintf("  Compute/Cloud:       $%s\n", formatCompactMoney(fg.MonthlyComputeCost)))
+	fin.WriteString(fmt.Sprintf("  Other Direct Costs:  $%s\n", formatCompactMoney(fg.MonthlyODCCost)))
+
+	// Partnership costs
+	partnerCost := int64(0)
+	for _, p := range fg.Partnerships {
+		if p.Status == "active" {
+			partnerCost += p.Cost
+		}
+	}
+	if partnerCost > 0 {
+		fin.WriteString(fmt.Sprintf("  Partnerships:        $%s\n", formatCompactMoney(partnerCost)))
+	}
+
+	totalExpenses := fg.MonthlyTeamCost + fg.MonthlyComputeCost + fg.MonthlyODCCost + partnerCost
+	fin.WriteString("  ─────────────────────────\n")
+	fin.WriteString(fmt.Sprintf("  Total Expenses:      $%s\n\n", formatCompactMoney(totalExpenses)))
+
+	// Net income
+	netIncome := netMRR - totalExpenses
+	if netIncome >= 0 {
+		fin.WriteString(netStyle.Render(fmt.Sprintf("NET INCOME: +$%s/mo 🟢\n", formatCompactMoney(netIncome))))
+	} else {
+		fin.WriteString(deductStyle.Render(fmt.Sprintf("NET BURN: -$%s/mo 🔴\n", formatCompactMoney(-netIncome))))
+	}
+
+	// Net margin
+	if fg.MRR > 0 {
+		netMargin := float64(netIncome) / float64(fg.MRR) * 100.0
+		marginColor := styles.Green
+		if netMargin < 0 {
+			marginColor = styles.Red
+		}
+		fin.WriteString(lipgloss.NewStyle().Foreground(marginColor).Render(fmt.Sprintf("Net Margin: %.0f%%\n", netMargin)))
+	}
+
+	// Funding history
 	if len(fg.FundingRounds) > 0 {
-		fin.WriteString("\nFUNDING HISTORY:\n")
+		fin.WriteString("\n")
+		fin.WriteString(sectionStyle.Render("── FUNDING HISTORY ──"))
+		fin.WriteString("\n")
 		totalRaised := int64(0)
 		for _, r := range fg.FundingRounds {
-			fin.WriteString(fmt.Sprintf("  %s: $%s (%.1f%% equity)\n", r.RoundName, formatCompactMoney(r.Amount), r.EquityGiven))
+			fin.WriteString(fmt.Sprintf("  %s: $%s (%.1f%% equity, %s terms)\n",
+				r.RoundName, formatCompactMoney(r.Amount), r.EquityGiven, r.Terms))
 			totalRaised += r.Amount
 		}
 		fin.WriteString(fmt.Sprintf("  Total Raised: $%s\n", formatCompactMoney(totalRaised)))
@@ -5195,6 +5982,703 @@ func (s *FounderGameScreen) renderTechDebt() string {
 	return b.String()
 }
 
+// ============================================================================
+// Board Table View
+// ============================================================================
+
+func (s *FounderGameScreen) renderBoardTable() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("👔 BOARD COMPOSITION")))
+	b.WriteString("\n\n")
+
+	// Summary line
+	summaryBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2).
+		Width(65)
+
+	var content strings.Builder
+
+	labelStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+	valStyle := lipgloss.NewStyle().Foreground(styles.White)
+
+	content.WriteString(labelStyle.Render("Board Seats: "))
+	content.WriteString(valStyle.Render(fmt.Sprintf("%d", fg.BoardSeats)))
+	content.WriteString("    ")
+	content.WriteString(labelStyle.Render("Equity Pool: "))
+	content.WriteString(valStyle.Render(fmt.Sprintf("%.1f%%", fg.EquityPool)))
+	content.WriteString("    ")
+	content.WriteString(labelStyle.Render("Your Equity: "))
+	content.WriteString(valStyle.Render(fmt.Sprintf("%.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway)))
+	content.WriteString("\n\n")
+
+	// Sentiment
+	sentiment := fg.BoardSentiment
+	if sentiment == "" {
+		sentiment = "neutral"
+	}
+	sentimentIcon := "😐"
+	sentimentColor := styles.Yellow
+	switch sentiment {
+	case "happy":
+		sentimentIcon = "😊"
+		sentimentColor = styles.Green
+	case "pleased":
+		sentimentIcon = "🙂"
+		sentimentColor = styles.Green
+	case "concerned":
+		sentimentIcon = "😟"
+		sentimentColor = styles.Yellow
+	case "angry":
+		sentimentIcon = "😡"
+		sentimentColor = styles.Red
+	}
+	content.WriteString(labelStyle.Render("Sentiment: "))
+	content.WriteString(lipgloss.NewStyle().Foreground(sentimentColor).Render(fmt.Sprintf("%s %s", sentimentIcon, sentiment)))
+	content.WriteString("    ")
+	content.WriteString(labelStyle.Render("Pressure: "))
+	pressureColor := styles.Green
+	if fg.BoardPressure > 70 {
+		pressureColor = styles.Red
+	} else if fg.BoardPressure > 40 {
+		pressureColor = styles.Yellow
+	}
+	content.WriteString(lipgloss.NewStyle().Foreground(pressureColor).Render(fmt.Sprintf("%d%%", fg.BoardPressure)))
+	content.WriteString("\n")
+
+	// Divider
+	divider := lipgloss.NewStyle().Foreground(styles.Gray)
+	content.WriteString(divider.Render(strings.Repeat("─", 55)))
+	content.WriteString("\n\n")
+
+	// Chairman
+	chairman := fg.GetChairman()
+	if chairman != nil {
+		chairStyle := lipgloss.NewStyle().Foreground(styles.Gold).Bold(true)
+		content.WriteString(chairStyle.Render("👑 CHAIRMAN"))
+		content.WriteString("\n")
+		nameStyle := lipgloss.NewStyle().Foreground(styles.White).Bold(true)
+		content.WriteString(nameStyle.Render(fmt.Sprintf("   %s", chairman.Name)))
+		content.WriteString("\n")
+		detailStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+		content.WriteString(detailStyle.Render(fmt.Sprintf("   Expertise: %s │ Impact: 2x │ Equity: %.2f%%",
+			chairman.Expertise, chairman.EquityCost)))
+		content.WriteString("\n")
+		content.WriteString(detailStyle.Render(fmt.Sprintf("   Contribution: %.0f%% │ Added: Month %d",
+			chairman.ContributionScore*100, chairman.MonthAdded)))
+		content.WriteString("\n\n")
+	}
+
+	// Advisors
+	advisorCount := 0
+	for _, m := range fg.BoardMembers {
+		if !m.IsActive || m.IsChairman || m.Type != "advisor" {
+			continue
+		}
+		if advisorCount == 0 {
+			sectionStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+			content.WriteString(sectionStyle.Render("🧠 ADVISORS"))
+			content.WriteString("\n")
+		}
+		nameStyle := lipgloss.NewStyle().Foreground(styles.White)
+		content.WriteString(nameStyle.Render(fmt.Sprintf("   %s", m.Name)))
+		detailStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+		content.WriteString(detailStyle.Render(fmt.Sprintf(" (%s) %.2f%% eq, Score: %.0f%%",
+			m.Expertise, m.EquityCost, m.ContributionScore*100)))
+		content.WriteString("\n")
+		advisorCount++
+	}
+	if advisorCount > 0 {
+		content.WriteString("\n")
+	}
+
+	// Investor directors
+	investorCount := 0
+	for _, m := range fg.BoardMembers {
+		if !m.IsActive || m.Type != "investor" {
+			continue
+		}
+		if investorCount == 0 {
+			sectionStyle := lipgloss.NewStyle().Foreground(styles.Magenta).Bold(true)
+			content.WriteString(sectionStyle.Render("💼 INVESTOR DIRECTORS"))
+			content.WriteString("\n")
+		}
+		nameStyle := lipgloss.NewStyle().Foreground(styles.White)
+		content.WriteString(nameStyle.Render(fmt.Sprintf("   %s", m.Name)))
+		detailStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+		content.WriteString(detailStyle.Render(fmt.Sprintf(" (%s) %.2f%% equity", m.Expertise, m.EquityCost)))
+		content.WriteString("\n")
+		investorCount++
+	}
+
+	// Empty state
+	if chairman == nil && advisorCount == 0 && investorCount == 0 {
+		emptyStyle := lipgloss.NewStyle().Foreground(styles.Gray).Italic(true)
+		content.WriteString(emptyStyle.Render("   No board members yet. Add advisors to get guidance!"))
+		content.WriteString("\n")
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(summaryBox.Render(content.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc/enter back to board menu"))
+
+	return b.String()
+}
+
+// ============================================================================
+// Expand Equity Pool
+// ============================================================================
+
+func (s *FounderGameScreen) renderExpandPool() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📊 EXPAND EQUITY POOL")))
+	b.WriteString("\n\n")
+
+	contentBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2).
+		Width(50)
+
+	var content strings.Builder
+	titleStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
+	content.WriteString(titleStyle.Render("Enter expansion percentage (1-10%):"))
+	content.WriteString("\n\n")
+
+	if s.inputMessage != "" {
+		infoStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+		content.WriteString(infoStyle.Render(s.inputMessage))
+		content.WriteString("\n\n")
+	}
+
+	inputStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(0, 1)
+	content.WriteString(inputStyle.Render(s.equityPoolInput.View()))
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(contentBox.Render(content.String())))
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter confirm"))
+
+	return b.String()
+}
+
+// ============================================================================
+// Advisor Management
+// ============================================================================
+
+var svAdvisorNames = map[string][]string{
+	"sales":       {"Marc Andreessen", "Ben Horowitz", "Jason Lemkin", "Tomas Tunguz", "Sam Altman"},
+	"product":     {"Marissa Mayer", "Julie Zhuo", "Ken Norton", "Shreyas Doshi", "Lenny Rachitsky"},
+	"fundraising": {"Reid Hoffman", "Peter Thiel", "Vinod Khosla", "Mary Meeker", "Bill Gurley"},
+	"operations":  {"Sheryl Sandberg", "Keith Rabois", "Claire Hughes Johnson", "Frank Slootman", "Elad Gil"},
+	"strategy":    {"Eric Schmidt", "Jeff Bezos", "Patrick Collison", "Stewart Butterfield", "Drew Houston"},
+}
+
+func (s *FounderGameScreen) rebuildAdvisorExpertiseMenu() {
+	items := []components.MenuItem{
+		{ID: "sales", Title: "Sales & Revenue", Description: "Close more deals, improve conversion", Icon: "💰"},
+		{ID: "product", Title: "Product & Engineering", Description: "Build faster, improve maturity", Icon: "🔧"},
+		{ID: "fundraising", Title: "Fundraising & Finance", Description: "Better terms, investor intros", Icon: "📈"},
+		{ID: "operations", Title: "Operations & Scaling", Description: "Reduce costs, improve efficiency", Icon: "⚙️"},
+		{ID: "strategy", Title: "Strategy & Growth", Description: "Market positioning, expansion", Icon: "🎯"},
+		{ID: "cancel", Title: "Cancel", Icon: "←"},
+	}
+
+	s.advisorExpertiseMenu = components.NewMenu("SELECT ADVISOR EXPERTISE", items)
+	s.advisorExpertiseMenu.SetSize(55, 15)
+	s.advisorExpertiseMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleAdvisorExpertiseSelection(id string) (ScreenModel, tea.Cmd) {
+	if id == "cancel" {
+		s.rebuildBoardMenu()
+		s.view = FounderViewBoard
+		return s, nil
+	}
+
+	fg := s.gameData.FounderState
+	s.selectedExpertise = id
+
+	// Pick a name from the SV names pool
+	names, ok := svAdvisorNames[id]
+	if !ok {
+		names = []string{"Alex Kim", "Jordan Lee", "Morgan Chen"}
+	}
+	nameIdx := len(fg.BoardMembers) % len(names)
+	s.pendingAdvisorName = names[nameIdx]
+
+	// Calculate costs
+	equityCost := 0.25 + float64(len(fg.BoardMembers))*0.1
+	if equityCost > 1.0 {
+		equityCost = 1.0
+	}
+	s.pendingAdvisorCost = equityCost
+
+	// Setup fee: $10k-50k based on expertise
+	setupFees := map[string]int64{
+		"sales": 25000, "product": 20000, "fundraising": 50000, "operations": 30000, "strategy": 40000,
+	}
+	s.pendingAdvisorSetup = setupFees[id]
+
+	// Build confirmation menu
+	items := []components.MenuItem{
+		{
+			ID:    "confirm",
+			Title: fmt.Sprintf("Hire %s ($%sK setup + %.2f%% equity)", s.pendingAdvisorName, formatCompactMoney(s.pendingAdvisorSetup), equityCost),
+			Icon:  "✓",
+		},
+		{ID: "cancel", Title: "Cancel", Icon: "←"},
+	}
+	s.advisorConfirmMenu = components.NewMenu("CONFIRM ADVISOR", items)
+	s.advisorConfirmMenu.SetSize(60, 8)
+	s.advisorConfirmMenu.SetHideHelp(true)
+	s.view = FounderViewAdvisorConfirm
+	return s, nil
+}
+
+func (s *FounderGameScreen) handleAdvisorConfirmSelection(id string) (ScreenModel, tea.Cmd) {
+	if id == "cancel" {
+		s.rebuildAdvisorExpertiseMenu()
+		s.view = FounderViewAdvisorExpertise
+		return s, nil
+	}
+
+	fg := s.gameData.FounderState
+
+	// Deduct setup fee
+	fg.Cash -= s.pendingAdvisorSetup
+
+	// Create advisor
+	advisor := founder.BoardMember{
+		Name:       s.pendingAdvisorName,
+		Type:       "advisor",
+		Expertise:  s.selectedExpertise,
+		MonthAdded: fg.Turn,
+		EquityCost: s.pendingAdvisorCost,
+		IsActive:   true,
+	}
+	fg.BoardMembers = append(fg.BoardMembers, advisor)
+	fg.EquityPool -= s.pendingAdvisorCost
+
+	s.turnMessages = []string{
+		fmt.Sprintf("✓ Hired advisor: %s (%s)", advisor.Name, advisor.Expertise),
+		fmt.Sprintf("   Setup fee: $%s", formatCompactMoney(s.pendingAdvisorSetup)),
+		fmt.Sprintf("   Equity cost: %.2f%%", advisor.EquityCost),
+		fmt.Sprintf("   Cash remaining: $%s", formatCompactMoney(fg.Cash)),
+	}
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) rebuildRemoveAdvisorMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+	for _, m := range fg.BoardMembers {
+		if m.IsActive && m.Type == "advisor" {
+			// Calculate buyback cost based on valuation
+			arr := fg.MRR * 12
+			valuation := int64(float64(arr) * 10.0)
+			buybackCost := int64(float64(valuation) * m.EquityCost / 100.0)
+
+			items = append(items, components.MenuItem{
+				ID:          "buyback_" + m.Name,
+				Title:       fmt.Sprintf("Remove %s (buy back equity: $%s)", m.Name, formatCompactMoney(buybackCost)),
+				Description: fmt.Sprintf("%s advisor, %.2f%% equity", m.Expertise, m.EquityCost),
+				Icon:        "💰",
+			})
+			items = append(items, components.MenuItem{
+				ID:          "nobuyback_" + m.Name,
+				Title:       fmt.Sprintf("Remove %s (no buyback)", m.Name),
+				Description: "They keep equity, possible negative PR",
+				Icon:        "❌",
+			})
+		}
+	}
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Cancel", Icon: "←"})
+
+	s.removeAdvisorMenu = components.NewMenu("REMOVE ADVISOR", items)
+	s.removeAdvisorMenu.SetSize(60, 15)
+	s.removeAdvisorMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleRemoveAdvisorSelection(id string) (ScreenModel, tea.Cmd) {
+	if id == "cancel" {
+		s.rebuildBoardMenu()
+		s.view = FounderViewBoard
+		return s, nil
+	}
+
+	fg := s.gameData.FounderState
+
+	if strings.HasPrefix(id, "buyback_") {
+		name := strings.TrimPrefix(id, "buyback_")
+		// Calculate and process buyback
+		arr := fg.MRR * 12
+		valuation := int64(float64(arr) * 10.0)
+
+		for i := range fg.BoardMembers {
+			if fg.BoardMembers[i].Name == name && fg.BoardMembers[i].IsActive {
+				buybackCost := int64(float64(valuation) * fg.BoardMembers[i].EquityCost / 100.0)
+				if fg.Cash >= buybackCost {
+					fg.Cash -= buybackCost
+					fg.EquityPool += fg.BoardMembers[i].EquityCost
+					fg.BoardMembers[i].IsActive = false
+					s.turnMessages = []string{
+						fmt.Sprintf("✓ Removed advisor: %s", name),
+						fmt.Sprintf("   Bought back %.2f%% equity for $%s", fg.BoardMembers[i].EquityCost, formatCompactMoney(buybackCost)),
+						"   Equity returned to pool",
+					}
+				} else {
+					s.turnMessages = []string{
+						fmt.Sprintf("❌ Not enough cash for buyback ($%s needed)", formatCompactMoney(buybackCost)),
+					}
+				}
+				break
+			}
+		}
+	} else if strings.HasPrefix(id, "nobuyback_") {
+		name := strings.TrimPrefix(id, "nobuyback_")
+		fg.RemoveAdvisor(name, false)
+		s.turnMessages = []string{
+			fmt.Sprintf("✓ Removed advisor: %s (no buyback)", name),
+			"   Advisor retains equity",
+			"   ⚠️  Possible negative PR impact",
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) renderAdvisorExpertise() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🧠 ADD ADVISOR")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2)
+
+	if s.advisorExpertiseMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.advisorExpertiseMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderAdvisorConfirm() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("CONFIRM ADVISOR HIRE")))
+	b.WriteString("\n\n")
+
+	// Details box
+	detailBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2).
+		Width(55)
+
+	var details strings.Builder
+	labelStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+	details.WriteString(labelStyle.Render("Advisor: "))
+	details.WriteString(fmt.Sprintf("%s\n", s.pendingAdvisorName))
+	details.WriteString(labelStyle.Render("Expertise: "))
+	details.WriteString(fmt.Sprintf("%s\n", s.selectedExpertise))
+	details.WriteString(labelStyle.Render("Setup Fee: "))
+	details.WriteString(fmt.Sprintf("$%s\n", formatCompactMoney(s.pendingAdvisorSetup)))
+	details.WriteString(labelStyle.Render("Equity Cost: "))
+	details.WriteString(fmt.Sprintf("%.2f%%\n\n", s.pendingAdvisorCost))
+
+	details.WriteString(labelStyle.Render("After hire:\n"))
+	details.WriteString(fmt.Sprintf("  Cash: $%s → $%s\n",
+		formatCompactMoney(fg.Cash), formatCompactMoney(fg.Cash-s.pendingAdvisorSetup)))
+	details.WriteString(fmt.Sprintf("  Equity Pool: %.1f%% → %.1f%%\n",
+		fg.EquityPool, fg.EquityPool-s.pendingAdvisorCost))
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(detailBox.Render(details.String())))
+	b.WriteString("\n\n")
+
+	if s.advisorConfirmMenu != nil {
+		menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+		b.WriteString(menuContainer.Render(s.advisorConfirmMenu.View()))
+	}
+	b.WriteString("\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+func (s *FounderGameScreen) renderRemoveAdvisor() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Red).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("❌ REMOVE ADVISOR")))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Red).
+		Padding(1, 2)
+
+	if s.removeAdvisorMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.removeAdvisorMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+// ============================================================================
+// Acquisition Offer
+// ============================================================================
+
+func (s *FounderGameScreen) rebuildAcquisitionMenu() {
+	fg := s.gameData.FounderState
+	offer := s.pendingAcquisition
+	if offer == nil {
+		return
+	}
+
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	forcedAcceptance := founderEquity < 50.0
+
+	items := []components.MenuItem{}
+	if forcedAcceptance {
+		items = append(items, components.MenuItem{
+			ID:          "forced",
+			Title:       "Board Forces Acquisition",
+			Description: fmt.Sprintf("You have %.1f%% equity - board has control", founderEquity),
+			Icon:        "⚠️",
+		})
+	} else {
+		items = append(items, components.MenuItem{
+			ID:          "accept",
+			Title:       "Accept Offer",
+			Description: fmt.Sprintf("Sell company for $%s", formatCompactMoney(offer.OfferAmount)),
+			Icon:        "✓",
+		})
+		items = append(items, components.MenuItem{
+			ID:          "decline",
+			Title:       "Decline Offer",
+			Description: "Continue building your company",
+			Icon:        "✗",
+		})
+	}
+
+	s.acquisitionMenu = components.NewMenu("YOUR DECISION", items)
+	s.acquisitionMenu.SetSize(60, 10)
+	s.acquisitionMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleAcquisitionSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+	offer := s.pendingAcquisition
+	if offer == nil {
+		s.view = FounderViewMain
+		return s, nil
+	}
+
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	founderPayout := int64(float64(offer.OfferAmount) * founderEquity / 100.0)
+
+	switch id {
+	case "accept", "forced":
+		fg.Cash = founderPayout
+		fg.HasExited = true
+		fg.ExitType = "acquisition"
+		fg.ExitValuation = offer.OfferAmount
+		fg.ExitMonth = fg.Turn
+		fg.Turn = fg.MaxTurns + 1 // End game
+
+		if offer.IsCompetitor {
+			s.turnMessages = append(s.turnMessages, fmt.Sprintf("⚠️ %s acquired your company for $%s!", offer.Acquirer, formatCompactMoney(offer.OfferAmount)))
+		} else {
+			s.turnMessages = append(s.turnMessages, fmt.Sprintf("🎉 Acquisition complete! Sold to %s for $%s", offer.Acquirer, formatCompactMoney(offer.OfferAmount)))
+		}
+		s.turnMessages = append(s.turnMessages, fmt.Sprintf("💰 Your payout: $%s (%.1f%% equity)", formatCompactMoney(founderPayout), founderEquity))
+
+	case "decline":
+		s.turnMessages = append(s.turnMessages, fmt.Sprintf("✓ Declined acquisition offer from %s", offer.Acquirer))
+	}
+
+	s.pendingAcquisition = nil
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) renderAcquisitionOffer() string {
+	fg := s.gameData.FounderState
+	offer := s.pendingAcquisition
+	if offer == nil {
+		return "No offer"
+	}
+
+	var b strings.Builder
+
+	// Header
+	var headerStyle lipgloss.Style
+	if offer.IsCompetitor {
+		headerStyle = lipgloss.NewStyle().
+			Foreground(styles.Black).
+			Background(styles.Red).
+			Bold(true).
+			Width(70).
+			Align(lipgloss.Center)
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("⚠️ COMPETITOR ACQUISITION OFFER!")))
+	} else {
+		headerStyle = lipgloss.NewStyle().
+			Foreground(styles.Black).
+			Background(styles.Green).
+			Bold(true).
+			Width(70).
+			Align(lipgloss.Center)
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🎉 ACQUISITION OFFER!")))
+	}
+	b.WriteString("\n\n")
+
+	// Offer details box
+	offerBox := lipgloss.NewStyle().
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 3).
+		Width(65)
+
+	var details strings.Builder
+
+	acquirerStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
+	details.WriteString(acquirerStyle.Render(fmt.Sprintf("%s wants to acquire %s!", offer.Acquirer, fg.CompanyName)))
+	details.WriteString("\n\n")
+
+	amountStyle := lipgloss.NewStyle().Foreground(styles.Green).Bold(true)
+	details.WriteString("Offer Amount: ")
+	details.WriteString(amountStyle.Render(fmt.Sprintf("$%s", formatCompactMoney(offer.OfferAmount))))
+	details.WriteString("\n")
+	details.WriteString(fmt.Sprintf("Due Diligence: %s\n", offer.DueDiligence))
+	details.WriteString(fmt.Sprintf("Terms Quality: %s\n", offer.TermsQuality))
+	details.WriteString("\n")
+
+	// Cap table payout breakdown
+	headerRow := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+	details.WriteString(headerRow.Render("── PAYOUT BREAKDOWN ──"))
+	details.WriteString("\n\n")
+
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	founderPayout := int64(float64(offer.OfferAmount) * founderEquity / 100.0)
+
+	founderLine := lipgloss.NewStyle().Foreground(styles.Green)
+	details.WriteString(founderLine.Render(fmt.Sprintf("%-30s %6.1f%%  $%s", "You (Founder)", founderEquity, formatCompactMoney(founderPayout))))
+	details.WriteString("\n")
+
+	for _, entry := range fg.CapTable {
+		payout := int64(float64(offer.OfferAmount) * entry.Equity / 100.0)
+		label := entry.Name
+		switch entry.Type {
+		case "executive":
+			label += " (Exec)"
+		case "employee":
+			label += " (Emp)"
+		case "advisor":
+			label += " (Adv)"
+		}
+		details.WriteString(fmt.Sprintf("%-30s %6.1f%%  $%s\n",
+			truncate(label, 30), entry.Equity, formatCompactMoney(payout)))
+	}
+
+	if fg.EquityPool > 0 {
+		poolStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+		details.WriteString(poolStyle.Render(fmt.Sprintf("%-30s %6.1f%%  (unallocated)", "Employee Pool", fg.EquityPool)))
+		details.WriteString("\n")
+	}
+
+	// Forced acceptance warning
+	if founderEquity < 50.0 {
+		details.WriteString("\n")
+		warnStyle := lipgloss.NewStyle().Foreground(styles.Red).Bold(true)
+		details.WriteString(warnStyle.Render("⚠️ WARNING: You don't have majority ownership!"))
+		details.WriteString("\n")
+		warnDetail := lipgloss.NewStyle().Foreground(styles.Yellow)
+		details.WriteString(warnDetail.Render(fmt.Sprintf("   Your equity: %.1f%% (need 50%%+ for control)", founderEquity)))
+		details.WriteString("\n")
+		details.WriteString(warnDetail.Render("   The board can force this acquisition."))
+	}
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(offerBox.Render(details.String())))
+	b.WriteString("\n\n")
+
+	// Menu
+	if s.acquisitionMenu != nil {
+		menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+		b.WriteString(menuContainer.Render(s.acquisitionMenu.View()))
+	}
+	b.WriteString("\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("enter select"))
+
+	return b.String()
+}
+
 func (s *FounderGameScreen) renderEndAffiliate() string {
 	var b strings.Builder
 
@@ -5221,6 +6705,211 @@ func (s *FounderGameScreen) renderEndAffiliate() string {
 
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
 	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
+}
+
+// ==================== Confirm Quit ====================
+
+func (s *FounderGameScreen) rebuildConfirmQuitMenu() {
+	items := []components.MenuItem{
+		{ID: "resume", Title: "Resume Game", Description: "Continue playing", Icon: "▶️"},
+		{ID: "quit", Title: "Quit to Main Menu", Description: "⚠️ Your progress will be lost!", Icon: "🚪"},
+	}
+	s.confirmQuitMenu = components.NewMenu("QUIT GAME?", items)
+	s.confirmQuitMenu.SetSize(55, 8)
+	s.confirmQuitMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleConfirmQuitSelection(id string) (ScreenModel, tea.Cmd) {
+	switch id {
+	case "resume":
+		s.view = FounderViewMain
+		return s, nil
+	case "quit":
+		return s, SwitchTo(ScreenMainMenu)
+	}
+	return s, nil
+}
+
+func (s *FounderGameScreen) renderConfirmQuit() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Yellow).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("⚠️ QUIT GAME?")))
+	b.WriteString("\n\n")
+
+	warnStyle := lipgloss.NewStyle().Foreground(styles.Red).Bold(true).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(warnStyle.Render("Your current game progress will be lost!"))
+	b.WriteString("\n")
+	b.WriteString(warnStyle.Render("This cannot be undone."))
+	b.WriteString("\n\n")
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Yellow).
+		Padding(1, 2)
+
+	if s.confirmQuitMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.confirmQuitMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc resume • enter select"))
+
+	return b.String()
+}
+
+// ==================== Engineer Reallocation ====================
+
+func (s *FounderGameScreen) rebuildEngineerReallocMenu() {
+	fg := s.gameData.FounderState
+	inProgress := fg.GetInProgressFeatures()
+
+	if len(inProgress) == 0 {
+		s.reallocMenu = nil
+		s.reallocFeatures = nil
+		return
+	}
+
+	items := []components.MenuItem{}
+	totalEngineers := len(fg.Team.Engineers)
+	allocatedEngineers := fg.GetAllocatedEngineers()
+	availableEngineers := totalEngineers - allocatedEngineers
+
+	for _, f := range inProgress {
+		items = append(items, components.MenuItem{
+			ID:          "realloc_add_" + f.Name,
+			Title:       fmt.Sprintf("Add engineer to %s", f.Name),
+			Description: fmt.Sprintf("Currently: %d engineers, %d%% done", f.AllocatedEngineers, f.DevelopmentProgress),
+			Icon:        "➕",
+		})
+		if f.AllocatedEngineers > 1 {
+			items = append(items, components.MenuItem{
+				ID:          "realloc_remove_" + f.Name,
+				Title:       fmt.Sprintf("Remove engineer from %s", f.Name),
+				Description: fmt.Sprintf("Currently: %d engineers, %d%% done", f.AllocatedEngineers, f.DevelopmentProgress),
+				Icon:        "➖",
+			})
+		}
+	}
+
+	items = append(items, components.MenuItem{
+		ID:       "info",
+		Title:    fmt.Sprintf("Available: %d / %d engineers", availableEngineers, totalEngineers),
+		Disabled: true,
+		Icon:     "ℹ️",
+	})
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
+
+	s.reallocMenu = components.NewMenu("ENGINEER REALLOCATION", items)
+	s.reallocMenu.SetSize(60, 15)
+	s.reallocMenu.SetHideHelp(true)
+	s.reallocFeatures = inProgress
+}
+
+func (s *FounderGameScreen) handleEngineerReallocSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewRoadmap
+		return s, nil
+	}
+
+	if strings.HasPrefix(id, "realloc_add_") {
+		featureName := strings.TrimPrefix(id, "realloc_add_")
+		// Find current allocation
+		for _, f := range fg.GetInProgressFeatures() {
+			if f.Name == featureName {
+				err := fg.ReallocateEngineers(featureName, f.AllocatedEngineers+1)
+				if err != nil {
+					s.turnMessages = []string{fmt.Sprintf("❌ %v", err)}
+				} else {
+					s.turnMessages = []string{fmt.Sprintf("✓ Added engineer to %s (now %d engineers)", featureName, f.AllocatedEngineers+1)}
+				}
+				break
+			}
+		}
+		// Rebuild and stay
+		s.rebuildEngineerReallocMenu()
+		if s.reallocMenu == nil {
+			s.view = FounderViewRoadmap
+		}
+		return s, nil
+	}
+
+	if strings.HasPrefix(id, "realloc_remove_") {
+		featureName := strings.TrimPrefix(id, "realloc_remove_")
+		for _, f := range fg.GetInProgressFeatures() {
+			if f.Name == featureName {
+				newCount := f.AllocatedEngineers - 1
+				if newCount < 1 {
+					newCount = 1
+				}
+				err := fg.ReallocateEngineers(featureName, newCount)
+				if err != nil {
+					s.turnMessages = []string{fmt.Sprintf("❌ %v", err)}
+				} else {
+					s.turnMessages = []string{fmt.Sprintf("✓ Removed engineer from %s (now %d engineers)", featureName, newCount)}
+				}
+				break
+			}
+		}
+		s.rebuildEngineerReallocMenu()
+		if s.reallocMenu == nil {
+			s.view = FounderViewRoadmap
+		}
+		return s, nil
+	}
+
+	return s, nil
+}
+
+func (s *FounderGameScreen) renderEngineerRealloc() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Cyan).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🔧 ENGINEER REALLOCATION")))
+	b.WriteString("\n\n")
+
+	if len(s.turnMessages) > 0 {
+		msgStyle := lipgloss.NewStyle().Foreground(styles.Green).Width(s.width).Align(lipgloss.Center)
+		for _, msg := range s.turnMessages {
+			b.WriteString(msgStyle.Render(msg))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+		s.turnMessages = nil
+	}
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	menuBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Cyan).
+		Padding(1, 2)
+
+	if s.reallocMenu != nil {
+		b.WriteString(menuContainer.Render(menuBox.Render(s.reallocMenu.View())))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("enter select • esc back"))
 
 	return b.String()
 }

@@ -26,6 +26,7 @@ const (
 	ScreenVCResults
 	ScreenFounderSetup
 	ScreenFounderGame
+	ScreenFounderResults
 	ScreenLeaderboard
 	ScreenAchievements
 	ScreenUpgrades
@@ -124,9 +125,10 @@ type App struct {
 	vcInvest     ScreenModel
 	vcTurn       ScreenModel
 	vcResults    ScreenModel
-	founderSetup ScreenModel
-	founderGame  ScreenModel
-	leaderboard  ScreenModel
+	founderSetup   ScreenModel
+	founderGame    ScreenModel
+	founderResults ScreenModel
+	leaderboard    ScreenModel
 	achievements ScreenModel
 	upgrades     ScreenModel
 	stats        ScreenModel
@@ -179,7 +181,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Global quit handler
-		if key.Matches(msg, appKeys.Quit) && a.currentScreen != ScreenVCGame && a.currentScreen != ScreenFounderGame {
+		if key.Matches(msg, appKeys.Quit) && a.currentScreen != ScreenVCGame && a.currentScreen != ScreenFounderGame && a.currentScreen != ScreenFounderResults {
 			a.quitting = true
 			return a, tea.Quit
 		}
@@ -261,6 +263,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ScreenFounderGame:
 		if a.founderGame != nil {
 			a.founderGame, cmd = a.founderGame.Update(msg)
+			cmds = append(cmds, cmd)
+		}
+	case ScreenFounderResults:
+		if a.founderResults != nil {
+			a.founderResults, cmd = a.founderResults.Update(msg)
 			cmds = append(cmds, cmd)
 		}
 	case ScreenLeaderboard:
@@ -352,6 +359,10 @@ func (a *App) View() string {
 		if a.founderGame != nil {
 			content = a.founderGame.View()
 		}
+	case ScreenFounderResults:
+		if a.founderResults != nil {
+			content = a.founderResults.View()
+		}
 	case ScreenLeaderboard:
 		if a.leaderboard != nil {
 			content = a.leaderboard.View()
@@ -436,6 +447,10 @@ func (a *App) switchScreen(screen Screen, data interface{}) (tea.Model, tea.Cmd)
 	case ScreenFounderGame:
 		a.founderGame = NewFounderGameScreen(a.width, a.height, a.gameData)
 		cmd = a.founderGame.Init()
+
+	case ScreenFounderResults:
+		a.founderResults = NewFounderResultsScreen(a.width, a.height, a.gameData)
+		cmd = a.founderResults.Init()
 
 	case ScreenLeaderboard:
 		a.leaderboard = NewLeaderboardScreen(a.width, a.height)

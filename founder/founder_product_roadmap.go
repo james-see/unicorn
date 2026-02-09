@@ -9,10 +9,10 @@ import (
 // InitializeProductRoadmap creates the roadmap with available features
 func (fs *FounderState) InitializeProductRoadmap() {
 	fs.ProductRoadmap = &ProductRoadmap{
-		Features:          []ProductFeature{},
-		AvailableFeatures: getAvailableFeatures(),
-		CompletedCount:    0,
-		InProgressCount:   0,
+		Features:           []ProductFeature{},
+		AvailableFeatures:  getAvailableFeatures(),
+		CompletedCount:     0,
+		InProgressCount:    0,
 		CompetitorLaunches: []CompetitorFeatureLaunch{},
 	}
 }
@@ -245,7 +245,7 @@ func (fs *FounderState) ProcessRoadmapProgress() []string {
 
 	for i := range fs.ProductRoadmap.Features {
 		feature := &fs.ProductRoadmap.Features[i]
-		
+
 		if feature.Status != "in_progress" {
 			continue
 		}
@@ -266,15 +266,15 @@ func (fs *FounderState) ProcessRoadmapProgress() []string {
 				// Check if competitor launched this feature before player completed it
 				// Map feature names to competitor feature names (normalize for comparison)
 				featureMap := map[string][]string{
-					"REST API": {"API", "REST API", "API Integration"},
-					"Mobile App": {"Mobile App", "Mobile", "iOS App", "Android App"},
-					"Enterprise SSO": {"SSO", "Single Sign-On", "Enterprise SSO"},
+					"REST API":           {"API", "REST API", "API Integration"},
+					"Mobile App":         {"Mobile App", "Mobile", "iOS App", "Android App"},
+					"Enterprise SSO":     {"SSO", "Single Sign-On", "Enterprise SSO"},
 					"Advanced Analytics": {"Analytics", "Advanced Analytics", "Reporting"},
 					"AI/ML Capabilities": {"AI", "ML", "Machine Learning", "Artificial Intelligence"},
-					"Integrations Hub": {"Integrations", "Integration Hub", "API Integration"},
-					"Security Suite": {"Security", "Security Suite", "Enterprise Security"},
+					"Integrations Hub":   {"Integrations", "Integration Hub", "API Integration"},
+					"Security Suite":     {"Security", "Security Suite", "Enterprise Security"},
 				}
-				
+
 				// Check if any competitor launched a similar feature before completion
 				competitorLaunchedFirst := false
 				for _, launch := range fs.ProductRoadmap.CompetitorLaunches {
@@ -322,7 +322,7 @@ func (fs *FounderState) ProcessRoadmapProgress() []string {
 	if rand.Float64() < 0.08 { // 8% chance per month
 		competitorFeatures := []string{"API", "Mobile App", "SSO", "Analytics", "Integrations", "Security"}
 		feature := competitorFeatures[rand.Intn(len(competitorFeatures))]
-		
+
 		compName := "A competitor"
 		if len(fs.Competitors) > 0 {
 			activeComps := []Competitor{}
@@ -341,9 +341,9 @@ func (fs *FounderState) ProcessRoadmapProgress() []string {
 			fs.InitializeProductRoadmap()
 		}
 		launch := CompetitorFeatureLaunch{
-			FeatureName:   feature,
+			FeatureName:    feature,
 			CompetitorName: compName,
-			MonthLaunched: fs.Turn,
+			MonthLaunched:  fs.Turn,
 		}
 		fs.ProductRoadmap.CompetitorLaunches = append(fs.ProductRoadmap.CompetitorLaunches, launch)
 
@@ -353,6 +353,100 @@ func (fs *FounderState) ProcessRoadmapProgress() []string {
 	return messages
 }
 
+// getAdvancedFeatures returns advanced features available after all core features are done
+func getAdvancedFeatures() []ProductFeature {
+	return []ProductFeature{
+		{
+			Name:              "AI-Powered Automation",
+			Category:          "AI",
+			EngineerMonths:    12,
+			Cost:              250000,
+			ChurnReduction:    0.05,
+			CloseRateIncrease: 0.30,
+			DealSizeIncrease:  0.40,
+			MarketAppealScore: 100,
+			Status:            "available",
+		},
+		{
+			Name:              "Real-time Collaboration",
+			Category:          "Product",
+			EngineerMonths:    8,
+			Cost:              150000,
+			ChurnReduction:    0.04,
+			CloseRateIncrease: 0.20,
+			DealSizeIncrease:  0.25,
+			MarketAppealScore: 92,
+			Status:            "available",
+		},
+		{
+			Name:              "Custom Reporting Engine",
+			Category:          "Analytics",
+			EngineerMonths:    6,
+			Cost:              100000,
+			ChurnReduction:    0.03,
+			CloseRateIncrease: 0.15,
+			DealSizeIncrease:  0.20,
+			MarketAppealScore: 85,
+			Status:            "available",
+		},
+		{
+			Name:              "Multi-tenant Architecture",
+			Category:          "Infrastructure",
+			EngineerMonths:    10,
+			Cost:              200000,
+			ChurnReduction:    0.04,
+			CloseRateIncrease: 0.25,
+			DealSizeIncrease:  0.35,
+			MarketAppealScore: 88,
+			Status:            "available",
+		},
+		{
+			Name:              "Global CDN & Edge Computing",
+			Category:          "Infrastructure",
+			EngineerMonths:    7,
+			Cost:              130000,
+			ChurnReduction:    0.03,
+			CloseRateIncrease: 0.10,
+			DealSizeIncrease:  0.15,
+			MarketAppealScore: 78,
+			Status:            "available",
+		},
+		{
+			Name:              "Advanced Compliance (SOC2/HIPAA)",
+			Category:          "Security",
+			EngineerMonths:    5,
+			Cost:              80000,
+			ChurnReduction:    0.04,
+			CloseRateIncrease: 0.22,
+			DealSizeIncrease:  0.30,
+			MarketAppealScore: 95,
+			Status:            "available",
+		},
+		{
+			Name:              "Predictive Analytics",
+			Category:          "AI",
+			EngineerMonths:    9,
+			Cost:              180000,
+			ChurnReduction:    0.03,
+			CloseRateIncrease: 0.18,
+			DealSizeIncrease:  0.28,
+			MarketAppealScore: 90,
+			Status:            "available",
+		},
+		{
+			Name:              "No-Code Builder",
+			Category:          "Product",
+			EngineerMonths:    11,
+			Cost:              220000,
+			ChurnReduction:    0.05,
+			CloseRateIncrease: 0.28,
+			DealSizeIncrease:  0.35,
+			MarketAppealScore: 96,
+			Status:            "available",
+		},
+	}
+}
+
 // GetAvailableFeaturesToStart returns features that can be started
 func (fs *FounderState) GetAvailableFeaturesToStart() []ProductFeature {
 	if fs.ProductRoadmap == nil {
@@ -360,7 +454,7 @@ func (fs *FounderState) GetAvailableFeaturesToStart() []ProductFeature {
 	}
 
 	available := []ProductFeature{}
-	
+
 	// Create a map of features already started or completed
 	started := make(map[string]bool)
 	for _, f := range fs.ProductRoadmap.Features {
@@ -369,10 +463,25 @@ func (fs *FounderState) GetAvailableFeaturesToStart() []ProductFeature {
 		}
 	}
 
-	// Return features not yet started
+	// Return core features not yet started
 	for _, f := range fs.ProductRoadmap.AvailableFeatures {
 		if !started[f.Name] {
 			available = append(available, f)
+		}
+	}
+
+	// If all core features are done (started or completed), unlock advanced features
+	coreRemaining := 0
+	for _, f := range fs.ProductRoadmap.AvailableFeatures {
+		if !started[f.Name] {
+			coreRemaining++
+		}
+	}
+	if coreRemaining == 0 {
+		for _, f := range getAdvancedFeatures() {
+			if !started[f.Name] {
+				available = append(available, f)
+			}
 		}
 	}
 
@@ -449,4 +558,3 @@ func (fs *FounderState) CancelFeature(featureName string) error {
 
 	return nil
 }
-

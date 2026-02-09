@@ -6,13 +6,13 @@ import "math"
 func (fs *FounderState) InitializeTechnicalDebt() {
 	if fs.TechnicalDebt == nil {
 		fs.TechnicalDebt = &TechnicalDebt{
-			CurrentLevel:       20, // Start at 20/100
-			VelocityImpact:     1.0,
-			BugFrequency:       0.02,
-			SecurityRisks:      0,
-			ScalingProblems:    false,
-			EngineerMorale:     0.80,
-			RefactoringCosts:   0,
+			CurrentLevel:        20, // Start at 20/100
+			VelocityImpact:      1.0,
+			BugFrequency:        0.02,
+			SecurityRisks:       0,
+			ScalingProblems:     false,
+			EngineerMorale:      0.80,
+			RefactoringCosts:    0,
 			MonthsSinceRefactor: 0,
 		}
 	}
@@ -26,9 +26,40 @@ func (fs *FounderState) AccumulateTechnicalDebt() []string {
 		fs.InitializeTechnicalDebt()
 	}
 
+	// Check if all features are done and product is mature - greatly reduce debt accumulation
+	allFeaturesDone := false
+	if fs.ProductRoadmap != nil {
+		inProgressCount := 0
+		for _, f := range fs.ProductRoadmap.Features {
+			if f.Status == "in_progress" {
+				inProgressCount++
+			}
+		}
+		allFeaturesDone = inProgressCount == 0 && fs.ProductRoadmap.CompletedCount > 0
+	}
+
+	// If product is fully mature and no active development, minimal debt
+	if allFeaturesDone && fs.ProductMaturity >= 0.95 {
+		// Maintenance mode: debt slowly decreases or stays flat
+		if fs.TechnicalDebt.MonthsSinceRefactor > 12 {
+			// Even in maintenance, neglecting refactoring too long adds a tiny amount
+			fs.TechnicalDebt.CurrentLevel += 1
+			if fs.TechnicalDebt.CurrentLevel > 100 {
+				fs.TechnicalDebt.CurrentLevel = 100
+			}
+		} else {
+			// Natural decay in maintenance mode
+			if fs.TechnicalDebt.CurrentLevel > 0 {
+				fs.TechnicalDebt.CurrentLevel -= 1
+			}
+		}
+		fs.TechnicalDebt.MonthsSinceRefactor++
+		return messages
+	}
+
 	// Debt accumulates when shipping fast without senior engineers
 	debtIncrease := 2
-	
+
 	// Check for CTO in Executives
 	hasCTO := false
 	for _, exec := range fs.Team.Executives {
@@ -86,14 +117,14 @@ func (fs *FounderState) RefactorTechDebt(cost int64, engineersAllocated int) err
 
 	fs.Cash -= cost
 	fs.TechnicalDebt.RefactoringCosts = cost
-	
+
 	// Reduce debt based on investment
 	debtReduction := 10 + (engineersAllocated * 5)
 	fs.TechnicalDebt.CurrentLevel -= debtReduction
 	if fs.TechnicalDebt.CurrentLevel < 10 {
 		fs.TechnicalDebt.CurrentLevel = 10 // Minimum 10 debt
 	}
-	
+
 	fs.TechnicalDebt.MonthsSinceRefactor = 0
 	fs.TechnicalDebt.VelocityImpact = 1.0
 	fs.TechnicalDebt.BugFrequency = 0.02
@@ -101,4 +132,3 @@ func (fs *FounderState) RefactorTechDebt(cost int64, engineersAllocated int) err
 
 	return nil
 }
-

@@ -6,11 +6,9 @@ import (
 	"math/rand"
 )
 
-
 func (fs *FounderState) IsGameOver() bool {
 	return fs.Cash <= 0 || fs.Turn > fs.MaxTurns || fs.HasExited
 }
-
 
 func (fs *FounderState) GetAvailableExits() []ExitOption {
 	var exits []ExitOption
@@ -138,7 +136,6 @@ func (fs *FounderState) GetAvailableExits() []ExitOption {
 	return exits
 }
 
-
 func (fs *FounderState) ExecuteExit(exitType string) {
 	fs.HasExited = true
 	fs.ExitType = exitType
@@ -152,7 +149,6 @@ func (fs *FounderState) ExecuteExit(exitType string) {
 		}
 	}
 }
-
 
 func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founderEquity float64) {
 	founderEquity = 100.0 - fs.EquityPool - fs.EquityGivenAway
@@ -186,7 +182,6 @@ func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founde
 
 	return outcome, valuation, founderEquity
 }
-
 
 func (fs *FounderState) CheckForAcquisition() *AcquisitionOffer {
 	// Only after Series A and if metrics are good
@@ -275,7 +270,7 @@ func (fs *FounderState) CheckForCompetitorAcquisition() *AcquisitionOffer {
 		if comp.Name == "Hooli" || comp.Name == "Hooli Search" || comp.Name == "Gavin Belson's New Thing" {
 			acquisitionChance *= 1.5 // Hooli is more likely to acquire
 		}
-		
+
 		// Nucleus is competitive
 		if comp.Name == "Nucleus" {
 			acquisitionChance *= 1.3
@@ -350,11 +345,9 @@ func (fs *FounderState) CheckForCompetitorAcquisition() *AcquisitionOffer {
 	return nil
 }
 
-
 func (fs *FounderState) NeedsLowCashWarning() bool {
 	return fs.Cash <= 200000 && fs.CashRunwayMonths < 6
 }
-
 
 func (fs *FounderState) GenerateMonthlyHighlights() []MonthlyHighlight {
 	var highlights []MonthlyHighlight
@@ -491,7 +484,6 @@ func (fs *FounderState) GenerateMonthlyHighlights() []MonthlyHighlight {
 	return result
 }
 
-
 func (fs *FounderState) GetBoardGuidance() []string {
 	var guidance []string
 
@@ -565,7 +557,7 @@ func (fs *FounderState) GetBoardGuidance() []string {
 			// 30% chance chairman attends event on your behalf
 			opportunityTypes := []string{"partnership", "customer", "fundraising"}
 			opportunityType := opportunityTypes[rand.Intn(len(opportunityTypes))]
-			
+
 			switch opportunityType {
 			case "partnership":
 				guidance = append(guidance, fmt.Sprintf("👔 %s (Chairman) represented company at industry conference - opened partnership discussions",
@@ -590,12 +582,13 @@ func (fs *FounderState) GetBoardGuidance() []string {
 		if rand.Float64() < 0.3 {
 			switch member.Expertise {
 			case "sales":
-				// Sales expertise helps with customer acquisition
+				// Sales expertise helps with customer acquisition - apply the boost
 				boost := int64(float64(fs.MRR) * (0.02 + rand.Float64()*0.03)) // 2-5% boost
 				if boost > 0 {
-					guidance = append(guidance, fmt.Sprintf("📊 %s (Sales Advisor) introduced you to potential customers (+$%s MRR opportunity)",
+					fs.MRR += boost
+					fs.DirectMRR += boost
+					guidance = append(guidance, fmt.Sprintf("📊 %s (Sales Advisor) introduced you to key prospects (+$%s MRR)",
 						member.Name, formatCurrency(boost)))
-					// Could apply boost here or make it an opportunity
 				}
 			case "product":
 				// Product expertise improves product maturity
@@ -606,9 +599,17 @@ func (fs *FounderState) GetBoardGuidance() []string {
 						member.Name, improvement*100))
 				}
 			case "fundraising":
-				// Fundraising expertise improves future round terms
+				// Fundraising expertise improves future round terms and reduces board pressure
 				if len(fs.FundingRounds) < 3 {
 					guidance = append(guidance, fmt.Sprintf("💰 %s (Fundraising Advisor) is warming up investors for your next round",
+						member.Name))
+				}
+				if fs.BoardPressure > 5 {
+					fs.BoardPressure -= 3
+					if fs.BoardPressure < 0 {
+						fs.BoardPressure = 0
+					}
+					guidance = append(guidance, fmt.Sprintf("💰 %s (Fundraising Advisor) eased investor concerns (board pressure -3)",
 						member.Name))
 				}
 			case "operations":
@@ -621,7 +622,7 @@ func (fs *FounderState) GetBoardGuidance() []string {
 				}
 			case "strategy":
 				// Strategy expertise helps avoid bad decisions
-				if fs.CustomerChurnRate > 0.15 {
+				if fs.CustomerChurnRate > 0.10 {
 					reduction := 0.01 + rand.Float64()*0.02 // 1-3% churn reduction
 					fs.CustomerChurnRate = math.Max(0.01, fs.CustomerChurnRate-reduction)
 					guidance = append(guidance, fmt.Sprintf("🎓 %s (Strategy Advisor) helped reduce churn (%.0f%% improvement)",
@@ -633,7 +634,6 @@ func (fs *FounderState) GetBoardGuidance() []string {
 
 	return guidance
 }
-
 
 func (fs *FounderState) UpdateBoardSentiment() {
 	if len(fs.FundingRounds) == 0 {
@@ -692,7 +692,6 @@ func (fs *FounderState) UpdateBoardSentiment() {
 		fs.BoardPressure = 95
 	}
 }
-
 
 func (fs *FounderState) GenerateStrategicOpportunity() *StrategicOpportunity {
 	// Don't generate if one already pending
@@ -790,12 +789,10 @@ func (fs *FounderState) GenerateStrategicOpportunity() *StrategicOpportunity {
 	return &opp
 }
 
-
 // ProcessMonth runs all monthly calculations
 func (fs *FounderState) ProcessMonth() []string {
 	return fs.ProcessMonthWithBaseline(fs.MRR)
 }
-
 
 func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 	var messages []string
@@ -927,7 +924,7 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 			customer := activeDirectCustomers[i]
 			fs.churnCustomer(customer.ID)
 			fs.DirectMRR -= customer.DealSize
-			
+
 			// Track if customer was lost during roadmap execution
 			if hasInProgressFeatures {
 				fs.CustomersLostDuringRoadmap++
@@ -939,7 +936,7 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 			customer := activeAffiliateCustomers[i]
 			fs.churnCustomer(customer.ID)
 			fs.AffiliateMRR -= customer.DealSize
-			
+
 			// Track if customer was lost during roadmap execution
 			if hasInProgressFeatures {
 				fs.CustomersLostDuringRoadmap++
@@ -1025,7 +1022,7 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 
 	// 7. Process advanced features (affiliates, partnerships, etc.)
 	// These will add more MRR, so we'll compare baseline to final MRR after all processing
-	
+
 	// Process product roadmap feature development
 	roadmapMsgs := fs.ProcessRoadmapProgress()
 	messages = append(messages, roadmapMsgs...)
@@ -1037,7 +1034,7 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 	// Process pricing experiments and competitor pressure
 	pricingMsgs := fs.ProcessPricingExperiment()
 	messages = append(messages, pricingMsgs...)
-	
+
 	competitorPricingMsgs := fs.CheckCompetitorPricing()
 	messages = append(messages, competitorPricingMsgs...)
 
@@ -1045,7 +1042,7 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 	if fs.MRR >= 50000 || fs.Customers >= 20 {
 		newDealsMsgs := fs.GenerateNewDeals()
 		messages = append(messages, newDealsMsgs...)
-		
+
 		pipelineMsgs := fs.ProcessPipeline()
 		messages = append(messages, pipelineMsgs...)
 	}

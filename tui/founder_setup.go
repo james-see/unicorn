@@ -8,10 +8,12 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jamesacampbell/unicorn/database"
 	"github.com/jamesacampbell/unicorn/founder"
 	"github.com/jamesacampbell/unicorn/tui/components"
 	"github.com/jamesacampbell/unicorn/tui/keys"
 	"github.com/jamesacampbell/unicorn/tui/styles"
+	"github.com/jamesacampbell/unicorn/upgrades"
 )
 
 // FounderSetupStep represents steps in founder setup
@@ -21,6 +23,7 @@ const (
 	FounderStepName FounderSetupStep = iota
 	FounderStepCompany
 	FounderStepCategory
+	FounderStepDifficulty
 	FounderStepReady
 )
 
@@ -32,14 +35,21 @@ type FounderSetupScreen struct {
 	step     FounderSetupStep
 
 	// Inputs
-	nameInput    textinput.Model
-	companyInput textinput.Model
-	categoryMenu *components.Menu
+	nameInput      textinput.Model
+	companyInput   textinput.Model
+	categoryMenu   *components.Menu
+	difficultyMenu *components.Menu
 
 	// Data
 	playerName  string
 	companyName string
 	category    string
+	difficulty  string
+
+	// Player state
+	playerLevel int
+	welcomeBack bool
+	playerStats *database.PlayerStats
 }
 
 // NewFounderSetupScreen creates a new founder setup screen
@@ -72,14 +82,57 @@ func NewFounderSetupScreen(width, height int, gameData *GameData) *FounderSetupS
 	categoryMenu.SetSize(50, 15)
 	categoryMenu.SetHideHelp(true)
 
+	// Get player level for difficulty unlocks
+	playerLevel := 1
+	profile, err := database.GetPlayerProfile(gameData.PlayerName)
+	if err == nil && profile != nil {
+		playerLevel = profile.Level
+	}
+
+	// Difficulty menu
+	difficultyItems := []components.MenuItem{
+		{
+			ID:          "easy",
+			Title:       "Easy",
+			Description: "More cash, slower burn, friendlier market",
+			Icon:        "🟢",
+		},
+		{
+			ID:          "medium",
+			Title:       "Medium",
+			Description: "Balanced challenge, realistic conditions",
+			Icon:        "🟡",
+		},
+		{
+			ID:          "hard",
+			Title:       "Hard",
+			Description: "Less cash, aggressive competition, higher churn",
+			Icon:        "🔴",
+			Disabled:    playerLevel < 5,
+		},
+		{
+			ID:          "expert",
+			Title:       "Expert",
+			Description: "Minimal runway, brutal market, investor pressure",
+			Icon:        "💀",
+			Disabled:    playerLevel < 10,
+		},
+	}
+	difficultyMenu := components.NewMenu("SELECT DIFFICULTY", difficultyItems)
+	difficultyMenu.SetSize(60, 15)
+	difficultyMenu.SetHideHelp(true)
+
 	return &FounderSetupScreen{
-		width:        width,
-		height:       height,
-		gameData:     gameData,
-		step:         FounderStepName,
-		nameInput:    nameInput,
-		companyInput: companyInput,
-		categoryMenu: categoryMenu,
+		width:          width,
+		height:         height,
+		gameData:       gameData,
+		step:           FounderStepName,
+		nameInput:      nameInput,
+		companyInput:   companyInput,
+		categoryMenu:   categoryMenu,
+		difficultyMenu: difficultyMenu,
+		playerLevel:    playerLevel,
+		difficulty:     "easy",
 	}
 }
 
@@ -107,6 +160,28 @@ func (s *FounderSetupScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				if name != "" {
 					s.playerName = name
 					s.gameData.PlayerName = name
+
+					// Check for returning player
+					stats, err := database.GetPlayerStats(name)
+					if err == nil && stats != nil && stats.TotalGames > 0 {
+						s.welcomeBack = true
+						s.playerStats = stats
+					}
+
+					// Refresh player level
+					profile, err := database.GetPlayerProfile(name)
+					if err == nil && profile != nil {
+						s.playerLevel = profile.Level
+						// Refresh difficulty menu locks
+						s.refreshDifficultyMenu()
+					}
+
+					// Load player upgrades from DB
+					playerUpgrades, err := database.GetPlayerUpgrades(name)
+					if err == nil {
+						s.gameData.PlayerUpgrades = playerUpgrades
+					}
+
 					s.step = FounderStepCompany
 					s.companyInput.Focus()
 					return s, textinput.Blink
@@ -125,8 +200,31 @@ func (s *FounderSetupScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		}
 
 	case components.MenuSelectedMsg:
-		if s.step == FounderStepCategory {
+		switch s.step {
+		case FounderStepCategory:
 			s.category = msg.ID
+			s.step = FounderStepDifficulty
+			return s, nil
+
+		case FounderStepDifficulty:
+			switch msg.ID {
+			case "easy":
+				s.difficulty = "easy"
+			case "medium":
+				s.difficulty = "medium"
+			case "hard":
+				if s.playerLevel >= 5 {
+					s.difficulty = "hard"
+				} else {
+					return s, nil
+				}
+			case "expert":
+				if s.playerLevel >= 10 {
+					s.difficulty = "expert"
+				} else {
+					return s, nil
+				}
+			}
 			return s, s.startGame()
 		}
 	}
@@ -140,9 +238,45 @@ func (s *FounderSetupScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		s.companyInput, cmd = s.companyInput.Update(msg)
 	case FounderStepCategory:
 		s.categoryMenu, cmd = s.categoryMenu.Update(msg)
+	case FounderStepDifficulty:
+		s.difficultyMenu, cmd = s.difficultyMenu.Update(msg)
 	}
 
 	return s, cmd
+}
+
+func (s *FounderSetupScreen) refreshDifficultyMenu() {
+	difficultyItems := []components.MenuItem{
+		{
+			ID:          "easy",
+			Title:       "Easy",
+			Description: "More cash, slower burn, friendlier market",
+			Icon:        "🟢",
+		},
+		{
+			ID:          "medium",
+			Title:       "Medium",
+			Description: "Balanced challenge, realistic conditions",
+			Icon:        "🟡",
+		},
+		{
+			ID:          "hard",
+			Title:       "Hard",
+			Description: "Less cash, aggressive competition, higher churn",
+			Icon:        "🔴",
+			Disabled:    s.playerLevel < 5,
+		},
+		{
+			ID:          "expert",
+			Title:       "Expert",
+			Description: "Minimal runway, brutal market, investor pressure",
+			Icon:        "💀",
+			Disabled:    s.playerLevel < 10,
+		},
+	}
+	s.difficultyMenu = components.NewMenu("SELECT DIFFICULTY", difficultyItems)
+	s.difficultyMenu.SetSize(60, 15)
+	s.difficultyMenu.SetHideHelp(true)
 }
 
 func (s *FounderSetupScreen) startGame() tea.Cmd {
@@ -165,6 +299,10 @@ func (s *FounderSetupScreen) startGame() tea.Cmd {
 				BaseCAC:          1000,
 				TargetMarketSize: 10000,
 			}
+
+			// Apply difficulty modifiers
+			s.applyDifficultyToTemplate(&template)
+
 			s.gameData.FounderState = founder.NewFounderGame(s.playerName, template, s.gameData.PlayerUpgrades)
 		} else {
 			// Find template matching category, or use first one
@@ -172,7 +310,7 @@ func (s *FounderSetupScreen) startGame() tea.Cmd {
 			for _, t := range templates {
 				if t.Type == s.category {
 					selectedTemplate = t
-					selectedTemplate.Name = s.companyName // Use custom company name
+					selectedTemplate.Name = s.companyName
 					break
 				}
 			}
@@ -180,10 +318,35 @@ func (s *FounderSetupScreen) startGame() tea.Cmd {
 				selectedTemplate = templates[0]
 				selectedTemplate.Name = s.companyName
 			}
+
+			// Apply difficulty modifiers
+			s.applyDifficultyToTemplate(&selectedTemplate)
+
 			s.gameData.FounderState = founder.NewFounderGame(s.playerName, selectedTemplate, s.gameData.PlayerUpgrades)
 		}
 
 		return SwitchScreenMsg{Screen: ScreenFounderGame}
+	}
+}
+
+// applyDifficultyToTemplate modifies the template based on difficulty
+func (s *FounderSetupScreen) applyDifficultyToTemplate(t *founder.StartupTemplate) {
+	switch s.difficulty {
+	case "easy":
+		t.InitialCash = int64(float64(t.InitialCash) * 1.5)
+		t.BaseChurnRate = t.BaseChurnRate * 0.7
+		t.BaseCAC = int64(float64(t.BaseCAC) * 0.8)
+	case "medium":
+		// Default - no changes
+	case "hard":
+		t.InitialCash = int64(float64(t.InitialCash) * 0.7)
+		t.BaseChurnRate = t.BaseChurnRate * 1.3
+		t.BaseCAC = int64(float64(t.BaseCAC) * 1.3)
+	case "expert":
+		t.InitialCash = int64(float64(t.InitialCash) * 0.5)
+		t.BaseChurnRate = t.BaseChurnRate * 1.6
+		t.BaseCAC = int64(float64(t.BaseCAC) * 1.6)
+		t.MonthlyBurn = int64(float64(t.MonthlyBurn) * 1.3)
 	}
 }
 
@@ -204,6 +367,53 @@ func (s *FounderSetupScreen) View() string {
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(header))
 	b.WriteString("\n\n")
 
+	// Welcome back message
+	if s.welcomeBack && s.playerStats != nil && s.step == FounderStepCompany {
+		welcomeBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Green).
+			Padding(0, 2).
+			Width(55)
+
+		welcomeStyle := lipgloss.NewStyle().Foreground(styles.Green).Bold(true)
+		var welcome strings.Builder
+		welcome.WriteString(welcomeStyle.Render(fmt.Sprintf("Welcome back, %s!", s.playerName)))
+		welcome.WriteString("\n")
+		welcome.WriteString(fmt.Sprintf("Games Played: %d | Best Net Worth: $%s | Win Rate: %.0f%%",
+			s.playerStats.TotalGames,
+			formatCompactMoney(s.playerStats.BestNetWorth),
+			s.playerStats.WinRate))
+
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(welcomeBox.Render(welcome.String())))
+		b.WriteString("\n\n")
+	}
+
+	// Active upgrades display
+	if s.step == FounderStepDifficulty && len(s.gameData.PlayerUpgrades) > 0 {
+		founderUpgrades := upgrades.FilterUpgradeIDsForGameMode(s.gameData.PlayerUpgrades, "founder")
+		if len(founderUpgrades) > 0 {
+			upgradeBox := lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(styles.Green).
+				Padding(0, 2).
+				Width(55)
+
+			var upgradeContent strings.Builder
+			upgradeStyle := lipgloss.NewStyle().Foreground(styles.Green).Bold(true)
+			upgradeContent.WriteString(upgradeStyle.Render("✨ Active Upgrades:"))
+			upgradeContent.WriteString("\n")
+			for _, upgradeID := range founderUpgrades {
+				if upgrade, exists := upgrades.AllUpgrades[upgradeID]; exists {
+					upgradeContent.WriteString(fmt.Sprintf("  %s %s", upgrade.Icon, upgrade.Name))
+					upgradeContent.WriteString("\n")
+				}
+			}
+
+			b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(upgradeBox.Render(upgradeContent.String())))
+			b.WriteString("\n")
+		}
+	}
+
 	// Progress
 	b.WriteString(s.renderProgress())
 	b.WriteString("\n\n")
@@ -223,6 +433,8 @@ func (s *FounderSetupScreen) View() string {
 		content = s.renderCompanyStep()
 	case FounderStepCategory:
 		content = s.categoryMenu.View()
+	case FounderStepDifficulty:
+		content = s.renderDifficultyStep()
 	}
 
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(contentBox.Render(content)))
@@ -236,7 +448,7 @@ func (s *FounderSetupScreen) View() string {
 }
 
 func (s *FounderSetupScreen) renderProgress() string {
-	steps := []string{"Name", "Company", "Category"}
+	steps := []string{"Name", "Company", "Category", "Difficulty"}
 	var parts []string
 
 	for i, step := range steps {
@@ -288,6 +500,28 @@ func (s *FounderSetupScreen) renderCompanyStep() string {
 
 	hintStyle := lipgloss.NewStyle().Foreground(styles.Gray).Italic(true)
 	b.WriteString(hintStyle.Render(fmt.Sprintf("Founded by %s", s.playerName)))
+
+	return b.String()
+}
+
+func (s *FounderSetupScreen) renderDifficultyStep() string {
+	var b strings.Builder
+
+	// Show level info
+	if s.playerLevel > 1 {
+		levelStyle := lipgloss.NewStyle().Foreground(styles.Cyan)
+		b.WriteString(levelStyle.Render(fmt.Sprintf("Your Level: %d", s.playerLevel)))
+		if s.playerLevel < 5 {
+			lockStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+			b.WriteString(lockStyle.Render(" (Hard unlocks at Lvl 5, Expert at Lvl 10)"))
+		} else if s.playerLevel < 10 {
+			lockStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+			b.WriteString(lockStyle.Render(" (Expert unlocks at Lvl 10)"))
+		}
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString(s.difficultyMenu.View())
 
 	return b.String()
 }
