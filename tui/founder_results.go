@@ -152,13 +152,19 @@ func (s *FounderResultsScreen) Init() tea.Cmd {
 		successfulExits = 1
 	}
 
+	// Calculate actual months played (Turn gets inflated on exit)
+	actualTurns := fs.Turn
+	if fs.HasExited && fs.ExitMonth > 0 {
+		actualTurns = fs.ExitMonth
+	}
+
 	// Save score to database
 	score := database.GameScore{
 		PlayerName:      fs.FounderName,
 		FinalNetWorth:   s.founderPayout,
 		ROI:             s.roi,
 		SuccessfulExits: successfulExits,
-		TurnsPlayed:     fs.Turn,
+		TurnsPlayed:     actualTurns,
 		Difficulty:      "Founder",
 		PlayedAt:        time.Now(),
 	}
@@ -319,13 +325,19 @@ func (s *FounderResultsScreen) checkAchievements() {
 	playerStats, _ := database.GetPlayerStats(fs.FounderName)
 	winStreak, _ := database.GetWinStreak(fs.FounderName)
 
+	// Calculate actual turns for achievements
+	achievementTurns := fs.Turn
+	if fs.HasExited && fs.ExitMonth > 0 {
+		achievementTurns = fs.ExitMonth
+	}
+
 	// Build game stats for achievement checking
 	gameStats := achievements.GameStats{
 		GameMode:                    "founder",
 		FinalNetWorth:               s.founderPayout,
 		ROI:                         s.roi,
 		SuccessfulExits:             successfulExits,
-		TurnsPlayed:                 fs.Turn,
+		TurnsPlayed:                 achievementTurns,
 		Difficulty:                  "Founder",
 		FinalMRR:                    fs.MRR,
 		FinalValuation:              s.valuation,
@@ -536,7 +548,11 @@ func (s *FounderResultsScreen) renderResults() string {
 	results.WriteString("\n")
 	results.WriteString(playerStyle.Render(fmt.Sprintf("Company: %s (%s)", fs.CompanyName, fs.Category)))
 	results.WriteString("\n")
-	results.WriteString(fmt.Sprintf("Months Played: %d", fs.Turn))
+	monthsPlayed := fs.Turn
+	if fs.HasExited && fs.ExitMonth > 0 {
+		monthsPlayed = fs.ExitMonth
+	}
+	results.WriteString(fmt.Sprintf("Months Played: %d", monthsPlayed))
 	results.WriteString("\n\n")
 
 	// Outcome
@@ -846,7 +862,11 @@ func (s *FounderResultsScreen) renderLeaderboard() string {
 
 	content.WriteString(fmt.Sprintf("Company:     %s\n", fs.CompanyName))
 	content.WriteString(fmt.Sprintf("Category:    %s\n", fs.Category))
-	content.WriteString(fmt.Sprintf("Duration:    %d months\n", fs.Turn))
+	durationMonths := fs.Turn
+	if fs.HasExited && fs.ExitMonth > 0 {
+		durationMonths = fs.ExitMonth
+	}
+	content.WriteString(fmt.Sprintf("Duration:    %d months\n", durationMonths))
 	content.WriteString(fmt.Sprintf("Peak MRR:    $%s\n", formatCompactMoney(fs.MRR)))
 	content.WriteString(fmt.Sprintf("Total Customers: %d (ever: %d)\n", fs.Customers, fs.TotalCustomersEver))
 

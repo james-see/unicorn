@@ -852,7 +852,8 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 							fmt.Sprintf("   New equity pool: %.1f%%", fg.EquityPool),
 							fmt.Sprintf("   Your equity: %.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway),
 						}
-						s.view = FounderViewMain
+						s.rebuildBoardMenu()
+						s.view = FounderViewBoard
 						return s, nil
 					}
 				}
@@ -2186,7 +2187,8 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 			fmt.Sprintf("   New board seats: %d", fg.BoardSeats),
 			fmt.Sprintf("   Remaining equity pool: %.1f%%", fg.EquityPool),
 		}
-		s.view = FounderViewMain
+		s.rebuildBoardMenu()
+		s.view = FounderViewBoard
 		return s, nil
 
 	case "expand_pool":
@@ -2218,7 +2220,8 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 				"   ⚠️  Possible negative PR impact",
 			}
 		}
-		s.view = FounderViewMain
+		s.rebuildBoardMenu()
+		s.view = FounderViewBoard
 		return s, nil
 
 	case "set_chairman":
@@ -2253,12 +2256,14 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 					"   Additional 0.25% equity granted",
 				}
 			}
-			s.view = FounderViewMain
+			s.rebuildBoardMenu()
+			s.view = FounderViewBoard
 			return s, nil
 		}
 		if len(items) == 0 {
 			s.turnMessages = []string{"⚠️ No eligible advisors to set as chairman. Hire an advisor first."}
-			s.view = FounderViewMain
+			s.rebuildBoardMenu()
+			s.view = FounderViewBoard
 			return s, nil
 		}
 		// Multiple advisors - show menu
@@ -2295,12 +2300,14 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 					"   ⚠️  Board sentiment worsened",
 				}
 			}
-			s.view = FounderViewMain
+			s.rebuildBoardMenu()
+			s.view = FounderViewBoard
 			return s, nil
 		}
 		if len(items) == 0 {
 			s.turnMessages = []string{"⚠️ No investor board members to fire"}
-			s.view = FounderViewMain
+			s.rebuildBoardMenu()
+			s.view = FounderViewBoard
 			return s, nil
 		}
 		s.pendingBoardSubAction = "fire_board_member"
@@ -2326,7 +2333,8 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 			}
 		}
 		s.pendingBoardSubAction = ""
-		s.view = FounderViewMain
+		s.rebuildBoardMenu()
+		s.view = FounderViewBoard
 		return s, nil
 	}
 
@@ -2343,7 +2351,8 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 			}
 		}
 		s.pendingBoardSubAction = ""
-		s.view = FounderViewMain
+		s.rebuildBoardMenu()
+		s.view = FounderViewBoard
 		return s, nil
 	}
 
@@ -2581,13 +2590,26 @@ func (s *FounderGameScreen) rebuildSegmentsMenu() {
 		{ID: "view", Title: "View Current Segments", Description: "See customer distribution", Icon: "👁️"},
 	}
 
-	// Add segment options
+	// Add segment options with current focus indicator
 	segments := []string{"SMB", "Mid-Market", "Enterprise", "Strategic"}
+	actionLabel := "Select"
+	if fg.SelectedICP != "" {
+		actionLabel = "Switch to"
+	}
 	for _, seg := range segments {
+		icon := "🎯"
+		desc := ""
+		if seg == fg.SelectedICP {
+			icon = "✅"
+			desc = "Currently focused"
+		} else {
+			desc = fmt.Sprintf("%s %s segment", actionLabel, seg)
+		}
 		items = append(items, components.MenuItem{
-			ID:    "focus_" + strings.ToLower(strings.ReplaceAll(seg, "-", "_")),
-			Title: fmt.Sprintf("Focus on %s", seg),
-			Icon:  "🎯",
+			ID:          "focus_" + strings.ToLower(strings.ReplaceAll(seg, "-", "_")),
+			Title:       fmt.Sprintf("Focus on %s", seg),
+			Description: desc,
+			Icon:        icon,
 		})
 	}
 
@@ -2644,13 +2666,24 @@ func (s *FounderGameScreen) handleSegmentsSelection(id string) (ScreenModel, tea
 		}
 		segment := segmentMap[id]
 		if segment != "" {
-			err := fg.ChangeICP(segment)
+			var err error
+			if fg.SelectedICP == "" {
+				// First time selecting an ICP
+				err = fg.SelectICP(segment)
+			} else if fg.SelectedICP == segment {
+				s.turnMessages = []string{fmt.Sprintf("Already focused on %s", segment)}
+				s.view = FounderViewMain
+				return s, nil
+			} else {
+				// Changing from one ICP to another
+				err = fg.ChangeICP(segment)
+			}
 			if err != nil {
-				s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+				s.turnMessages = []string{fmt.Sprintf("❌ %v", err)}
 			} else {
 				s.turnMessages = []string{
 					fmt.Sprintf("✓ Now focusing on %s segment!", segment),
-					"This will affect future customer acquisition and deal sizes",
+					"   Benefits: -20%% CAC, +15%% close rate, +10%% deal size",
 				}
 			}
 		}
@@ -2671,14 +2704,16 @@ func (s *FounderGameScreen) rebuildPricingMenu() {
 
 	items := []components.MenuItem{
 		{ID: "view", Title: "View Current Pricing", Description: "See pricing model details", Icon: "👁️"},
-		{ID: "monthly", Title: "Switch to Monthly", Description: "No discount, higher churn", Icon: "📅"},
-		{ID: "annual", Title: "Switch to Annual", Description: "Discount for commitment", Icon: "📆"},
-		{ID: "usage", Title: "Usage-Based Pricing", Description: "Pay-as-you-go model", Icon: "📊"},
+		{ID: "freemium", Title: "Freemium Model", Description: "Free tier + paid upgrades", Icon: "🆓"},
+		{ID: "trial", Title: "Free Trial Model", Description: "Trial period then paid", Icon: "⏳"},
+		{ID: "annual_upfront", Title: "Annual Upfront", Description: "Annual billing with discount", Icon: "📆"},
+		{ID: "usage_based", Title: "Usage-Based Pricing", Description: "Pay-as-you-go model", Icon: "📊"},
+		{ID: "tiered", Title: "Tiered Pricing", Description: "Multiple tiers for segments", Icon: "📶"},
 		{ID: "cancel", Title: "Back", Icon: "←"},
 	}
 
 	s.pricingMenu = components.NewMenu("PRICING STRATEGY", items)
-	s.pricingMenu.SetSize(55, 12)
+	s.pricingMenu.SetSize(55, 14)
 	s.pricingMenu.SetHideHelp(true)
 }
 
@@ -2703,32 +2738,52 @@ func (s *FounderGameScreen) handlePricingSelection(id string) (ScreenModel, tea.
 		s.view = FounderViewMain
 		return s, nil
 
-	case "monthly":
-		err := fg.ChangePricingModel("subscription", false, 0)
+	case "freemium":
+		err := fg.ChangePricingModel("freemium", false, 0)
 		if err != nil {
 			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
 		} else {
-			s.turnMessages = []string{"✓ Switched to monthly billing"}
+			s.turnMessages = []string{"✓ Switched to freemium model", "Free tier attracts users, paid upgrades drive revenue"}
 		}
 		s.view = FounderViewMain
 		return s, nil
 
-	case "annual":
-		err := fg.ChangePricingModel("subscription", true, 0.15)
+	case "trial":
+		err := fg.ChangePricingModel("trial", false, 0)
 		if err != nil {
 			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
 		} else {
-			s.turnMessages = []string{"✓ Switched to annual billing with 15% discount"}
+			s.turnMessages = []string{"✓ Switched to free trial model", "Users try before buying — higher conversion expected"}
 		}
 		s.view = FounderViewMain
 		return s, nil
 
-	case "usage":
-		err := fg.ChangePricingModel("usage", false, 0)
+	case "annual_upfront":
+		err := fg.ChangePricingModel("annual_upfront", true, 0.15)
 		if err != nil {
 			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
 		} else {
-			s.turnMessages = []string{"✓ Switched to usage-based pricing"}
+			s.turnMessages = []string{"✓ Switched to annual upfront billing", "15% discount for commitment, lower churn"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "usage_based":
+		err := fg.ChangePricingModel("usage_based", false, 0)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Switched to usage-based pricing", "Revenue scales with customer usage"}
+		}
+		s.view = FounderViewMain
+		return s, nil
+
+	case "tiered":
+		err := fg.ChangePricingModel("tiered", false, 0)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Switched to tiered pricing", "Multiple tiers serve different customer segments"}
 		}
 		s.view = FounderViewMain
 		return s, nil
@@ -6290,7 +6345,8 @@ func (s *FounderGameScreen) handleAdvisorConfirmSelection(id string) (ScreenMode
 		fmt.Sprintf("   Equity cost: %.2f%%", advisor.EquityCost),
 		fmt.Sprintf("   Cash remaining: $%s", formatCompactMoney(fg.Cash)),
 	}
-	s.view = FounderViewMain
+	s.rebuildBoardMenu()
+	s.view = FounderViewBoard
 	return s, nil
 }
 
@@ -6372,7 +6428,8 @@ func (s *FounderGameScreen) handleRemoveAdvisorSelection(id string) (ScreenModel
 		}
 	}
 
-	s.view = FounderViewMain
+	s.rebuildBoardMenu()
+	s.view = FounderViewBoard
 	return s, nil
 }
 
