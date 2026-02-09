@@ -4573,8 +4573,12 @@ func (s *FounderGameScreen) renderMain() string {
 			Bold(true).
 			Width(70).
 			Align(lipgloss.Center)
-		warnText := fmt.Sprintf("⚠️ LOW CASH WARNING: $%s remaining | %d months runway",
-			formatCompactMoney(fg.Cash), fg.CashRunwayMonths)
+		runwayStr := fmt.Sprintf("%d months runway", fg.CashRunwayMonths)
+		if fg.CashRunwayMonths < 0 {
+			runwayStr = "profitable"
+		}
+		warnText := fmt.Sprintf("⚠️ LOW CASH WARNING: $%s remaining | %s",
+			formatCompactMoney(fg.Cash), runwayStr)
 		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(warnBox.Render(warnText)))
 	}
 	b.WriteString("\n")
@@ -5738,6 +5742,10 @@ func (s *FounderGameScreen) renderFinancials() string {
 	fin.WriteString(fmt.Sprintf("  Compute/Cloud:       $%s\n", formatCompactMoney(fg.MonthlyComputeCost)))
 	fin.WriteString(fmt.Sprintf("  Other Direct Costs:  $%s\n", formatCompactMoney(fg.MonthlyODCCost)))
 
+	// Per-employee overhead ($2k/employee for benefits, tools, office, etc.)
+	employeeOverhead := int64(fg.Team.TotalEmployees) * 2000
+	fin.WriteString(fmt.Sprintf("  Employee Overhead:   $%s (%d × $2k)\n", formatCompactMoney(employeeOverhead), fg.Team.TotalEmployees))
+
 	// Partnership costs
 	partnerCost := int64(0)
 	for _, p := range fg.Partnerships {
@@ -5749,7 +5757,7 @@ func (s *FounderGameScreen) renderFinancials() string {
 		fin.WriteString(fmt.Sprintf("  Partnerships:        $%s\n", formatCompactMoney(partnerCost)))
 	}
 
-	totalExpenses := fg.MonthlyTeamCost + fg.MonthlyComputeCost + fg.MonthlyODCCost + partnerCost
+	totalExpenses := fg.MonthlyTeamCost + employeeOverhead + fg.MonthlyComputeCost + fg.MonthlyODCCost + partnerCost
 	fin.WriteString("  ─────────────────────────\n")
 	fin.WriteString(fmt.Sprintf("  Total Expenses:      $%s\n\n", formatCompactMoney(totalExpenses)))
 

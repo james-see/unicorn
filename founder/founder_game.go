@@ -348,6 +348,10 @@ func (fs *FounderState) CheckForCompetitorAcquisition() *AcquisitionOffer {
 }
 
 func (fs *FounderState) NeedsLowCashWarning() bool {
+	// -1 means infinite runway (profitable), don't warn
+	if fs.CashRunwayMonths < 0 {
+		return false
+	}
 	return fs.Cash <= 200000 && fs.CashRunwayMonths < 6
 }
 

@@ -51,9 +51,12 @@ func (fs *FounderState) CalculateTeamCost() {
 
 
 func (fs *FounderState) CalculateRunway() {
-	monthlyBurn := fs.Team.TotalMonthlyCost + 20000 // Team + $20k ops costs
-	monthlyRevenue := fs.MRR
-	netBurn := monthlyBurn - monthlyRevenue
+	// Match the actual ProcessMonth cash flow calculation:
+	// Revenue: MRR * 67% (after 33% deductions for tax, processing, overhead, savings)
+	// Costs: team + $2k/employee overhead + infrastructure (compute + ODC)
+	netRevenue := int64(float64(fs.MRR) * 0.67)
+	monthlyCosts := fs.MonthlyTeamCost + (int64(fs.Team.TotalEmployees) * 2000) + fs.MonthlyComputeCost + fs.MonthlyODCCost
+	netBurn := monthlyCosts - netRevenue
 
 	if netBurn <= 0 {
 		// Cash positive! Runway is infinite
