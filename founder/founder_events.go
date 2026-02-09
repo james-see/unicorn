@@ -94,6 +94,10 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 		return "", fmt.Errorf("competitor is no longer active")
 	}
 
+	if comp.LastActionMonth == fs.Turn && strategy != "ignore" {
+		return "", fmt.Errorf("already took action against %s this month — wait until next month", comp.Name)
+	}
+
 	switch strategy {
 	case "ignore":
 		comp.Strategy = "ignore"
@@ -115,6 +119,7 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 			comp.Threat = "low"
 		}
 		comp.MarketShare *= 0.7 // Reduce their market share
+		comp.LastActionMonth = fs.Turn
 
 		return fmt.Sprintf("Competing aggressively! Cost: $%s. Reduced %s threat to %s",
 			formatCurrency(cost), comp.Name, comp.Threat), nil
@@ -128,6 +133,7 @@ func (fs *FounderState) HandleCompetitor(compIndex int, strategy string) (string
 		fs.Cash -= cost
 		comp.Strategy = "partner"
 		comp.Active = false
+		comp.LastActionMonth = fs.Turn
 
 		// Merge customer bases
 		newCustomers := int(float64(fs.Customers) * comp.MarketShare)

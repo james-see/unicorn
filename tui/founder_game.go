@@ -2014,11 +2014,17 @@ func (s *FounderGameScreen) rebuildCompetitorMenu() {
 		} else if comp.Threat == "low" {
 			threatIcon = "🟢"
 		}
+		desc := fmt.Sprintf("%s | Market: %.1f%% | Strategy: %s", comp.Threat, comp.MarketShare*100, comp.Strategy)
+		acted := comp.LastActionMonth == fg.Turn
+		if acted {
+			desc += " | ✓ acted this month"
+		}
 		items = append(items, components.MenuItem{
 			ID:          fmt.Sprintf("comp_%d", i),
 			Title:       comp.Name,
-			Description: fmt.Sprintf("%s | Market: %.1f%% | Strategy: %s", comp.Threat, comp.MarketShare*100, comp.Strategy),
+			Description: desc,
 			Icon:        threatIcon,
+			Disabled:    acted,
 		})
 	}
 

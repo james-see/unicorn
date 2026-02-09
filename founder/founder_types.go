@@ -311,12 +311,13 @@ type ReferralProgram struct {
 
 // Competitor represents a competing company
 type Competitor struct {
-	Name          string
-	Threat        string // "low", "medium", "high", "critical"
-	MarketShare   float64
-	Strategy      string // "ignore", "monitor", "compete", "partner"
-	MonthAppeared int
-	Active        bool
+	Name            string
+	Threat          string // "low", "medium", "high", "critical"
+	MarketShare     float64
+	Strategy        string // "ignore", "monitor", "compete", "partner"
+	MonthAppeared   int
+	Active          bool
+	LastActionMonth int // Prevent multiple actions in same turn
 }
 
 // Market represents a geographic expansion
