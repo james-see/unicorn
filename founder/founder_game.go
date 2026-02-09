@@ -701,16 +701,27 @@ func (fs *FounderState) GenerateStrategicOpportunity() *StrategicOpportunity {
 		return nil
 	}
 
-	// 15% chance per month (after month 3)
-	if fs.Turn < 3 || rand.Float64() > 0.15 {
+	// 12% chance per month (after month 3)
+	if fs.Turn < 3 || rand.Float64() > 0.12 {
 		return nil
 	}
 
-	opportunityTypes := []string{"press", "enterprise_pilot", "conference", "talent", "competitor_distress"}
+	// Large pool of opportunity types for variety
+	opportunityTypes := []string{
+		"press", "enterprise_pilot", "conference", "talent", "competitor_distress",
+		"api_integration", "govt_contract", "influencer", "patent",
+		"university_partnership",
+	}
 
-	// Add bridge round opportunity if running low on cash and have raised before
+	// Conditional opportunities
 	if fs.CashRunwayMonths <= 6 && len(fs.FundingRounds) > 0 {
 		opportunityTypes = append(opportunityTypes, "bridge_round")
+	}
+	if fs.Customers >= 100 {
+		opportunityTypes = append(opportunityTypes, "white_label", "channel_partner")
+	}
+	if fs.MRR >= 50000 {
+		opportunityTypes = append(opportunityTypes, "international_expansion_offer", "podcast_feature")
 	}
 
 	oppType := opportunityTypes[rand.Intn(len(opportunityTypes))]
@@ -719,24 +730,42 @@ func (fs *FounderState) GenerateStrategicOpportunity() *StrategicOpportunity {
 
 	switch oppType {
 	case "press":
+		// Variety of press outlets
+		pressOptions := []struct {
+			Name string
+			Desc string
+		}{
+			{"TechCrunch", "TechCrunch wants to write a feature story about your startup."},
+			{"The Verge", "The Verge is doing a piece on emerging SaaS companies."},
+			{"Hacker News", "Your story got picked up — a Hacker News front page post is being written."},
+			{"Product Hunt", "Product Hunt is featuring you as Product of the Day."},
+			{"Forbes 30 Under 30", "Forbes is considering you for their 30 Under 30 list."},
+			{"Bloomberg Technology", "Bloomberg Technology wants a founder interview."},
+			{"The Information", "The Information wants an exclusive deep-dive into your tech."},
+			{"Wired", "Wired is profiling the next wave of startup founders."},
+		}
+		press := pressOptions[rand.Intn(len(pressOptions))]
+		customers := 5 + rand.Intn(15)
 		opp = StrategicOpportunity{
 			Type:        "press",
-			Title:       "📰 TechCrunch Feature Opportunity",
-			Description: "TechCrunch wants to write a feature story about your company. This could significantly boost brand awareness and inbound leads.",
-			Cost:        10000 + rand.Int63n(15000), // $10-25k PR prep
-			Benefit:     fmt.Sprintf("+%d potential customers over next 3 months, +15%% brand awareness", 5+rand.Intn(10)),
-			Risk:        "Requires founder time (1 week) and PR prep costs",
-			ExpiresIn:   1,
+			Title:       fmt.Sprintf("📰 %s Feature", press.Name),
+			Description: fmt.Sprintf("%s This could significantly boost brand awareness and inbound leads.", press.Desc),
+			Cost:        10000 + rand.Int63n(15000),
+			Benefit:     fmt.Sprintf("+%d customers, -15%% CAC from brand awareness", customers),
+			Risk:        "Requires founder time and PR prep costs",
+			ExpiresIn:   2,
 		}
 
 	case "enterprise_pilot":
+		companies := []string{"Salesforce", "Microsoft", "Adobe", "Oracle", "SAP", "Cisco", "IBM", "Walmart", "JPMorgan", "Goldman Sachs"}
+		company := companies[rand.Intn(len(companies))]
 		dealSize := 50000 + rand.Int63n(150000)
 		opp = StrategicOpportunity{
 			Type:        "enterprise_pilot",
-			Title:       "🏢 Enterprise Pilot Program",
-			Description: "Fortune 500 company wants to pilot your product. High revenue potential but requires dedicated engineering resources.",
-			Cost:        0, // No upfront cost, but requires team time
-			Benefit:     fmt.Sprintf("$%s annual contract if successful (80%% chance), reference customer for enterprise sales", formatCurrency(dealSize)),
+			Title:       fmt.Sprintf("🏢 %s Pilot Program", company),
+			Description: fmt.Sprintf("%s wants to pilot your product. High revenue potential but requires dedicated resources.", company),
+			Cost:        0,
+			Benefit:     fmt.Sprintf("$%s/yr contract if successful (80%% chance), enterprise reference customer", formatCurrency(dealSize)),
 			Risk:        "Requires 2 engineers for 3 months, may slow product development",
 			ExpiresIn:   1,
 		}
@@ -749,42 +778,207 @@ func (fs *FounderState) GenerateStrategicOpportunity() *StrategicOpportunity {
 			Title:       "💰 Bridge Round Opportunity",
 			Description: "Existing investor offers bridge financing at favorable terms. Quick capital to extend runway.",
 			Cost:        0,
-			Benefit:     fmt.Sprintf("$%s at %.1f%% equity (better terms than raising a full round)", formatCurrency(amount), equity),
+			Benefit:     fmt.Sprintf("$%s at %.1f%% equity (better terms than full round)", formatCurrency(amount), equity),
 			Risk:        "Additional dilution, may signal to market that you're struggling",
 			ExpiresIn:   2,
 		}
 
 	case "conference":
+		conferences := []struct {
+			Name string
+			Desc string
+		}{
+			{"SaaStr Annual", "The world's largest SaaS conference wants you on stage."},
+			{"TechCrunch Disrupt", "Selected for Startup Battlefield at TechCrunch Disrupt."},
+			{"Web Summit", "Invited to present at Web Summit in Lisbon."},
+			{"AWS re:Invent", "AWS re:Invent wants you to demo in their startup showcase."},
+			{"SXSW", "SXSW Interactive has a speaking slot available."},
+			{"Collision", "Collision conference in Toronto wants you as a featured startup."},
+			{"Y Combinator Demo Day", "YC invites you to present at Demo Day as a special guest."},
+		}
+		conf := conferences[rand.Intn(len(conferences))]
+		leads := 3 + rand.Intn(8)
 		opp = StrategicOpportunity{
 			Type:        "conference",
-			Title:       "🎤 Conference Speaking Slot",
-			Description: "Invited to speak at major industry conference. Great for leads and recruiting, but takes founder time.",
-			Cost:        5000 + rand.Int63n(10000), // Travel + booth costs
-			Benefit:     fmt.Sprintf("+%d qualified leads, improved recruiting pipeline, industry credibility", 10+rand.Intn(20)),
+			Title:       fmt.Sprintf("🎤 %s", conf.Name),
+			Description: fmt.Sprintf("%s Great for leads and recruiting.", conf.Desc),
+			Cost:        5000 + rand.Int63n(10000),
+			Benefit:     fmt.Sprintf("+%d customers, -10%% CAC from credibility", leads),
 			Risk:        "Founder unavailable for 1 week, may not convert leads immediately",
 			ExpiresIn:   2,
 		}
 
 	case "talent":
+		companies := []string{"Google", "Meta", "Apple", "Netflix", "Stripe", "Airbnb", "Uber", "SpaceX", "OpenAI"}
+		company := companies[rand.Intn(len(companies))]
 		opp = StrategicOpportunity{
 			Type:        "talent",
-			Title:       "⭐ Star Engineer Available",
-			Description: "Senior engineer from Google/Meta is interested in joining. Exceptional talent but expensive and expects senior role.",
-			Cost:        200000, // $200k/year salary
-			Benefit:     "Accelerates product development 2x, attracts other top talent, improved technical credibility",
-			Risk:        "High salary, may create team dynamics issues if not managed well",
+			Title:       fmt.Sprintf("⭐ Star Engineer from %s", company),
+			Description: fmt.Sprintf("Senior engineer from %s is interested in joining. Exceptional talent but expensive.", company),
+			Cost:        200000,
+			Benefit:     "2x engineering impact, attracts other top talent, technical credibility",
+			Risk:        "High salary, may create team dynamics issues",
 			ExpiresIn:   1,
 		}
 
 	case "competitor_distress":
+		customers := 15 + rand.Intn(25)
 		opp = StrategicOpportunity{
 			Type:        "competitor_distress",
 			Title:       "🎯 Competitor in Distress",
-			Description: "Main competitor is struggling (layoffs, negative press). Perfect time to steal their customers or acquire them cheaply.",
+			Description: "Main competitor is struggling (layoffs, negative press). Perfect time to poach their customers.",
 			Cost:        50000 + rand.Int63n(150000),
-			Benefit:     fmt.Sprintf("+%d customers (from their base), eliminate key competitor", 15+rand.Intn(25)),
+			Benefit:     fmt.Sprintf("+%d customers from their base, eliminate competitor", customers),
 			Risk:        "May inherit technical debt or unhappy customers",
 			ExpiresIn:   2,
+		}
+
+	case "api_integration":
+		partners := []struct {
+			Name string
+			Desc string
+		}{
+			{"Stripe", "Stripe wants to feature your product in their app marketplace."},
+			{"Slack", "Slack's app directory team wants to co-develop an integration."},
+			{"Shopify", "Shopify wants to add you as a recommended partner app."},
+			{"HubSpot", "HubSpot marketplace is offering a featured integration spot."},
+			{"Salesforce AppExchange", "Salesforce wants you on AppExchange."},
+			{"Zapier", "Zapier offers to build a native integration, exposing you to millions of users."},
+		}
+		partner := partners[rand.Intn(len(partners))]
+		customers := 10 + rand.Intn(20)
+		opp = StrategicOpportunity{
+			Type:        "api_integration",
+			Title:       fmt.Sprintf("🔌 %s Integration", partner.Name),
+			Description: fmt.Sprintf("%s Their customer base would gain access to your product.", partner.Desc),
+			Cost:        15000 + rand.Int63n(35000),
+			Benefit:     fmt.Sprintf("+%d customers, +2%% ongoing growth from partner channel", customers),
+			Risk:        "Engineering time to build and maintain integration",
+			ExpiresIn:   2,
+		}
+
+	case "govt_contract":
+		agencies := []string{"DoD", "NASA", "FDA", "SEC", "Department of Education", "VA", "USDA"}
+		agency := agencies[rand.Intn(len(agencies))]
+		contractMRR := 20000 + rand.Intn(80000)
+		opp = StrategicOpportunity{
+			Type:        "govt_contract",
+			Title:       fmt.Sprintf("🏛️ %s Contract Opportunity", agency),
+			Description: fmt.Sprintf("The %s is evaluating your product for a multi-year contract. Government work = guaranteed revenue.", agency),
+			Cost:        25000 + rand.Int63n(50000),
+			Benefit:     fmt.Sprintf("+$%s/mo guaranteed MRR, 3-year contract", formatCurrency(int64(contractMRR))),
+			Risk:        "Government compliance requirements, slow procurement process",
+			ExpiresIn:   3,
+		}
+
+	case "influencer":
+		influencers := []struct {
+			Name string
+			Desc string
+		}{
+			{"Top YouTube Tech Reviewer", "A YouTube tech channel with 2M subscribers wants to review your product."},
+			{"LinkedIn Thought Leader", "A LinkedIn influencer with 500K followers wants to feature you in their newsletter."},
+			{"Twitter/X Tech Influencer", "A major tech influencer on X wants to do a sponsored tweet series."},
+			{"Industry Podcast Host", "Top industry podcast (50K listeners) wants you as a guest."},
+			{"TikTok Business Creator", "A business TikTok creator with 1M followers wants to make a case study."},
+		}
+		inf := influencers[rand.Intn(len(influencers))]
+		customers := 8 + rand.Intn(20)
+		opp = StrategicOpportunity{
+			Type:        "influencer",
+			Title:       fmt.Sprintf("📱 %s", inf.Name),
+			Description: inf.Desc,
+			Cost:        5000 + rand.Int63n(25000),
+			Benefit:     fmt.Sprintf("+%d customers from viral exposure", customers),
+			Risk:        "ROI uncertain, audience may not be target market",
+			ExpiresIn:   1,
+		}
+
+	case "patent":
+		opp = StrategicOpportunity{
+			Type:        "patent",
+			Title:       "📜 Patent Filing Opportunity",
+			Description: "Your legal team identified a key innovation that can be patented. This would create a strong competitive moat.",
+			Cost:        30000 + rand.Int63n(50000),
+			Benefit:     "Reduce all competitors' market share by 20%, defensible IP",
+			Risk:        "Long filing process, patent trolls may target you",
+			ExpiresIn:   3,
+		}
+
+	case "university_partnership":
+		universities := []string{"Stanford", "MIT", "Carnegie Mellon", "Georgia Tech", "UC Berkeley", "Caltech"}
+		uni := universities[rand.Intn(len(universities))]
+		customers := 5 + rand.Intn(10)
+		opp = StrategicOpportunity{
+			Type:        "university_partnership",
+			Title:       fmt.Sprintf("🎓 %s Partnership", uni),
+			Description: fmt.Sprintf("%s wants to use your product in their program. Access to talent pipeline and academic customers.", uni),
+			Cost:        10000 + rand.Int63n(20000),
+			Benefit:     fmt.Sprintf("+%d customers, improved recruiting from %s", customers, uni),
+			Risk:        "Academic pricing expectations, support overhead",
+			ExpiresIn:   2,
+		}
+
+	case "white_label":
+		customers := 20 + rand.Intn(30)
+		opp = StrategicOpportunity{
+			Type:        "press", // Reuse press handler for simplicity (adds customers + reduces CAC)
+			Title:       "🏷️ White-Label Distribution Deal",
+			Description: "Major company wants to white-label your product under their brand. Instant scale but brand dilution risk.",
+			Cost:        30000 + rand.Int63n(50000),
+			Benefit:     fmt.Sprintf("+%d customers, -15%% CAC from distribution network", customers),
+			Risk:        "Your brand not visible, partner may demand exclusivity",
+			ExpiresIn:   2,
+		}
+
+	case "channel_partner":
+		partners := []string{"Accenture", "Deloitte", "KPMG", "PwC", "McKinsey Digital"}
+		partner := partners[rand.Intn(len(partners))]
+		customers := 10 + rand.Intn(15)
+		opp = StrategicOpportunity{
+			Type:        "api_integration", // Similar mechanics: customers + growth boost
+			Title:       fmt.Sprintf("🤝 %s Channel Partnership", partner),
+			Description: fmt.Sprintf("%s wants to resell your product to their enterprise clients.", partner),
+			Cost:        20000 + rand.Int63n(40000),
+			Benefit:     fmt.Sprintf("+%d enterprise customers, +2%% ongoing growth", customers),
+			Risk:        "Channel conflict with direct sales, margin compression",
+			ExpiresIn:   2,
+		}
+
+	case "international_expansion_offer":
+		regions := []struct {
+			Name string
+			Desc string
+		}{
+			{"Japan", "Japanese distributor offers to localize and sell your product in Japan."},
+			{"Germany", "German enterprise partner wants exclusive distribution rights in DACH region."},
+			{"Brazil", "Brazilian tech accelerator wants to launch you in Latin America."},
+			{"India", "Indian IT services firm wants to bundle your product with their offerings."},
+		}
+		region := regions[rand.Intn(len(regions))]
+		customers := 15 + rand.Intn(20)
+		opp = StrategicOpportunity{
+			Type:        "press", // Reuse for customer acquisition
+			Title:       fmt.Sprintf("🌍 %s Market Entry", region.Name),
+			Description: region.Desc,
+			Cost:        40000 + rand.Int63n(60000),
+			Benefit:     fmt.Sprintf("+%d customers, -15%% CAC from local partner network", customers),
+			Risk:        "Localization costs, regulatory compliance, time zone challenges",
+			ExpiresIn:   3,
+		}
+
+	case "podcast_feature":
+		podcasts := []string{"All-In Podcast", "My First Million", "The Tim Ferriss Show", "How I Built This", "Acquired", "Lenny's Podcast"}
+		pod := podcasts[rand.Intn(len(podcasts))]
+		customers := 5 + rand.Intn(12)
+		opp = StrategicOpportunity{
+			Type:        "conference", // Similar mechanics: customers + CAC reduction
+			Title:       fmt.Sprintf("🎙️ %s Guest Spot", pod),
+			Description: fmt.Sprintf("%s wants you as a guest. Great exposure to their audience of founders and decision-makers.", pod),
+			Cost:        0, // Free exposure
+			Benefit:     fmt.Sprintf("+%d customers, -10%% CAC from credibility", customers),
+			Risk:        "May face tough questions, founder time commitment",
+			ExpiresIn:   1,
 		}
 	}
 

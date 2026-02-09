@@ -642,19 +642,44 @@ func (s *FounderResultsScreen) renderResults() string {
 		results.WriteString(totalStyle.Render(fmt.Sprintf("Total Raised: $%s", formatCompactMoney(totalRaised))))
 	}
 
-	// Cap table payout (for acquisition exit)
-	if fs.HasExited && fs.ExitType == "acquisition" && len(fs.CapTable) > 0 {
+	// Cap table breakdown (show for all endings)
+	if len(fs.CapTable) > 0 || len(fs.FundingRounds) > 0 {
 		results.WriteString("\n\n")
-		results.WriteString(resultsHeader.Render("═══ PAYOUT BREAKDOWN ═══"))
+		if fs.HasExited {
+			results.WriteString(resultsHeader.Render("═══ PAYOUT BREAKDOWN ═══"))
+		} else {
+			results.WriteString(resultsHeader.Render("═══ CAP TABLE ═══"))
+		}
 		results.WriteString("\n\n")
+
+		// Use exit valuation if exited, otherwise computed valuation
+		valForPayout := s.valuation
+		if fs.HasExited && fs.ExitValuation > 0 {
+			valForPayout = fs.ExitValuation
+		}
 
 		founderPayStyle := lipgloss.NewStyle().Foreground(styles.Green)
-		results.WriteString(founderPayStyle.Render(fmt.Sprintf("%-30s %6.1f%%  $%s",
-			"You (Founder)", s.founderEquity, formatCompactMoney(s.founderPayout))))
+		founderVal := int64(float64(valForPayout) * s.founderEquity / 100.0)
+		results.WriteString(founderPayStyle.Render(fmt.Sprintf("%-28s %6.1f%%  $%s",
+			"You (Founder)", s.founderEquity, formatCompactMoney(founderVal))))
 		results.WriteString("\n")
 
+		// Investors
+		investorStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+		for _, round := range fs.FundingRounds {
+			investorName := round.RoundName
+			if len(round.Investors) > 0 {
+				investorName = round.Investors[0]
+			}
+			investorVal := int64(float64(valForPayout) * round.EquityGiven / 100.0)
+			results.WriteString(investorStyle.Render(fmt.Sprintf("%-28s %6.1f%%  $%s",
+				truncate(investorName+" ("+round.RoundName+")", 28), round.EquityGiven, formatCompactMoney(investorVal))))
+			results.WriteString("\n")
+		}
+
+		// Employees, execs, advisors from cap table
 		for _, entry := range fs.CapTable {
-			entryPayout := int64(float64(fs.ExitValuation) * entry.Equity / 100.0)
+			entryVal := int64(float64(valForPayout) * entry.Equity / 100.0)
 			label := entry.Name
 			switch entry.Type {
 			case "executive":
@@ -664,13 +689,20 @@ func (s *FounderResultsScreen) renderResults() string {
 			case "advisor":
 				label += " (Adv)"
 			}
-			results.WriteString(fmt.Sprintf("%-30s %6.1f%%  $%s\n",
-				truncate(label, 30), entry.Equity, formatCompactMoney(entryPayout)))
+			results.WriteString(fmt.Sprintf("%-28s %6.2f%%  $%s\n",
+				truncate(label, 28), entry.Equity, formatCompactMoney(entryVal)))
 		}
 
-		if fs.EquityPool > 0 {
-			poolStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
-			results.WriteString(poolStyle.Render(fmt.Sprintf("%-30s %6.1f%%  (unallocated)", "Employee Pool", fs.EquityPool)))
+		// Unallocated pool
+		unallocatedPool := fs.EquityPool - fs.EquityAllocated
+		if unallocatedPool < 0 {
+			unallocatedPool = 0
+		}
+		if unallocatedPool > 0 {
+			dimStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+			results.WriteString(dimStyle.Render(fmt.Sprintf("%-28s %6.1f%%  (cancelled at exit)",
+				"Unallocated Pool", unallocatedPool)))
+			results.WriteString("\n")
 		}
 	}
 
