@@ -3576,74 +3576,94 @@ func (s *FounderGameScreen) rebuildStrategicOpportunityMenu() {
 			)
 		}
 
-		// Founder attends (full benefit, but founder time cost)
-		items = append(items,
-			components.MenuItem{
-				ID:          "accept_founder",
-				Title:       "Founder Attends Personally",
-				Description: fmt.Sprintf("100%% benefit: %s | Tradeoff: -20%% product velocity this month", opp.Benefit),
-				Icon:        "👤",
-			},
-		)
+		// Determine if this is a delegatable opportunity (event/meeting you attend)
+		// vs a direct decision (hire someone, sign a contract, file a patent, take funding)
+		isDelegatable := opp.Type == "press" || opp.Type == "conference" || opp.Type == "influencer" ||
+			opp.Type == "podcast" || opp.Type == "university_partnership" || opp.Type == "api_integration" ||
+			opp.Type == "international_expansion_offer" || opp.Type == "channel_partner" || opp.Type == "white_label"
 
-		// CTO delegation option
-		hasCTO := false
-		ctoName := ""
-		for _, exec := range fg.Team.Executives {
-			if exec.Role == founder.RoleCTO {
-				hasCTO = true
-				ctoName = exec.Name
-				break
-			}
-		}
-		// CGO/COO can handle business opportunities
-		hasCGO := false
-		cgoName := ""
-		cgoRole := ""
-		for _, exec := range fg.Team.Executives {
-			if exec.Role == founder.RoleCGO || exec.Role == founder.RoleCOO {
-				hasCGO = true
-				cgoName = exec.Name
-				cgoRole = strings.ToUpper(string(exec.Role))
-				break
-			}
-		}
-
-		// Technical opportunities: CTO can handle
-		isTechOpp := opp.Type == "talent" || opp.Type == "enterprise_pilot" || opp.Type == "api_integration" || opp.Type == "patent"
-		// Business opportunities: CGO/COO can handle
-		isBizOpp := opp.Type == "press" || opp.Type == "conference" || opp.Type == "influencer" || opp.Type == "competitor_distress" || opp.Type == "govt_contract"
-
-		if hasCTO && isTechOpp {
+		if isDelegatable {
+			// Founder attends (full benefit, but founder time cost)
 			items = append(items,
 				components.MenuItem{
-					ID:          "accept_cto",
-					Title:       fmt.Sprintf("Send %s (CTO)", ctoName),
-					Description: "75% benefit, no founder time cost, no velocity hit",
-					Icon:        "⚡",
+					ID:          "accept_founder",
+					Title:       "Founder Attends Personally",
+					Description: fmt.Sprintf("100%% benefit: %s | Tradeoff: -2%% product velocity", opp.Benefit),
+					Icon:        "👤",
 				},
 			)
-		}
-		if hasCGO && isBizOpp {
-			items = append(items,
-				components.MenuItem{
-					ID:          "accept_cxo",
-					Title:       fmt.Sprintf("Send %s (%s)", cgoName, cgoRole),
-					Description: "75% benefit, no founder time cost, no velocity hit",
-					Icon:        "📈",
-				},
-			)
-		}
 
-		// Chairman delegation
-		chairman := fg.GetChairman()
-		if chairman != nil {
+			// CTO delegation option
+			hasCTO := false
+			ctoName := ""
+			for _, exec := range fg.Team.Executives {
+				if exec.Role == founder.RoleCTO {
+					hasCTO = true
+					ctoName = exec.Name
+					break
+				}
+			}
+			// CGO/COO can handle business opportunities
+			hasCGO := false
+			cgoName := ""
+			cgoRole := ""
+			for _, exec := range fg.Team.Executives {
+				if exec.Role == founder.RoleCGO || exec.Role == founder.RoleCOO {
+					hasCGO = true
+					cgoName = exec.Name
+					cgoRole = strings.ToUpper(string(exec.Role))
+					break
+				}
+			}
+
+			// Technical opportunities: CTO can handle
+			isTechOpp := opp.Type == "api_integration"
+			// Business opportunities: CGO/COO can handle
+			isBizOpp := opp.Type == "press" || opp.Type == "conference" || opp.Type == "influencer" ||
+				opp.Type == "podcast" || opp.Type == "channel_partner" || opp.Type == "white_label" ||
+				opp.Type == "international_expansion_offer"
+
+			if hasCTO && isTechOpp {
+				items = append(items,
+					components.MenuItem{
+						ID:          "accept_cto",
+						Title:       fmt.Sprintf("Send %s (CTO)", ctoName),
+						Description: "75% benefit, no founder time cost",
+						Icon:        "⚡",
+					},
+				)
+			}
+			if hasCGO && isBizOpp {
+				items = append(items,
+					components.MenuItem{
+						ID:          "accept_cxo",
+						Title:       fmt.Sprintf("Send %s (%s)", cgoName, cgoRole),
+						Description: "75% benefit, no founder time cost",
+						Icon:        "📈",
+					},
+				)
+			}
+
+			// Chairman delegation
+			chairman := fg.GetChairman()
+			if chairman != nil {
+				items = append(items,
+					components.MenuItem{
+						ID:          "accept_chairman",
+						Title:       fmt.Sprintf("Send Chairman %s", chairman.Name),
+						Description: "60% benefit, no founder time, chairman's network may help",
+						Icon:        "🎩",
+					},
+				)
+			}
+		} else {
+			// Non-delegatable: direct accept/decline (hiring, contracts, patents, funding, acquisitions)
 			items = append(items,
 				components.MenuItem{
-					ID:          "accept_chairman",
-					Title:       fmt.Sprintf("Send Chairman %s", chairman.Name),
-					Description: "60% benefit, no founder time, chairman's network may help",
-					Icon:        "🎩",
+					ID:          "accept_founder",
+					Title:       "Accept Opportunity",
+					Description: fmt.Sprintf("Benefit: %s", opp.Benefit),
+					Icon:        "✓",
 				},
 			)
 		}
@@ -3675,6 +3695,11 @@ func (s *FounderGameScreen) handleStrategicOpportunitySelection(id string) (Scre
 
 	opp := fg.PendingOpportunity
 
+	// Determine if this is a delegatable opportunity
+	isDelegatable := opp.Type == "press" || opp.Type == "conference" || opp.Type == "influencer" ||
+		opp.Type == "podcast" || opp.Type == "university_partnership" || opp.Type == "api_integration" ||
+		opp.Type == "international_expansion_offer" || opp.Type == "channel_partner" || opp.Type == "white_label"
+
 	// Determine benefit multiplier and tradeoffs based on who attends
 	benefitMultiplier := 1.0
 	founderTimeCost := false
@@ -3683,8 +3708,10 @@ func (s *FounderGameScreen) handleStrategicOpportunitySelection(id string) (Scre
 	switch id {
 	case "accept_founder":
 		benefitMultiplier = 1.0
-		founderTimeCost = true
-		delegateName = "you"
+		if isDelegatable {
+			founderTimeCost = true // Only costs founder time if it's an attendance event
+			delegateName = "you"
+		}
 	case "accept_cto":
 		benefitMultiplier = 0.75
 		for _, exec := range fg.Team.Executives {
@@ -3730,7 +3757,13 @@ func (s *FounderGameScreen) handleStrategicOpportunitySelection(id string) (Scre
 		fg.Cash -= opp.Cost
 	}
 
-	msgs := []string{fmt.Sprintf("✓ Accepted: %s (sent %s)", opp.Title, delegateName)}
+	var headerMsg string
+	if isDelegatable && delegateName != "" {
+		headerMsg = fmt.Sprintf("✓ Accepted: %s (sent %s)", opp.Title, delegateName)
+	} else {
+		headerMsg = fmt.Sprintf("✓ Accepted: %s", opp.Title)
+	}
+	msgs := []string{headerMsg}
 
 	// Apply benefit multiplier to customer/MRR gains
 	scaleCustomers := func(base int) int {
@@ -3892,12 +3925,14 @@ func (s *FounderGameScreen) handleStrategicOpportunitySelection(id string) (Scre
 	// Sync MRR
 	fg.MRR = fg.DirectMRR + fg.AffiliateMRR
 
-	// Apply founder time cost tradeoff
-	if founderTimeCost {
-		fg.ProductMaturity *= 0.98 // -2% product velocity
-		msgs = append(msgs, "   ⏱️ Founder time spent: -2% product velocity this month")
-	} else {
-		msgs = append(msgs, fmt.Sprintf("   ✓ Delegated to %s — no founder time cost", delegateName))
+	// Apply founder time cost tradeoff (only for delegatable/attendance opportunities)
+	if isDelegatable {
+		if founderTimeCost {
+			fg.ProductMaturity *= 0.98 // -2% product velocity
+			msgs = append(msgs, "   ⏱️ Founder time spent: -2% product velocity this month")
+		} else {
+			msgs = append(msgs, fmt.Sprintf("   ✓ Delegated to %s — no founder time cost", delegateName))
+		}
 	}
 
 	if opp.Cost > 0 {
