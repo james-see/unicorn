@@ -151,7 +151,9 @@ func (fs *FounderState) ExecuteExit(exitType string) {
 }
 
 func (fs *FounderState) GetFinalScore() (outcome string, valuation int64, founderEquity float64) {
-	founderEquity = 100.0 - fs.EquityPool - fs.EquityGivenAway
+	// At exit, unallocated equity pool gets cancelled and reverts to existing shareholders (primarily founder)
+	// Only equity actually allocated to employees counts against the founder
+	founderEquity = 100.0 - fs.EquityAllocated - fs.EquityGivenAway
 
 	// Calculate final valuation based on MRR
 	if fs.MRR > 0 {

@@ -1004,6 +1004,23 @@ func (fs *FounderState) generateRegulationEvent(isPositive bool) *RandomEvent {
 
 func (fs *FounderState) generateCompetitionEvent(isPositive bool) *RandomEvent {
 	if isPositive {
+		// If there are active competitors, mark one as exiting
+		for i := range fs.Competitors {
+			if fs.Competitors[i].Active {
+				fs.Competitors[i].Active = false
+				return &RandomEvent{
+					Severity:    "moderate",
+					IsPositive:  true,
+					Title:       "Major Competitor Exits Market",
+					Description: fmt.Sprintf("%s shuts down, opening up opportunities", fs.Competitors[i].Name),
+					Impact: EventImpact{
+						GrowthChange:   1.25, // +25% growth
+						CACChange:      0.80, // -20% CAC
+						DurationMonths: 6,
+					},
+				}
+			}
+		}
 		return &RandomEvent{
 			Severity:    "moderate",
 			IsPositive:  true,
@@ -1018,6 +1035,17 @@ func (fs *FounderState) generateCompetitionEvent(isPositive bool) *RandomEvent {
 	} else {
 		// Check for open source threat
 		if rand.Float64() < 0.3 {
+			// Also spawn a competitor for the open source alternative
+			comp := Competitor{
+				Name:          "OSS Alternative",
+				Threat:        "high",
+				MarketShare:   0.05 + rand.Float64()*0.10,
+				Strategy:      "ignore",
+				MonthAppeared: fs.Turn,
+				Active:        true,
+			}
+			fs.Competitors = append(fs.Competitors, comp)
+
 			return &RandomEvent{
 				Severity:    "major",
 				IsPositive:  false,
@@ -1032,11 +1060,31 @@ func (fs *FounderState) generateCompetitionEvent(isPositive bool) *RandomEvent {
 			}
 		}
 
+		// Spawn an actual competitor entry for the well-funded competitor
+		compNames := []string{"Funded Rival", "Series B Startup", "Tiger Global Portfolio Co", "a16z Backed Co", "Sequoia Portfolio Co"}
+		compName := compNames[rand.Intn(len(compNames))]
+		// Avoid duplicate names
+		for _, existing := range fs.Competitors {
+			if existing.Name == compName {
+				compName = compName + " II"
+				break
+			}
+		}
+		comp := Competitor{
+			Name:          compName,
+			Threat:        "high",
+			MarketShare:   0.10 + rand.Float64()*0.15,
+			Strategy:      "ignore",
+			MonthAppeared: fs.Turn,
+			Active:        true,
+		}
+		fs.Competitors = append(fs.Competitors, comp)
+
 		return &RandomEvent{
 			Severity:    "moderate",
 			IsPositive:  false,
 			Title:       "Well-Funded Competitor Emerges",
-			Description: "New competitor raises $50M Series B, plans aggressive expansion",
+			Description: fmt.Sprintf("%s raises $50M Series B, plans aggressive expansion", compName),
 			Impact: EventImpact{
 				CACChange:      1.25, // +25% CAC
 				ChurnChange:    0.03, // +3% churn

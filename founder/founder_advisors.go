@@ -512,7 +512,7 @@ func (fs *FounderState) SetChairman(advisorName string) error {
 	// Check if we have enough equity pool
 	availableEquity := fs.EquityPool - fs.EquityAllocated
 	if availableEquity < additionalEquity {
-		return fmt.Errorf("insufficient equity pool (need %.2f%%, have %.2f%% available)", additionalEquity, availableEquity)
+		return fmt.Errorf("insufficient equity pool (need %.2f%%, have %.2f%% available) — expand pool via Board & Equity", additionalEquity, availableEquity)
 	}
 
 	// Update equity allocation

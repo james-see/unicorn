@@ -68,6 +68,8 @@ const (
 	FounderViewBoardTable
 	FounderViewConfirmQuit
 	FounderViewEngineerRealloc
+	FounderViewCapTable
+	FounderViewExecOffer
 )
 
 // FounderGameScreen handles the founder game
@@ -174,6 +176,10 @@ type FounderGameScreen struct {
 
 	// Board sub-action tracking (for chairman selection vs fire)
 	pendingBoardSubAction string
+
+	// Executive offer negotiation
+	execOffers   []founder.ExecOffer
+	execOfferMenu *components.Menu
 }
 
 // NewFounderGameScreen creates a new founder game screen
@@ -361,9 +367,15 @@ func (s *FounderGameScreen) rebuildActionsMenu() {
 		})
 	}
 
-	if len(fg.Competitors) > 0 {
+	activeCompetitors := 0
+	for _, c := range fg.Competitors {
+		if c.Active {
+			activeCompetitors++
+		}
+	}
+	if activeCompetitors > 0 {
 		items = append(items, components.MenuItem{
-			ID: "competitors", Title: "Handle Competitors", Description: fmt.Sprintf("%d active competitors", len(fg.Competitors)), Icon: "⚔️",
+			ID: "competitors", Title: "Handle Competitors", Description: fmt.Sprintf("%d active competitors", activeCompetitors), Icon: "⚔️",
 		})
 	}
 
@@ -492,6 +504,9 @@ func (s *FounderGameScreen) rebuildActionsMenu() {
 	})
 	items = append(items, components.MenuItem{
 		ID: "financials", Title: "View Financials", Description: "Cash flow breakdown", Icon: "📊",
+	})
+	items = append(items, components.MenuItem{
+		ID: "cap_table", Title: "View Cap Table", Description: "Equity ownership breakdown", Icon: "📋",
 	})
 
 	if fg.SalesPipeline != nil && len(fg.SalesPipeline.ActiveDeals) > 0 {
@@ -741,6 +756,12 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				return s, nil
 			}
 
+		case FounderViewExecOffer:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewHiring
+				return s, nil
+			}
+
 		case FounderViewHiringMarket:
 			if key.Matches(msg, keys.Global.Back) {
 				s.view = FounderViewHiring
@@ -847,9 +868,13 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 					if err == nil && pct >= 1 && pct <= 10 {
 						fg := s.gameData.FounderState
 						fg.ExpandEquityPool(pct)
+						avail := fg.EquityPool - fg.EquityAllocated
+						if avail < 0 {
+							avail = 0
+						}
 						s.turnMessages = []string{
 							fmt.Sprintf("✓ Expanded equity pool by %.1f%%", pct),
-							fmt.Sprintf("   New equity pool: %.1f%%", fg.EquityPool),
+							fmt.Sprintf("   Total pool: %.1f%% (%.1f%% available)", fg.EquityPool, avail),
 							fmt.Sprintf("   Your equity: %.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway),
 						}
 						s.rebuildBoardMenu()
@@ -876,7 +901,7 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				return s.handleBuybackConfirm()
 			}
 
-		case FounderViewTeamRoster, FounderViewCustomers, FounderViewFinancials:
+		case FounderViewTeamRoster, FounderViewCustomers, FounderViewFinancials, FounderViewCapTable:
 			if key.Matches(msg, keys.Global.Back) {
 				s.view = FounderViewActions
 				return s, nil
@@ -1070,6 +1095,8 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 			return s.handleAction(msg.ID)
 		case FounderViewHiring:
 			return s.handleHiringSelection(msg.ID)
+		case FounderViewExecOffer:
+			return s.handleExecOfferSelection(msg.ID)
 		case FounderViewFiring:
 			return s.handleFiringSelection(msg.ID)
 		case FounderViewFunding:
@@ -1148,6 +1175,10 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		s.actionsMenu, cmd = s.actionsMenu.Update(msg)
 	case FounderViewHiring:
 		s.hiringMenu, cmd = s.hiringMenu.Update(msg)
+	case FounderViewExecOffer:
+		if s.execOfferMenu != nil {
+			s.execOfferMenu, cmd = s.execOfferMenu.Update(msg)
+		}
 	case FounderViewFiring:
 		s.firingMenu, cmd = s.firingMenu.Update(msg)
 	case FounderViewFunding:
@@ -1417,6 +1448,10 @@ func (s *FounderGameScreen) handleAction(id string) (ScreenModel, tea.Cmd) {
 		s.view = FounderViewFinancials
 		return s, nil
 
+	case "cap_table":
+		s.view = FounderViewCapTable
+		return s, nil
+
 	case "exit":
 		s.rebuildExitMenu()
 		s.view = FounderViewExit
@@ -1553,8 +1588,22 @@ func (s *FounderGameScreen) handleHiringSelection(id string) (ScreenModel, tea.C
 	s.selectedRole = role
 	s.selectedIsExec = isExec
 
+	// Executive hires go through offer negotiation
+	if isExec {
+		offers, err := fg.GenerateExecOffers(role)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ %v", err)}
+			s.view = FounderViewMain
+			return s, nil
+		}
+		s.execOffers = offers
+		s.rebuildExecOfferMenu()
+		s.view = FounderViewExecOffer
+		return s, nil
+	}
+
 	// Check if market selection is needed
-	if !isExec && (role == founder.RoleSales || role == founder.RoleMarketing || role == founder.RoleCustomerSuccess) && len(fg.GlobalMarkets) > 0 {
+	if (role == founder.RoleSales || role == founder.RoleMarketing || role == founder.RoleCustomerSuccess) && len(fg.GlobalMarkets) > 0 {
 		s.marketOptions = []string{"USA"}
 		for _, m := range fg.GlobalMarkets {
 			s.marketOptions = append(s.marketOptions, m.Region)
@@ -1564,24 +1613,153 @@ func (s *FounderGameScreen) handleHiringSelection(id string) (ScreenModel, tea.C
 		return s, nil
 	}
 
-	// Direct hire
+	// Direct hire for regular employees
 	err := fg.HireEmployee(role)
 	if err != nil {
 		s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
 	} else {
-		cost := "$100k/year"
-		if isExec {
-			cost = "$300k/year (3x impact)"
-		}
 		s.turnMessages = []string{
 			fmt.Sprintf("✓ Hired a new %s!", role),
-			fmt.Sprintf("   Cost: %s", cost),
+			fmt.Sprintf("   Cost: $100k/year"),
 			fmt.Sprintf("   New runway: %d months", fg.CashRunwayMonths),
 		}
 	}
 
 	s.view = FounderViewMain
 	return s, nil
+}
+
+// Executive offer negotiation
+func (s *FounderGameScreen) rebuildExecOfferMenu() {
+	items := []components.MenuItem{}
+	for i, offer := range s.execOffers {
+		equityStr := fmt.Sprintf("%.1f%% equity", offer.Equity)
+		salaryStr := fmt.Sprintf("$%dk/yr", offer.AnnualCost/1000)
+		impactStr := fmt.Sprintf("%.1fx impact", offer.Impact)
+		items = append(items, components.MenuItem{
+			ID:          fmt.Sprintf("offer_%d", i),
+			Title:       fmt.Sprintf("%s — %s + %s", offer.Label, equityStr, salaryStr),
+			Description: fmt.Sprintf("%s (%s)", offer.Description, impactStr),
+			Icon:        []string{"📋", "🚀", "💵"}[i%3],
+		})
+	}
+	items = append(items, components.MenuItem{
+		ID: "cancel", Title: "Pass on this candidate", Icon: "←",
+	})
+	s.execOfferMenu = components.NewMenu("CHOOSE COMPENSATION PACKAGE", items)
+	s.execOfferMenu.SetSize(65, 12)
+	s.execOfferMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handleExecOfferSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewHiring
+		return s, nil
+	}
+
+	if strings.HasPrefix(id, "offer_") {
+		idxStr := strings.TrimPrefix(id, "offer_")
+		idx := 0
+		fmt.Sscanf(idxStr, "%d", &idx)
+
+		if idx >= 0 && idx < len(s.execOffers) {
+			offer := s.execOffers[idx]
+			err := fg.HireExecWithOffer(offer)
+			if err != nil {
+				s.turnMessages = []string{fmt.Sprintf("❌ %v", err)}
+			} else {
+				s.turnMessages = []string{
+					fmt.Sprintf("✓ Hired %s as %s!", offer.Name, strings.ToUpper(string(offer.Role))),
+					fmt.Sprintf("   Package: %s", offer.Label),
+					fmt.Sprintf("   Equity: %.1f%% (4yr vest, 1yr cliff)", offer.Equity),
+					fmt.Sprintf("   Salary: $%dk/year ($%dk/mo)", offer.AnnualCost/1000, offer.MonthlyCost/1000),
+					fmt.Sprintf("   Impact: %.1fx", offer.Impact),
+					fmt.Sprintf("   New runway: %d months", fg.CashRunwayMonths),
+				}
+			}
+			s.view = FounderViewMain
+			return s, nil
+		}
+	}
+
+	return s, nil
+}
+
+func (s *FounderGameScreen) renderExecOffer() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Magenta).
+		Bold(true).
+		Width(65).
+		Align(lipgloss.Center)
+
+	if len(s.execOffers) > 0 {
+		offer := s.execOffers[0]
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(
+			headerStyle.Render(fmt.Sprintf("🤝 %s WANTS TO JOIN AS %s", strings.ToUpper(offer.Name), strings.ToUpper(string(offer.Role))))))
+	} else {
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("🤝 EXECUTIVE OFFER NEGOTIATION")))
+	}
+	b.WriteString("\n\n")
+
+	fg := s.gameData.FounderState
+	availPool := fg.EquityPool - fg.EquityAllocated
+	if availPool < 0 {
+		availPool = 0
+	}
+	infoStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(infoStyle.Render(fmt.Sprintf("Equity Pool: %.1f%% available | Cash: $%s | Runway: %d months",
+		availPool, formatCompactMoney(fg.Cash), fg.CashRunwayMonths)))
+	b.WriteString("\n\n")
+
+	// Offer comparison table
+	if len(s.execOffers) > 0 {
+		tableBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Magenta).
+			Padding(1, 2).
+			Width(65)
+
+		var table strings.Builder
+		colHead := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+		table.WriteString(colHead.Render(fmt.Sprintf("  %-18s %8s  %10s  %7s", "PACKAGE", "EQUITY", "SALARY", "IMPACT")))
+		table.WriteString("\n")
+		dimStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+		table.WriteString(dimStyle.Render("  " + strings.Repeat("─", 50)))
+		table.WriteString("\n")
+
+		colors := []lipgloss.Color{styles.White, styles.Green, styles.Yellow}
+		for i, offer := range s.execOffers {
+			style := lipgloss.NewStyle().Foreground(colors[i%len(colors)])
+			table.WriteString(style.Render(fmt.Sprintf("  %-18s %7.1f%%  $%dk/yr  %5.1fx",
+				offer.Label, offer.Equity, offer.AnnualCost/1000, offer.Impact)))
+			table.WriteString("\n")
+		}
+
+		table.WriteString("\n")
+		noteStyle := lipgloss.NewStyle().Foreground(styles.Gray).Italic(true)
+		table.WriteString(noteStyle.Render("  More equity → lower salary, higher motivation"))
+		table.WriteString("\n")
+		table.WriteString(noteStyle.Render("  More cash → less dilution, but higher burn rate"))
+
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(tableBox.Render(table.String())))
+		b.WriteString("\n\n")
+	}
+
+	menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+	if s.execOfferMenu != nil {
+		b.WriteString(menuContainer.Render(s.execOfferMenu.View()))
+	}
+	b.WriteString("\n\n")
+
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("esc back • enter select"))
+
+	return b.String()
 }
 
 func (s *FounderGameScreen) handleMarketSelection(num int) (ScreenModel, tea.Cmd) {
@@ -2194,8 +2372,12 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 	case "expand_pool":
 		s.equityPoolInput.SetValue("")
 		s.equityPoolInput.Focus()
-		s.inputMessage = fmt.Sprintf("Current pool: %.1f%% | Your equity: %.1f%%",
-			fg.EquityPool, 100.0-fg.EquityPool-fg.EquityGivenAway)
+		avail := fg.EquityPool - fg.EquityAllocated
+		if avail < 0 {
+			avail = 0
+		}
+		s.inputMessage = fmt.Sprintf("Pool: %.1f%% (%.1f%% available) | Your equity: %.1f%%",
+			fg.EquityPool, avail, 100.0-fg.EquityPool-fg.EquityGivenAway)
 		s.view = FounderViewBoardAction
 		return s, textinput.Blink
 
@@ -2448,7 +2630,8 @@ func (s *FounderGameScreen) handleExitConfirm() (ScreenModel, tea.Cmd) {
 
 	fg.ExecuteExit(s.selectedExitType)
 
-	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	// At exit, unallocated equity pool cancels — only allocated equity counts
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityAllocated
 	payout := int64(float64(fg.ExitValuation) * founderEquity / 100.0)
 
 	s.turnMessages = []string{
@@ -3927,6 +4110,8 @@ func (s *FounderGameScreen) View() string {
 		return s.renderActions()
 	case FounderViewHiring:
 		return s.renderHiring()
+	case FounderViewExecOffer:
+		return s.renderExecOffer()
 	case FounderViewHiringMarket:
 		return s.renderHiringMarket()
 	case FounderViewFiring:
@@ -3961,6 +4146,8 @@ func (s *FounderGameScreen) View() string {
 		return s.renderCustomers()
 	case FounderViewFinancials:
 		return s.renderFinancials()
+	case FounderViewCapTable:
+		return s.renderCapTable()
 	case FounderViewExit:
 		return s.renderExit()
 	case FounderViewConfirmExit:
@@ -5266,6 +5453,155 @@ func (s *FounderGameScreen) renderFinancials() string {
 	return b.String()
 }
 
+func (s *FounderGameScreen) renderCapTable() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Green).
+		Bold(true).
+		Width(70).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📋 CAP TABLE")))
+	b.WriteString("\n\n")
+
+	capBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Green).
+		Padding(1, 2).
+		Width(70)
+
+	var content strings.Builder
+
+	labelStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+	valStyle := lipgloss.NewStyle().Foreground(styles.White)
+	dimStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+
+	// Summary row
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	availablePool := fg.EquityPool - fg.EquityAllocated
+	if availablePool < 0 {
+		availablePool = 0
+	}
+	content.WriteString(labelStyle.Render("Total Shares: "))
+	content.WriteString(valStyle.Render("100%"))
+	content.WriteString("   ")
+	content.WriteString(labelStyle.Render("Funding Rounds: "))
+	content.WriteString(valStyle.Render(fmt.Sprintf("%d", len(fg.FundingRounds))))
+	content.WriteString("\n\n")
+
+	// Column header
+	colHeader := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+	content.WriteString(colHeader.Render(fmt.Sprintf("  %-32s %8s  %s", "HOLDER", "EQUITY", "DETAILS")))
+	content.WriteString("\n")
+	content.WriteString(dimStyle.Render("  " + strings.Repeat("─", 64)))
+	content.WriteString("\n")
+
+	// 1. Founder
+	founderColor := lipgloss.NewStyle().Foreground(styles.Green).Bold(true)
+	controlNote := ""
+	if founderEquity >= 50.0 {
+		controlNote = "majority control ✓"
+	} else {
+		controlNote = "minority ⚠️"
+	}
+	content.WriteString(founderColor.Render(fmt.Sprintf("  %-32s %7.1f%%  %s", "👤 "+fg.FounderName+" (Founder)", founderEquity, controlNote)))
+	content.WriteString("\n")
+
+	// 2. Investors (from funding rounds)
+	totalInvestorEquity := 0.0
+	investorStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
+	for _, round := range fg.FundingRounds {
+		roundEquity := round.EquityGiven
+		totalInvestorEquity += roundEquity
+		investorLabel := round.RoundName
+		if len(round.Investors) > 0 {
+			investorLabel = round.Investors[0]
+		}
+		content.WriteString(investorStyle.Render(fmt.Sprintf("  %-32s %7.1f%%  %s @ $%s val",
+			"💰 "+investorLabel,
+			roundEquity,
+			round.RoundName,
+			formatCompactMoney(round.Valuation))))
+		content.WriteString("\n")
+	}
+
+	// 3. Cap table entries (executives, employees, advisors)
+	execStyle := lipgloss.NewStyle().Foreground(styles.Magenta)
+	empStyle := lipgloss.NewStyle().Foreground(styles.White)
+	advisorStyle := lipgloss.NewStyle().Foreground(styles.Cyan)
+
+	for _, entry := range fg.CapTable {
+		var style lipgloss.Style
+		var icon string
+		var detail string
+		switch entry.Type {
+		case "executive":
+			style = execStyle
+			icon = "⭐"
+			detail = fmt.Sprintf("exec, month %d", entry.MonthGranted)
+		case "employee":
+			style = empStyle
+			icon = "👷"
+			detail = fmt.Sprintf("employee, month %d", entry.MonthGranted)
+		case "advisor":
+			style = advisorStyle
+			icon = "🧠"
+			detail = fmt.Sprintf("advisor, month %d", entry.MonthGranted)
+		default:
+			style = dimStyle
+			icon = "📄"
+			detail = entry.Type
+		}
+		content.WriteString(style.Render(fmt.Sprintf("  %-32s %7.2f%%  %s",
+			icon+" "+entry.Name, entry.Equity, detail)))
+		content.WriteString("\n")
+	}
+
+	// 4. Unallocated pool
+	if availablePool > 0 {
+		content.WriteString(dimStyle.Render(fmt.Sprintf("  %-32s %7.1f%%  reserved for future hires",
+			"🏦 Unallocated Pool", availablePool)))
+		content.WriteString("\n")
+	}
+
+	// Separator and totals
+	content.WriteString(dimStyle.Render("  " + strings.Repeat("─", 64)))
+	content.WriteString("\n")
+
+	totalStyle := lipgloss.NewStyle().Foreground(styles.White).Bold(true)
+	content.WriteString(totalStyle.Render(fmt.Sprintf("  %-32s %7.1f%%", "TOTAL", 100.0)))
+	content.WriteString("\n\n")
+
+	// Summary stats
+	summaryLabel := lipgloss.NewStyle().Foreground(styles.Yellow)
+	content.WriteString(summaryLabel.Render("  Founder Equity: "))
+	if founderEquity >= 50 {
+		content.WriteString(lipgloss.NewStyle().Foreground(styles.Green).Render(fmt.Sprintf("%.1f%%", founderEquity)))
+	} else {
+		content.WriteString(lipgloss.NewStyle().Foreground(styles.Red).Render(fmt.Sprintf("%.1f%%", founderEquity)))
+	}
+	content.WriteString(summaryLabel.Render("  |  Investor Equity: "))
+	content.WriteString(valStyle.Render(fmt.Sprintf("%.1f%%", totalInvestorEquity)))
+	content.WriteString(summaryLabel.Render("  |  Employee Pool: "))
+	content.WriteString(valStyle.Render(fmt.Sprintf("%.1f%% (%.1f%% used)", fg.EquityPool, fg.EquityAllocated)))
+	content.WriteString("\n")
+
+	// At-exit note
+	content.WriteString("\n")
+	content.WriteString(dimStyle.Render("  ℹ At exit, unallocated pool ("+fmt.Sprintf("%.1f%%", availablePool)+") cancels — founder effective equity: "+fmt.Sprintf("%.1f%%", 100.0-fg.EquityAllocated-fg.EquityGivenAway)+"%"))
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(capBox.Render(content.String())))
+	b.WriteString("\n\n")
+
+	capHelpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(capHelpStyle.Render("esc back"))
+
+	return b.String()
+}
+
 func (s *FounderGameScreen) renderExit() string {
 	var b strings.Builder
 
@@ -5327,7 +5663,8 @@ func (s *FounderGameScreen) renderConfirmExit() string {
 		Padding(1, 2).
 		Width(60)
 
-	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	// At exit, unallocated equity pool cancels — only allocated equity counts
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityAllocated
 	payout := int64(float64(selectedExit.Valuation) * founderEquity / 100.0)
 
 	var confirm strings.Builder
@@ -6070,8 +6407,12 @@ func (s *FounderGameScreen) renderBoardTable() string {
 	content.WriteString(labelStyle.Render("Board Seats: "))
 	content.WriteString(valStyle.Render(fmt.Sprintf("%d", fg.BoardSeats)))
 	content.WriteString("    ")
+	availablePool := fg.EquityPool - fg.EquityAllocated
+	if availablePool < 0 {
+		availablePool = 0
+	}
 	content.WriteString(labelStyle.Render("Equity Pool: "))
-	content.WriteString(valStyle.Render(fmt.Sprintf("%.1f%%", fg.EquityPool)))
+	content.WriteString(valStyle.Render(fmt.Sprintf("%.1f%% (%.1f%% available)", fg.EquityPool, availablePool)))
 	content.WriteString("    ")
 	content.WriteString(labelStyle.Render("Your Equity: "))
 	content.WriteString(valStyle.Render(fmt.Sprintf("%.1f%%", 100.0-fg.EquityPool-fg.EquityGivenAway)))
@@ -6337,7 +6678,15 @@ func (s *FounderGameScreen) handleAdvisorConfirmSelection(id string) (ScreenMode
 		IsActive:   true,
 	}
 	fg.BoardMembers = append(fg.BoardMembers, advisor)
-	fg.EquityPool -= s.pendingAdvisorCost
+	fg.EquityAllocated += s.pendingAdvisorCost // Allocate from pool, don't shrink pool itself
+
+	// Add to cap table
+	fg.CapTable = append(fg.CapTable, founder.CapTableEntry{
+		Name:         advisor.Name,
+		Type:         "advisor",
+		Equity:       s.pendingAdvisorCost,
+		MonthGranted: fg.Turn,
+	})
 
 	s.turnMessages = []string{
 		fmt.Sprintf("✓ Hired advisor: %s (%s)", advisor.Name, advisor.Expertise),
@@ -6403,7 +6752,17 @@ func (s *FounderGameScreen) handleRemoveAdvisorSelection(id string) (ScreenModel
 				buybackCost := int64(float64(valuation) * fg.BoardMembers[i].EquityCost / 100.0)
 				if fg.Cash >= buybackCost {
 					fg.Cash -= buybackCost
-					fg.EquityPool += fg.BoardMembers[i].EquityCost
+					fg.EquityAllocated -= fg.BoardMembers[i].EquityCost // Return to available pool
+					if fg.EquityAllocated < 0 {
+						fg.EquityAllocated = 0
+					}
+					// Remove from cap table
+					for j := len(fg.CapTable) - 1; j >= 0; j-- {
+						if fg.CapTable[j].Name == name && fg.CapTable[j].Type == "advisor" {
+							fg.CapTable = append(fg.CapTable[:j], fg.CapTable[j+1:]...)
+							break
+						}
+					}
 					fg.BoardMembers[i].IsActive = false
 					s.turnMessages = []string{
 						fmt.Sprintf("✓ Removed advisor: %s", name),
@@ -6495,11 +6854,15 @@ func (s *FounderGameScreen) renderAdvisorConfirm() string {
 	details.WriteString(labelStyle.Render("Equity Cost: "))
 	details.WriteString(fmt.Sprintf("%.2f%%\n\n", s.pendingAdvisorCost))
 
+	availPool := fg.EquityPool - fg.EquityAllocated
+	if availPool < 0 {
+		availPool = 0
+	}
 	details.WriteString(labelStyle.Render("After hire:\n"))
 	details.WriteString(fmt.Sprintf("  Cash: $%s → $%s\n",
 		formatCompactMoney(fg.Cash), formatCompactMoney(fg.Cash-s.pendingAdvisorSetup)))
-	details.WriteString(fmt.Sprintf("  Equity Pool: %.1f%% → %.1f%%\n",
-		fg.EquityPool, fg.EquityPool-s.pendingAdvisorCost))
+	details.WriteString(fmt.Sprintf("  Pool Available: %.1f%% → %.1f%%\n",
+		availPool, availPool-s.pendingAdvisorCost))
 
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(detailBox.Render(details.String())))
 	b.WriteString("\n\n")
@@ -6596,7 +6959,8 @@ func (s *FounderGameScreen) handleAcquisitionSelection(id string) (ScreenModel, 
 		return s, nil
 	}
 
-	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	// At exit, unallocated equity pool cancels — only allocated equity counts
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityAllocated
 	founderPayout := int64(float64(offer.OfferAmount) * founderEquity / 100.0)
 
 	switch id {
@@ -6680,7 +7044,8 @@ func (s *FounderGameScreen) renderAcquisitionOffer() string {
 	details.WriteString(headerRow.Render("── PAYOUT BREAKDOWN ──"))
 	details.WriteString("\n\n")
 
-	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityPool
+	// At exit, unallocated equity pool cancels — only allocated equity counts
+	founderEquity := 100.0 - fg.EquityGivenAway - fg.EquityAllocated
 	founderPayout := int64(float64(offer.OfferAmount) * founderEquity / 100.0)
 
 	founderLine := lipgloss.NewStyle().Foreground(styles.Green)
@@ -6702,9 +7067,13 @@ func (s *FounderGameScreen) renderAcquisitionOffer() string {
 			truncate(label, 30), entry.Equity, formatCompactMoney(payout)))
 	}
 
-	if fg.EquityPool > 0 {
-		poolStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
-		details.WriteString(poolStyle.Render(fmt.Sprintf("%-30s %6.1f%%  (unallocated)", "Employee Pool", fg.EquityPool)))
+	unallocatedPool := fg.EquityPool - fg.EquityAllocated
+	if unallocatedPool < 0 {
+		unallocatedPool = 0
+	}
+	if unallocatedPool > 0 {
+		poolStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+		details.WriteString(poolStyle.Render(fmt.Sprintf("%-30s %6.1f%%  (cancelled at exit)", "Unallocated Pool", unallocatedPool)))
 		details.WriteString("\n")
 	}
 

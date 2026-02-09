@@ -283,10 +283,8 @@ func (fs *FounderState) BuybackEquity(roundName string, equityPercent float64) (
 
 func (fs *FounderState) AddBoardSeat(reason string) {
 	fs.BoardSeats++
-	fs.EquityPool -= 2.0 // Each board seat costs 2% from equity pool
-	if fs.EquityPool < 0 {
-		fs.EquityPool = 0
-	}
+	// Board seats don't directly consume from the equity pool — the equity is
+	// allocated when an actual person fills the seat (advisor/investor board member)
 }
 
 
