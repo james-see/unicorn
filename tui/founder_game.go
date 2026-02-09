@@ -3527,9 +3527,95 @@ func (s *FounderGameScreen) rebuildStrategicOpportunityMenu() {
 
 	if fg.PendingOpportunity != nil {
 		opp := fg.PendingOpportunity
+
+		// Info rows
 		items = append(items,
 			components.MenuItem{ID: "info", Title: opp.Title, Description: opp.Description, Disabled: true, Icon: "💡"},
-			components.MenuItem{ID: "accept", Title: "Accept Opportunity", Description: fmt.Sprintf("Benefit: %s", opp.Benefit), Icon: "✓"},
+		)
+		if opp.Cost > 0 {
+			items = append(items,
+				components.MenuItem{ID: "cost_info", Title: fmt.Sprintf("Cost: $%s", formatCompactMoney(opp.Cost)), Disabled: true, Icon: "💰"},
+			)
+		}
+		if opp.Risk != "" {
+			items = append(items,
+				components.MenuItem{ID: "risk_info", Title: fmt.Sprintf("Risk: %s", opp.Risk), Disabled: true, Icon: "⚠️"},
+			)
+		}
+
+		// Founder attends (full benefit, but founder time cost)
+		items = append(items,
+			components.MenuItem{
+				ID:          "accept_founder",
+				Title:       "Founder Attends Personally",
+				Description: fmt.Sprintf("100%% benefit: %s | Tradeoff: -20%% product velocity this month", opp.Benefit),
+				Icon:        "👤",
+			},
+		)
+
+		// CTO delegation option
+		hasCTO := false
+		ctoName := ""
+		for _, exec := range fg.Team.Executives {
+			if exec.Role == founder.RoleCTO {
+				hasCTO = true
+				ctoName = exec.Name
+				break
+			}
+		}
+		// CGO/COO can handle business opportunities
+		hasCGO := false
+		cgoName := ""
+		cgoRole := ""
+		for _, exec := range fg.Team.Executives {
+			if exec.Role == founder.RoleCGO || exec.Role == founder.RoleCOO {
+				hasCGO = true
+				cgoName = exec.Name
+				cgoRole = strings.ToUpper(string(exec.Role))
+				break
+			}
+		}
+
+		// Technical opportunities: CTO can handle
+		isTechOpp := opp.Type == "talent" || opp.Type == "enterprise_pilot" || opp.Type == "api_integration" || opp.Type == "patent"
+		// Business opportunities: CGO/COO can handle
+		isBizOpp := opp.Type == "press" || opp.Type == "conference" || opp.Type == "influencer" || opp.Type == "competitor_distress" || opp.Type == "govt_contract"
+
+		if hasCTO && isTechOpp {
+			items = append(items,
+				components.MenuItem{
+					ID:          "accept_cto",
+					Title:       fmt.Sprintf("Send %s (CTO)", ctoName),
+					Description: "75% benefit, no founder time cost, no velocity hit",
+					Icon:        "⚡",
+				},
+			)
+		}
+		if hasCGO && isBizOpp {
+			items = append(items,
+				components.MenuItem{
+					ID:          "accept_cxo",
+					Title:       fmt.Sprintf("Send %s (%s)", cgoName, cgoRole),
+					Description: "75% benefit, no founder time cost, no velocity hit",
+					Icon:        "📈",
+				},
+			)
+		}
+
+		// Chairman delegation
+		chairman := fg.GetChairman()
+		if chairman != nil {
+			items = append(items,
+				components.MenuItem{
+					ID:          "accept_chairman",
+					Title:       fmt.Sprintf("Send Chairman %s", chairman.Name),
+					Description: "60% benefit, no founder time, chairman's network may help",
+					Icon:        "🎩",
+				},
+			)
+		}
+
+		items = append(items,
 			components.MenuItem{ID: "decline", Title: "Decline Opportunity", Description: "Pass on this opportunity", Icon: "✗"},
 		)
 	}
@@ -3537,7 +3623,7 @@ func (s *FounderGameScreen) rebuildStrategicOpportunityMenu() {
 	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
 
 	s.strategicOpportunityMenu = components.NewMenu("STRATEGIC OPPORTUNITY", items)
-	s.strategicOpportunityMenu.SetSize(60, 12)
+	s.strategicOpportunityMenu.SetSize(65, 18)
 	s.strategicOpportunityMenu.SetHideHelp(true)
 }
 
@@ -3556,173 +3642,241 @@ func (s *FounderGameScreen) handleStrategicOpportunitySelection(id string) (Scre
 
 	opp := fg.PendingOpportunity
 
+	// Determine benefit multiplier and tradeoffs based on who attends
+	benefitMultiplier := 1.0
+	founderTimeCost := false
+	delegateName := ""
+
 	switch id {
-	case "accept":
-		// Deduct cost
-		if opp.Cost > 0 {
-			if fg.Cash < opp.Cost {
-				s.turnMessages = []string{fmt.Sprintf("❌ Not enough cash ($%s needed)", formatCompactMoney(opp.Cost))}
-				s.view = FounderViewActions
-				return s, nil
+	case "accept_founder":
+		benefitMultiplier = 1.0
+		founderTimeCost = true
+		delegateName = "you"
+	case "accept_cto":
+		benefitMultiplier = 0.75
+		for _, exec := range fg.Team.Executives {
+			if exec.Role == founder.RoleCTO {
+				delegateName = exec.Name + " (CTO)"
+				break
 			}
-			fg.Cash -= opp.Cost
 		}
-
-		msgs := []string{fmt.Sprintf("✓ Accepted: %s", opp.Title)}
-
-		// Apply actual effects based on type
-		switch opp.Type {
-		case "press":
-			// Press coverage brings customers and reduces CAC
-			newCustomers := 5 + rand.Intn(15)
-			newMRR := int64(newCustomers) * fg.AvgDealSize
-			fg.Customers += newCustomers
-			fg.DirectCustomers += newCustomers
-			fg.DirectMRR += newMRR
-			fg.BaseCAC = int64(float64(fg.BaseCAC) * 0.85) // 15% CAC reduction
-			msgs = append(msgs,
-				fmt.Sprintf("   +%d new customers (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)),
-				"   -15% customer acquisition cost (brand awareness)")
-
-		case "enterprise_pilot":
-			// Big enterprise deal with 80% success chance
-			if rand.Float64() < 0.80 {
-				dealMRR := (50000 + rand.Int63n(150000)) / 12
-				fg.Customers += 1
-				fg.DirectCustomers += 1
-				fg.DirectMRR += dealMRR
-				msgs = append(msgs,
-					fmt.Sprintf("   Enterprise pilot SUCCESS — +$%s/mo MRR", formatCompactMoney(dealMRR)),
-					"   +1 enterprise customer (reference account)")
-			} else {
-				msgs = append(msgs, "   Enterprise pilot did not convert — they went with another vendor")
+	case "accept_cxo":
+		benefitMultiplier = 0.75
+		for _, exec := range fg.Team.Executives {
+			if exec.Role == founder.RoleCGO || exec.Role == founder.RoleCOO {
+				delegateName = exec.Name + " (" + strings.ToUpper(string(exec.Role)) + ")"
+				break
 			}
-
-		case "bridge_round":
-			// Quick cash injection with equity dilution
-			amount := 200000 + rand.Int63n(500000)
-			equity := 3.0 + rand.Float64()*5.0
-			fg.Cash += amount
-			fg.EquityGivenAway += equity
-			fg.CalculateRunway()
-			msgs = append(msgs,
-				fmt.Sprintf("   +$%s cash injection", formatCompactMoney(amount)),
-				fmt.Sprintf("   -%.1f%% equity dilution", equity),
-				fmt.Sprintf("   New runway: %d months", fg.CashRunwayMonths))
-
-		case "conference":
-			// Conference brings leads that convert to customers over time
-			newCustomers := 3 + rand.Intn(8)
-			newMRR := int64(newCustomers) * fg.AvgDealSize
-			fg.Customers += newCustomers
-			fg.DirectCustomers += newCustomers
-			fg.DirectMRR += newMRR
-			fg.BaseCAC = int64(float64(fg.BaseCAC) * 0.90) // 10% CAC reduction
-			msgs = append(msgs,
-				fmt.Sprintf("   +%d customers (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)),
-				"   -10% CAC from industry credibility")
-
-		case "talent":
-			// Hire a star engineer with high impact
-			eng := founder.Employee{
-				Name:        "Star Engineer",
-				Role:        founder.RoleEngineer,
-				MonthlyCost: 200000 / 12, // $200k/yr
-				Impact:      2.0,          // 2x normal engineer
-				MonthHired:  fg.Turn,
+		}
+	case "accept_chairman":
+		benefitMultiplier = 0.60
+		chairman := fg.GetChairman()
+		if chairman != nil {
+			delegateName = "Chairman " + chairman.Name
+			// Chairman's network occasionally gives a bonus
+			if rand.Float64() < 0.30 {
+				benefitMultiplier = 0.85 // Chairman's network came through
 			}
-			fg.Team.Engineers = append(fg.Team.Engineers, eng)
-			fg.CalculateTeamCost()
-			fg.CalculateRunway()
-			msgs = append(msgs,
-				"   Hired Star Engineer (2x impact)",
-				fmt.Sprintf("   Salary: $200k/yr | New runway: %d months", fg.CashRunwayMonths))
+		}
+	case "decline":
+		s.turnMessages = []string{fmt.Sprintf("✗ Declined: %s", opp.Title)}
+		fg.PendingOpportunity = nil
+		s.view = FounderViewMain
+		return s, nil
+	default:
+		return s, nil
+	}
 
-		case "competitor_distress":
-			// Acquire competitor's customers
-			newCustomers := 15 + rand.Intn(25)
-			newMRR := int64(newCustomers) * fg.AvgDealSize
-			fg.Customers += newCustomers
-			fg.DirectCustomers += newCustomers
-			fg.DirectMRR += newMRR
-			// Deactivate a random competitor if any exist
-			for i := range fg.Competitors {
-				if fg.Competitors[i].Active {
-					fg.Competitors[i].Active = false
-					msgs = append(msgs, fmt.Sprintf("   Eliminated competitor: %s", fg.Competitors[i].Name))
-					break
-				}
-			}
-			msgs = append(msgs, fmt.Sprintf("   +%d customers acquired (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)))
+	// Deduct cost
+	if opp.Cost > 0 {
+		if fg.Cash < opp.Cost {
+			s.turnMessages = []string{fmt.Sprintf("❌ Not enough cash ($%s needed)", formatCompactMoney(opp.Cost))}
+			s.view = FounderViewActions
+			return s, nil
+		}
+		fg.Cash -= opp.Cost
+	}
 
-		case "api_integration":
-			// API partner brings recurring customers
-			newCustomers := 10 + rand.Intn(20)
-			newMRR := int64(newCustomers) * fg.AvgDealSize
-			fg.Customers += newCustomers
-			fg.DirectCustomers += newCustomers
-			fg.DirectMRR += newMRR
-			fg.MonthlyGrowthRate += 0.02 // Ongoing growth boost
-			msgs = append(msgs,
-				fmt.Sprintf("   +%d customers via API integration (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)),
-				"   +2% ongoing monthly growth from partner channel")
+	msgs := []string{fmt.Sprintf("✓ Accepted: %s (sent %s)", opp.Title, delegateName)}
 
-		case "govt_contract":
-			// Government contract — guaranteed revenue
-			contractMRR := int64(20000 + rand.Intn(80000))
+	// Apply benefit multiplier to customer/MRR gains
+	scaleCustomers := func(base int) int {
+		return int(float64(base) * benefitMultiplier)
+	}
+	scaleMRR := func(base int64) int64 {
+		return int64(float64(base) * benefitMultiplier)
+	}
+
+	// Apply actual effects based on type
+	switch opp.Type {
+	case "press":
+		newCustomers := scaleCustomers(5 + rand.Intn(15))
+		if newCustomers < 1 {
+			newCustomers = 1
+		}
+		newMRR := int64(newCustomers) * fg.AvgDealSize
+		fg.Customers += newCustomers
+		fg.DirectCustomers += newCustomers
+		fg.DirectMRR += newMRR
+		cacReduction := 0.85 + (1.0-benefitMultiplier)*0.10 // Less effective if delegated
+		fg.BaseCAC = int64(float64(fg.BaseCAC) * cacReduction)
+		msgs = append(msgs,
+			fmt.Sprintf("   +%d new customers (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)),
+			fmt.Sprintf("   -%.0f%% CAC from brand awareness", (1.0-cacReduction)*100))
+
+	case "enterprise_pilot":
+		successChance := 0.80 * benefitMultiplier // Delegation reduces success rate
+		if rand.Float64() < successChance {
+			dealMRR := scaleMRR((50000 + rand.Int63n(150000)) / 12)
 			fg.Customers += 1
 			fg.DirectCustomers += 1
-			fg.DirectMRR += contractMRR
+			fg.DirectMRR += dealMRR
 			msgs = append(msgs,
-				fmt.Sprintf("   Government contract: +$%s/mo MRR", formatCompactMoney(contractMRR)),
-				"   3-year guaranteed revenue")
-
-		case "influencer":
-			newCustomers := 8 + rand.Intn(20)
-			newMRR := int64(newCustomers) * fg.AvgDealSize
-			fg.Customers += newCustomers
-			fg.DirectCustomers += newCustomers
-			fg.DirectMRR += newMRR
-			msgs = append(msgs, fmt.Sprintf("   Influencer campaign: +%d customers (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)))
-
-		case "patent":
-			// Patent creates competitive moat
-			for i := range fg.Competitors {
-				if fg.Competitors[i].Active {
-					fg.Competitors[i].MarketShare *= 0.8 // Reduce all competitor share
-				}
-			}
-			msgs = append(msgs, "   Patent granted — competitors' market share reduced 20%")
-
-		case "university_partnership":
-			// Cheap talent pipeline + customers
-			newCustomers := 5 + rand.Intn(10)
-			newMRR := int64(newCustomers) * fg.AvgDealSize
-			fg.Customers += newCustomers
-			fg.DirectCustomers += newCustomers
-			fg.DirectMRR += newMRR
-			msgs = append(msgs,
-				fmt.Sprintf("   +%d customers from university network (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)),
-				"   Improved recruiting pipeline")
+				fmt.Sprintf("   Enterprise pilot SUCCESS — +$%s/mo MRR", formatCompactMoney(dealMRR)),
+				"   +1 enterprise customer (reference account)")
+		} else {
+			msgs = append(msgs, "   Enterprise pilot did not convert — they went with another vendor")
 		}
 
-		// Sync MRR to reflect new customers
-		fg.MRR = fg.DirectMRR + fg.AffiliateMRR
-
-		if opp.Cost > 0 {
-			msgs = append(msgs, fmt.Sprintf("   Cost: $%s", formatCompactMoney(opp.Cost)))
-		}
-
+	case "bridge_round":
+		amount := 200000 + rand.Int63n(500000)
+		equity := 3.0 + rand.Float64()*5.0
+		fg.Cash += amount
+		fg.EquityGivenAway += equity
 		fg.CalculateRunway()
-		s.turnMessages = msgs
-		fg.PendingOpportunity = nil
+		msgs = append(msgs,
+			fmt.Sprintf("   +$%s cash injection", formatCompactMoney(amount)),
+			fmt.Sprintf("   -%.1f%% equity dilution", equity),
+			fmt.Sprintf("   New runway: %d months", fg.CashRunwayMonths))
 
-	case "decline":
-		s.turnMessages = []string{
-			fmt.Sprintf("✗ Declined: %s", opp.Title),
+	case "conference":
+		newCustomers := scaleCustomers(3 + rand.Intn(8))
+		if newCustomers < 1 {
+			newCustomers = 1
 		}
-		fg.PendingOpportunity = nil
+		newMRR := int64(newCustomers) * fg.AvgDealSize
+		fg.Customers += newCustomers
+		fg.DirectCustomers += newCustomers
+		fg.DirectMRR += newMRR
+		cacReduction := 0.90 + (1.0-benefitMultiplier)*0.07
+		fg.BaseCAC = int64(float64(fg.BaseCAC) * cacReduction)
+		msgs = append(msgs,
+			fmt.Sprintf("   +%d customers (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)),
+			fmt.Sprintf("   -%.0f%% CAC from credibility", (1.0-cacReduction)*100))
+
+	case "talent":
+		impactMult := 2.0 * benefitMultiplier // Less impact if not founder-recruited
+		eng := founder.Employee{
+			Name:        "Star Engineer",
+			Role:        founder.RoleEngineer,
+			MonthlyCost: 200000 / 12,
+			Impact:      impactMult,
+			MonthHired:  fg.Turn,
+		}
+		fg.Team.Engineers = append(fg.Team.Engineers, eng)
+		fg.CalculateTeamCost()
+		fg.CalculateRunway()
+		msgs = append(msgs,
+			fmt.Sprintf("   Hired Star Engineer (%.1fx impact)", impactMult),
+			fmt.Sprintf("   Salary: $200k/yr | New runway: %d months", fg.CashRunwayMonths))
+
+	case "competitor_distress":
+		newCustomers := scaleCustomers(15 + rand.Intn(25))
+		if newCustomers < 1 {
+			newCustomers = 1
+		}
+		newMRR := int64(newCustomers) * fg.AvgDealSize
+		fg.Customers += newCustomers
+		fg.DirectCustomers += newCustomers
+		fg.DirectMRR += newMRR
+		for i := range fg.Competitors {
+			if fg.Competitors[i].Active {
+				fg.Competitors[i].Active = false
+				msgs = append(msgs, fmt.Sprintf("   Eliminated competitor: %s", fg.Competitors[i].Name))
+				break
+			}
+		}
+		msgs = append(msgs, fmt.Sprintf("   +%d customers acquired (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)))
+
+	case "api_integration":
+		newCustomers := scaleCustomers(10 + rand.Intn(20))
+		if newCustomers < 1 {
+			newCustomers = 1
+		}
+		newMRR := int64(newCustomers) * fg.AvgDealSize
+		fg.Customers += newCustomers
+		fg.DirectCustomers += newCustomers
+		fg.DirectMRR += newMRR
+		growthBoost := 0.02 * benefitMultiplier
+		fg.MonthlyGrowthRate += growthBoost
+		msgs = append(msgs,
+			fmt.Sprintf("   +%d customers via API integration (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)),
+			fmt.Sprintf("   +%.1f%% ongoing monthly growth", growthBoost*100))
+
+	case "govt_contract":
+		contractMRR := scaleMRR(int64(20000 + rand.Intn(80000)))
+		fg.Customers += 1
+		fg.DirectCustomers += 1
+		fg.DirectMRR += contractMRR
+		msgs = append(msgs,
+			fmt.Sprintf("   Government contract: +$%s/mo MRR", formatCompactMoney(contractMRR)),
+			"   3-year guaranteed revenue")
+
+	case "influencer":
+		newCustomers := scaleCustomers(8 + rand.Intn(20))
+		if newCustomers < 1 {
+			newCustomers = 1
+		}
+		newMRR := int64(newCustomers) * fg.AvgDealSize
+		fg.Customers += newCustomers
+		fg.DirectCustomers += newCustomers
+		fg.DirectMRR += newMRR
+		msgs = append(msgs, fmt.Sprintf("   Influencer campaign: +%d customers (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)))
+
+	case "patent":
+		reduction := 0.80 + (1.0-benefitMultiplier)*0.10 // Less effective if delegated
+		for i := range fg.Competitors {
+			if fg.Competitors[i].Active {
+				fg.Competitors[i].MarketShare *= reduction
+			}
+		}
+		msgs = append(msgs, fmt.Sprintf("   Patent granted — competitors' market share reduced %.0f%%", (1.0-reduction)*100))
+
+	case "university_partnership":
+		newCustomers := scaleCustomers(5 + rand.Intn(10))
+		if newCustomers < 1 {
+			newCustomers = 1
+		}
+		newMRR := int64(newCustomers) * fg.AvgDealSize
+		fg.Customers += newCustomers
+		fg.DirectCustomers += newCustomers
+		fg.DirectMRR += newMRR
+		msgs = append(msgs,
+			fmt.Sprintf("   +%d customers from university network (+$%s/mo MRR)", newCustomers, formatCompactMoney(newMRR)),
+			"   Improved recruiting pipeline")
 	}
+
+	// Sync MRR
+	fg.MRR = fg.DirectMRR + fg.AffiliateMRR
+
+	// Apply founder time cost tradeoff
+	if founderTimeCost {
+		fg.ProductMaturity *= 0.98 // -2% product velocity
+		msgs = append(msgs, "   ⏱️ Founder time spent: -2% product velocity this month")
+	} else {
+		msgs = append(msgs, fmt.Sprintf("   ✓ Delegated to %s — no founder time cost", delegateName))
+	}
+
+	if opp.Cost > 0 {
+		msgs = append(msgs, fmt.Sprintf("   Cost: $%s", formatCompactMoney(opp.Cost)))
+	}
+	if benefitMultiplier < 1.0 {
+		msgs = append(msgs, fmt.Sprintf("   📊 Effectiveness: %.0f%% (delegated)", benefitMultiplier*100))
+	}
+
+	fg.CalculateRunway()
+	s.turnMessages = msgs
+	fg.PendingOpportunity = nil
 
 	s.view = FounderViewMain
 	return s, nil
