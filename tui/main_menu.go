@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -9,6 +10,7 @@ import (
 	"github.com/jamesacampbell/unicorn/tui/components"
 	"github.com/jamesacampbell/unicorn/tui/keys"
 	"github.com/jamesacampbell/unicorn/tui/styles"
+	"github.com/jamesacampbell/unicorn/version"
 )
 
 // MainMenuScreen is the main menu
@@ -189,13 +191,13 @@ func (m *MainMenuScreen) View() string {
 
 	b.WriteString(menuContainer.Render(menuBox.Render(m.menu.View())))
 
-	// Version info
+	// Version info (parity with release; links to release info)
 	b.WriteString("\n\n")
 	versionStyle := lipgloss.NewStyle().
 		Foreground(styles.Gray).
 		Width(m.width).
 		Align(lipgloss.Center)
-	b.WriteString(versionStyle.Render("v2.0 - Bubble Tea Edition"))
+	b.WriteString(versionStyle.Render(fmt.Sprintf("%s  •  %s", version.String(), version.ReleaseInfoURL())))
 
 	return b.String()
 }

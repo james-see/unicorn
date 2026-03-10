@@ -1,5 +1,15 @@
 # Changelog
 
+## Version 3.32.0 - Version parity with release & release info link (2026-03-09)
+
+### App version & release link
+- **Single source of truth for version**: Added `version` package; app version now matches release (CHANGELOG/tag).
+- **TUI main menu**: Shows current version and link to release info (e.g. `v3.32.0 • https://github.com/james-see/unicorn/releases/latest`).
+- **CLI**: `unicorn --version` or `unicorn -v` prints version and release URL.
+- **Releases**: Build injects version via ldflags so published binaries report the correct tag.
+
+---
+
 ## Version 3.31.1 - Founder Mode Startup Expansion & Bug Fixes (2025-11-08)
 
 ### 🐛 Bug Fixes

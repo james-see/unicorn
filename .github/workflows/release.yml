@@ -44,6 +44,15 @@ jobs:
       - name: Get dependencies
         run: go mod download
 
+      - name: Set version for build
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=dev-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
@@ -53,7 +62,7 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             output_name="${output_name}.exe"
           fi
-          go build -o "${output_name}" -ldflags="-s -w" .
+          go build -o "${output_name}" -ldflags="-s -w -X github.com/jamesacampbell/unicorn/version.Version=${{ steps.version.outputs.VERSION }}" .
 
       - name: Create archive
         run: |
