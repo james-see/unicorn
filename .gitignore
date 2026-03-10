@@ -34,6 +34,7 @@ unicorn_scores.db
 Thumbs.db
 
 # IDE
+.cursor/
 .vscode/
 .idea/
 *.swp

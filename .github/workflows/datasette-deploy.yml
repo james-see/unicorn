@@ -9,8 +9,6 @@ on:
     paths:
       - 'datasette-deploy/**'
       - '.github/workflows/datasette-deploy.yml'
-  schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
 
 jobs:
   deploy:
