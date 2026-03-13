@@ -115,7 +115,7 @@ func (s *VCTurnScreen) refreshPortfolioTable() {
 	}
 
 	s.portfolioTable = components.NewGameTable("", columns, rows)
-	s.portfolioTable.SetSize(60, 10)
+	s.portfolioTable.SetSize(s.width, 10)
 }
 
 func (s *VCTurnScreen) refreshLeaderboard() {
@@ -618,12 +618,12 @@ func (s *VCTurnScreen) renderTurnSummary() string {
 	gs := s.gameData.GameState
 	var b strings.Builder
 
-	// Header
+	// Header (full width to match content)
 	headerStyle := lipgloss.NewStyle().
 		Foreground(styles.Black).
 		Background(styles.Cyan).
 		Bold(true).
-		Width(70).
+		Width(s.width).
 		Align(lipgloss.Center)
 
 	header := fmt.Sprintf("🦄 %s - MONTH %d/%d", s.gameData.FirmName, gs.Portfolio.Turn, gs.Portfolio.MaxTurns)
@@ -649,11 +649,11 @@ func (s *VCTurnScreen) renderTurnSummary() string {
 	b.WriteString(s.renderNewsPanel())
 	b.WriteString("\n")
 
-	// Status bar
+	// Status bar (full width)
 	statusStyle := lipgloss.NewStyle().
 		Foreground(styles.White).
 		Background(styles.DarkGray).
-		Width(70).
+		Width(s.width).
 		Padding(0, 2)
 
 	// Calculate ROI
@@ -734,7 +734,7 @@ func (s *VCTurnScreen) renderNewsPanel() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Yellow).
 		Padding(0, 1).
-		Width(70)
+		Width(s.width)
 
 	var b strings.Builder
 	titleStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
@@ -759,10 +759,14 @@ func (s *VCTurnScreen) renderNewsPanel() string {
 				msgStyle = lipgloss.NewStyle().Foreground(styles.Red)
 			}
 
-			// Allow longer messages now that we have full width
+			// Allow longer messages with full-width panel
 			displayMsg := msg
-			if len(displayMsg) > 65 {
-				displayMsg = displayMsg[:62] + "..."
+			maxLen := s.width - 5
+			if maxLen < 40 {
+				maxLen = 40
+			}
+			if len(displayMsg) > maxLen {
+				displayMsg = displayMsg[:maxLen-3] + "..."
 			}
 
 			b.WriteString(msgStyle.Render("• " + displayMsg))

@@ -1,5 +1,13 @@
 # Changelog
 
+## Version 3.32.3 - Full-width tables & boxes (2026-03-13)
+
+### TUI layout
+- **Investment phase**: Header bar, startup table, syndicate table, and detail boxes now use full terminal width (match the top bar). "Your Range" column grows so dollar amounts no longer wrap to a second line.
+- **Turn screen**: Header, status bar, portfolio dashboard table, and news panel use full width.
+
+---
+
 ## Version 3.32.2 - Syndicate exact amounts & invest min/max (2026-03-13)
 
 ### Syndicate investment UX

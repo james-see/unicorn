@@ -144,7 +144,7 @@ func (s *VCInvestScreen) refreshStartupTable() {
 	}
 
 	s.startupTable = components.NewGameTable("", columns, rows)
-	s.startupTable.SetSize(70, 12)
+	s.startupTable.SetSize(s.width, 12)
 }
 
 // Init initializes the investment screen
@@ -553,17 +553,22 @@ func (s *VCInvestScreen) buildSyndicateTable() {
 		}
 	}
 
+	// Use full width; give "Your Range" remaining space so "$25,000-$289,509" doesn't wrap
+	contentWidth := s.width - 4
+	yourRangeWidth := contentWidth - 3 - 12 - 10 - 8
+	if yourRangeWidth < 22 {
+		yourRangeWidth = 22
+	}
 	columns := []table.Column{
 		{Title: "#", Width: 3},
 		{Title: "Company", Width: 12},
 		{Title: "Lead", Width: 10},
 		{Title: "Round", Width: 8},
-		{Title: "Your Range", Width: 20},
+		{Title: "Your Range", Width: yourRangeWidth},
 	}
 
 	s.syndicateTable = components.NewGameTable("", columns, rows)
-	// Height 16 so 4+ syndicate rows visible with header (internal height 12); was 10 and only showed 2
-	s.syndicateTable.SetSize(55, 16)
+	s.syndicateTable.SetSize(s.width, 16)
 }
 
 func (s *VCInvestScreen) handleSyndicateAmountSubmit() (ScreenModel, tea.Cmd) {
@@ -696,7 +701,7 @@ func (s *VCInvestScreen) renderHeader() string {
 		Foreground(styles.Black).
 		Background(styles.Cyan).
 		Bold(true).
-		Width(70).
+		Width(s.width).
 		Align(lipgloss.Center).
 		Padding(0, 2)
 
@@ -780,12 +785,12 @@ func (s *VCInvestScreen) renderAmountInput() string {
 	startup := s.selectedStartup
 	var b strings.Builder
 
-	// Startup details box
+	// Startup details box (full width to match header bar)
 	detailBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Cyan).
 		Padding(1, 2).
-		Width(60)
+		Width(s.width)
 
 	var details strings.Builder
 	nameStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
@@ -1018,12 +1023,12 @@ func (s *VCInvestScreen) renderSyndicateAmount() string {
 	b.WriteString(titleStyle.Render(fmt.Sprintf("🤝 SYNDICATE: %s", opp.CompanyName)))
 	b.WriteString("\n\n")
 
-	// Details box
+	// Details box (full width to match header bar)
 	detailBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Magenta).
 		Padding(1, 2).
-		Width(55)
+		Width(s.width)
 
 	var details strings.Builder
 	labelStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
