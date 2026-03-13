@@ -320,12 +320,12 @@ go build -o unicorn
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the complete feature roadmap and planned enhancements.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the complete feature roadmap and planned enhancements.
 
 **Quick Summary:**
 - ✅ Many features already implemented (upgrades, board seats, follow-on investments, syndicates, global leaderboards)
 - 🚧 Planned: Carry interest, more AI personalities, portfolio dashboard, competitor AI for founder mode
-- 📋 Full details and priorities in [ROADMAP.md](ROADMAP.md)
+- 📋 Full details and priorities in [docs/ROADMAP.md](docs/ROADMAP.md)
 
 ## Demo
 

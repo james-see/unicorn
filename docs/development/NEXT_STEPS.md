@@ -138,16 +138,16 @@ Should return JSON with your demo scores.
 
 Three comprehensive guides are available:
 
-1. **[QUICKSTART_LEADERBOARD.md](QUICKSTART_LEADERBOARD.md)**
+1. **[QUICKSTART_LEADERBOARD.md](../datasette/QUICKSTART_LEADERBOARD.md)**
    - 5-minute deployment guide
    - Quick reference commands
 
-2. **[DATASETTE_SETUP.md](DATASETTE_SETUP.md)**
+2. **[DATASETTE_SETUP.md](../datasette/DATASETTE_SETUP.md)**
    - Detailed setup instructions
    - Troubleshooting guide
    - Security considerations
 
-3. **[README_LEADERBOARD.md](README_LEADERBOARD.md)**
+3. **[README_LEADERBOARD.md](../datasette/README_LEADERBOARD.md)**
    - Architecture overview
    - API documentation
    - Future enhancements
@@ -243,9 +243,9 @@ vercel inspect YOUR-URL       # Deployment details
 
 ## ?? Need Help?
 
-- **Quick Start**: [QUICKSTART_LEADERBOARD.md](QUICKSTART_LEADERBOARD.md)
-- **Detailed Guide**: [DATASETTE_SETUP.md](DATASETTE_SETUP.md)
-- **Architecture**: [README_LEADERBOARD.md](README_LEADERBOARD.md)
+- **Quick Start**: [QUICKSTART_LEADERBOARD.md](../datasette/QUICKSTART_LEADERBOARD.md)
+- **Detailed Guide**: [DATASETTE_SETUP.md](../datasette/DATASETTE_SETUP.md)
+- **Architecture**: [README_LEADERBOARD.md](../datasette/README_LEADERBOARD.md)
 - **Project Summary**: [PHASE5_SUMMARY.md](PHASE5_SUMMARY.md)
 
 ## ?? You're All Set!

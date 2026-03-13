@@ -39,9 +39,9 @@ Integrated a complete global leaderboard system using Datasette, allowing player
 - Error handling with helpful deployment instructions
 
 ### 5. Documentation
-- **DATASETTE_SETUP.md** - Complete deployment guide
-- **QUICKSTART_LEADERBOARD.md** - 5-minute setup guide
-- **README_LEADERBOARD.md** - Architecture and features overview
+- **docs/datasette/DATASETTE_SETUP.md** - Complete deployment guide
+- **docs/datasette/QUICKSTART_LEADERBOARD.md** - 5-minute setup guide
+- **docs/datasette/README_LEADERBOARD.md** - Architecture and features overview
 - Updated `.gitignore` for Vercel and database files
 
 ## Technical Architecture
@@ -71,10 +71,10 @@ leaderboard/leaderboard.go              - Game HTTP client
 datasette-metadata.json                 - Datasette config
 vercel.json                             - Vercel deployment config
 leaderboard.db                          - SQLite database (with demo data)
-DATASETTE_SETUP.md                      - Detailed setup guide
-QUICKSTART_LEADERBOARD.md               - Quick start guide
-README_LEADERBOARD.md                   - Architecture overview
-PHASE5_SUMMARY.md                       - This file
+docs/datasette/DATASETTE_SETUP.md        - Detailed setup guide
+docs/datasette/QUICKSTART_LEADERBOARD.md - Quick start guide
+docs/datasette/README_LEADERBOARD.md     - Architecture overview
+docs/development/PHASE5_SUMMARY.md        - This file
 ```
 
 ## Files Modified
@@ -257,9 +257,9 @@ Potential additions:
 
 Three comprehensive guides created:
 
-1. **QUICKSTART_LEADERBOARD.md** - Deploy in 5 minutes
-2. **DATASETTE_SETUP.md** - Detailed setup with troubleshooting
-3. **README_LEADERBOARD.md** - Architecture and features
+1. **docs/datasette/QUICKSTART_LEADERBOARD.md** - Deploy in 5 minutes
+2. **docs/datasette/DATASETTE_SETUP.md** - Detailed setup with troubleshooting
+3. **docs/datasette/README_LEADERBOARD.md** - Architecture and features
 
 ## Benefits
 
@@ -298,7 +298,7 @@ The system is ready for deployment and will significantly enhance player engagem
 
 ## Next Steps
 
-1. Deploy to Vercel (see QUICKSTART_LEADERBOARD.md)
+1. Deploy to Vercel (see docs/datasette/QUICKSTART_LEADERBOARD.md)
 2. Update URLs in code
 3. Push to GitHub
 4. Announce feature to players
