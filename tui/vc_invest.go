@@ -250,6 +250,17 @@ func (s *VCInvestScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 			}
 
 		case PhaseSyndicateAmount:
+			opp := gs.SyndicateOpportunities[s.selectedSyndicate]
+			switch msg.String() {
+			case "x", "X":
+				s.amountInput.SetValue(fmt.Sprintf("%d", opp.YourMaxShare))
+				s.errorMsg = ""
+				return s, textinput.Blink
+			case "m", "M":
+				s.amountInput.SetValue(fmt.Sprintf("%d", opp.YourMinShare))
+				s.errorMsg = ""
+				return s, textinput.Blink
+			}
 			switch {
 			case key.Matches(msg, keys.Global.Back):
 				s.phase = PhaseSyndicateList
@@ -538,7 +549,7 @@ func (s *VCInvestScreen) buildSyndicateTable() {
 			truncate(opp.CompanyName, 12),
 			truncate(opp.LeadInvestor, 10),
 			formatCompactMoney(opp.TotalRoundSize),
-			fmt.Sprintf("$%s-$%s", formatCompactMoney(opp.YourMinShare), formatCompactMoney(opp.YourMaxShare)),
+			fmt.Sprintf("$%s-$%s", formatExactMoney(opp.YourMinShare), formatExactMoney(opp.YourMaxShare)),
 		}
 	}
 
@@ -547,7 +558,7 @@ func (s *VCInvestScreen) buildSyndicateTable() {
 		{Title: "Company", Width: 12},
 		{Title: "Lead", Width: 10},
 		{Title: "Round", Width: 8},
-		{Title: "Your Range", Width: 15},
+		{Title: "Your Range", Width: 20},
 	}
 
 	s.syndicateTable = components.NewGameTable("", columns, rows)
@@ -573,15 +584,15 @@ func (s *VCInvestScreen) handleSyndicateAmountSubmit() (ScreenModel, tea.Cmd) {
 	opp := gs.SyndicateOpportunities[s.selectedSyndicate]
 
 	if amount < opp.YourMinShare {
-		s.errorMsg = fmt.Sprintf("Minimum investment is $%d", opp.YourMinShare)
+		s.errorMsg = fmt.Sprintf("Minimum investment is $%s", formatExactMoney(opp.YourMinShare))
 		return s, nil
 	}
 	if amount > opp.YourMaxShare {
-		s.errorMsg = fmt.Sprintf("Maximum investment is $%d", opp.YourMaxShare)
+		s.errorMsg = fmt.Sprintf("Maximum investment is $%s", formatExactMoney(opp.YourMaxShare))
 		return s, nil
 	}
 	if amount > gs.Portfolio.Cash {
-		s.errorMsg = fmt.Sprintf("Insufficient funds (have $%d)", gs.Portfolio.Cash)
+		s.errorMsg = fmt.Sprintf("Insufficient funds (have $%s)", formatExactMoney(gs.Portfolio.Cash))
 		return s, nil
 	}
 
@@ -1024,7 +1035,7 @@ func (s *VCInvestScreen) renderSyndicateAmount() string {
 	details.WriteString(fmt.Sprintf("$%s\n", formatCompactMoney(opp.Valuation)))
 	details.WriteString(labelStyle.Render("Your Range: "))
 	greenStyle := lipgloss.NewStyle().Foreground(styles.Green)
-	details.WriteString(greenStyle.Render(fmt.Sprintf("$%s - $%s\n", formatCompactMoney(opp.YourMinShare), formatCompactMoney(opp.YourMaxShare))))
+	details.WriteString(greenStyle.Render(fmt.Sprintf("$%s - $%s\n", formatExactMoney(opp.YourMinShare), formatExactMoney(opp.YourMaxShare))))
 	details.WriteString("\n")
 	details.WriteString(labelStyle.Render("Benefits:\n"))
 	for _, benefit := range opp.Benefits {
@@ -1057,7 +1068,7 @@ func (s *VCInvestScreen) renderSyndicateAmount() string {
 
 	b.WriteString("\n")
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
-	b.WriteString(helpStyle.Render("enter confirm • esc cancel"))
+	b.WriteString(helpStyle.Render("x max • m min • enter confirm • esc cancel"))
 
 	return b.String()
 }
@@ -1080,4 +1091,27 @@ func formatCompactMoney(amount int64) string {
 		return fmt.Sprintf("%.0fK", float64(amount)/1000)
 	}
 	return fmt.Sprintf("%d", amount)
+}
+
+// formatExactMoney formats int64 with commas so exact min/max are shown (no K/M estimates).
+func formatExactMoney(amount int64) string {
+	if amount < 0 {
+		return "-" + formatExactMoney(-amount)
+	}
+	if amount < 1000 {
+		return fmt.Sprintf("%d", amount)
+	}
+	str := ""
+	for amount > 0 {
+		if str != "" {
+			str = "," + str
+		}
+		if amount >= 1000 {
+			str = fmt.Sprintf("%03d", amount%1000) + str
+		} else {
+			str = fmt.Sprintf("%d", amount%1000) + str
+		}
+		amount /= 1000
+	}
+	return str
 }

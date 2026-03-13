@@ -1,5 +1,13 @@
 # Changelog
 
+## Version 3.32.2 - Syndicate exact amounts & invest min/max (2026-03-13)
+
+### Syndicate investment UX
+- **Exact min/max**: Your Range and validation messages now show exact amounts with commas (e.g. $289,509) instead of K/M estimates.
+- **Quick fill**: On syndicate amount screen, press **x** for max or **m** for min to fill the investment amount.
+
+---
+
 ## Version 3.32.1 - Syndicate opportunities list fix (2026-03-13)
 
 ### Bug fixes
