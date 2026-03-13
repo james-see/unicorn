@@ -59,7 +59,7 @@ var (
 
 	FocusedBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(Magenta).
+			BorderForeground(Cyan).
 			Padding(1, 2)
 
 	// Panel styles for split layouts

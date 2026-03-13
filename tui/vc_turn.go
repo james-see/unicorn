@@ -115,7 +115,11 @@ func (s *VCTurnScreen) refreshPortfolioTable() {
 	}
 
 	s.portfolioTable = components.NewGameTable("", columns, rows)
-	s.portfolioTable.SetSize(s.width, 10)
+	tableWidth := s.width
+	if tableWidth > 88 {
+		tableWidth = 88
+	}
+	s.portfolioTable.SetSize(tableWidth, 10)
 }
 
 func (s *VCTurnScreen) refreshLeaderboard() {
@@ -730,45 +734,41 @@ func (s *VCTurnScreen) renderPortfolioPanel() string {
 }
 
 func (s *VCTurnScreen) renderNewsPanel() string {
+	// Fixed width so lipgloss border renders correctly (full width fragments the yellow border)
+	panelWidth := 72
+	if s.width < panelWidth {
+		panelWidth = s.width
+	}
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Yellow).
 		Padding(0, 1).
-		Width(s.width)
+		Width(panelWidth)
 
 	var b strings.Builder
 	titleStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
 	b.WriteString(titleStyle.Render("📰 NEWS"))
 	b.WriteString("\n")
 
+	innerWidth := panelWidth - 4
 	if len(s.turnMessages) == 0 {
 		b.WriteString("  No news this turn\n")
 	} else {
-		// Show last 4 messages
 		start := 0
 		if len(s.turnMessages) > 4 {
 			start = len(s.turnMessages) - 4
 		}
-
 		for _, msg := range s.turnMessages[start:] {
-			// Color code based on content
 			msgStyle := lipgloss.NewStyle().Foreground(styles.White)
 			if strings.Contains(msg, "raised") || strings.Contains(msg, "📈") || strings.Contains(msg, "increased") || strings.Contains(msg, "growth") {
 				msgStyle = lipgloss.NewStyle().Foreground(styles.Green)
 			} else if strings.Contains(msg, "down") || strings.Contains(msg, "📉") || strings.Contains(msg, "decreased") || strings.Contains(msg, "scandal") {
 				msgStyle = lipgloss.NewStyle().Foreground(styles.Red)
 			}
-
-			// Allow longer messages with full-width panel
 			displayMsg := msg
-			maxLen := s.width - 5
-			if maxLen < 40 {
-				maxLen = 40
+			if len(displayMsg) > innerWidth-4 {
+				displayMsg = displayMsg[:innerWidth-7] + "..."
 			}
-			if len(displayMsg) > maxLen {
-				displayMsg = displayMsg[:maxLen-3] + "..."
-			}
-
 			b.WriteString(msgStyle.Render("• " + displayMsg))
 			b.WriteString("\n")
 		}

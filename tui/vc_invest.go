@@ -87,19 +87,26 @@ func NewVCInvestScreen(width, height int, gameData *GameData) *VCInvestScreen {
 func (s *VCInvestScreen) refreshStartupTable() {
 	gs := s.gameData.GameState
 
-	// Build a set of already-invested company names
+	// Fixed column widths that stay under table width (with padding) so row doesn't wrap
+	columns := []table.Column{
+		{Title: "#", Width: 3},
+		{Title: "Name", Width: 18},
+		{Title: "Category", Width: 12},
+		{Title: "Valuation", Width: 9},
+		{Title: "Risk", Width: 6},
+		{Title: "Growth", Width: 6},
+	}
+
 	investedNames := make(map[string]bool)
 	for _, inv := range gs.Portfolio.Investments {
 		investedNames[inv.CompanyName] = true
 	}
 
-	// Build startup rows, skipping already-invested companies
 	var rows []table.Row
-	s.rowToStartupIdx = nil // Reset the mapping
+	s.rowToStartupIdx = nil
 	rowNum := 1
 
 	for i, startup := range gs.AvailableStartups {
-		// Skip if already invested (e.g., via syndicate)
 		if investedNames[startup.Name] {
 			continue
 		}
@@ -124,8 +131,8 @@ func (s *VCInvestScreen) refreshStartupTable() {
 
 		rows = append(rows, table.Row{
 			fmt.Sprintf("%d", rowNum),
-			truncate(startup.Name, 14),
-			truncate(startup.Category, 11),
+			truncate(startup.Name, 18),
+			truncate(startup.Category, 12),
 			formatCompactMoney(startup.Valuation),
 			riskLabel,
 			growthLabel,
@@ -134,17 +141,12 @@ func (s *VCInvestScreen) refreshStartupTable() {
 		rowNum++
 	}
 
-	columns := []table.Column{
-		{Title: "#", Width: 3},
-		{Title: "Name", Width: 14},
-		{Title: "Category", Width: 11},
-		{Title: "Valuation", Width: 9},
-		{Title: "Risk", Width: 4},
-		{Title: "Growth", Width: 6},
-	}
-
 	s.startupTable = components.NewGameTable("", columns, rows)
-	s.startupTable.SetSize(s.width, 12)
+	tableWidth := s.width
+	if tableWidth > 88 {
+		tableWidth = 88
+	}
+	s.startupTable.SetSize(tableWidth, 12)
 }
 
 // Init initializes the investment screen
@@ -542,33 +544,32 @@ func (s *VCInvestScreen) finalizeInvestment() (ScreenModel, tea.Cmd) {
 func (s *VCInvestScreen) buildSyndicateTable() {
 	gs := s.gameData.GameState
 
+	// Fixed column widths so row doesn't wrap; Your Range fits "$25,000-$999,999"
+	columns := []table.Column{
+		{Title: "#", Width: 3},
+		{Title: "Company", Width: 16},
+		{Title: "Lead", Width: 14},
+		{Title: "Round", Width: 8},
+		{Title: "Your Range", Width: 22},
+	}
+
 	rows := make([]table.Row, len(gs.SyndicateOpportunities))
 	for i, opp := range gs.SyndicateOpportunities {
 		rows[i] = table.Row{
 			fmt.Sprintf("%d", i+1),
-			truncate(opp.CompanyName, 12),
-			truncate(opp.LeadInvestor, 10),
+			truncate(opp.CompanyName, 16),
+			truncate(opp.LeadInvestor, 14),
 			formatCompactMoney(opp.TotalRoundSize),
 			fmt.Sprintf("$%s-$%s", formatExactMoney(opp.YourMinShare), formatExactMoney(opp.YourMaxShare)),
 		}
 	}
 
-	// Use full width; give "Your Range" remaining space so "$25,000-$289,509" doesn't wrap
-	contentWidth := s.width - 4
-	yourRangeWidth := contentWidth - 3 - 12 - 10 - 8
-	if yourRangeWidth < 22 {
-		yourRangeWidth = 22
-	}
-	columns := []table.Column{
-		{Title: "#", Width: 3},
-		{Title: "Company", Width: 12},
-		{Title: "Lead", Width: 10},
-		{Title: "Round", Width: 8},
-		{Title: "Your Range", Width: yourRangeWidth},
-	}
-
 	s.syndicateTable = components.NewGameTable("", columns, rows)
-	s.syndicateTable.SetSize(s.width, 16)
+	tableWidth := s.width
+	if tableWidth > 88 {
+		tableWidth = 88
+	}
+	s.syndicateTable.SetSize(tableWidth, 16)
 }
 
 func (s *VCInvestScreen) handleSyndicateAmountSubmit() (ScreenModel, tea.Cmd) {
@@ -785,12 +786,16 @@ func (s *VCInvestScreen) renderAmountInput() string {
 	startup := s.selectedStartup
 	var b strings.Builder
 
-	// Startup details box (full width to match header bar)
+	// Startup details box: fixed width so lipgloss border renders correctly
+	boxWidth := 70
+	if s.width < boxWidth {
+		boxWidth = s.width
+	}
 	detailBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Cyan).
 		Padding(1, 2).
-		Width(s.width)
+		Width(boxWidth)
 
 	var details strings.Builder
 	nameStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
@@ -1023,12 +1028,16 @@ func (s *VCInvestScreen) renderSyndicateAmount() string {
 	b.WriteString(titleStyle.Render(fmt.Sprintf("🤝 SYNDICATE: %s", opp.CompanyName)))
 	b.WriteString("\n\n")
 
-	// Details box (full width to match header bar)
+	// Details box: fixed width so lipgloss border renders correctly (full width + padding fragments borders)
+	boxWidth := 70
+	if s.width < boxWidth {
+		boxWidth = s.width
+	}
 	detailBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Magenta).
 		Padding(1, 2).
-		Width(s.width)
+		Width(boxWidth)
 
 	var details strings.Builder
 	labelStyle := lipgloss.NewStyle().Foreground(styles.Yellow)

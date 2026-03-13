@@ -1,5 +1,14 @@
 # Changelog
 
+## Version 3.32.4 - TUI layout and border fixes (2026-03-13)
+
+### TUI fixes
+- **Table width cap (88)**: Startup, syndicate, and portfolio tables no longer stretch to full width on wide terminals, avoiding row wrap and oversized frames. Focused table box uses cyan instead of magenta.
+- **Startup/syndicate columns**: Fixed column widths so rows stay on one line; Risk column shows "V.High" fully; Company/Lead/Name/Category use sensible widths without truncation where avoidable.
+- **Bordered boxes**: Syndicate amount, startup amount, and NEWS panels use fixed width (70–72) so lipgloss draws borders correctly instead of fragmenting (L-shaped segments, lines through content).
+
+---
+
 ## Version 3.32.3 - Full-width tables & boxes (2026-03-13)
 
 ### TUI layout
