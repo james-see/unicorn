@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 3.32.1 - Syndicate opportunities list fix (2026-03-13)
+
+### Bug fixes
+- **TUI VC investment phase**: Syndicate opportunities table now shows all 4 rows (was capped at 2). Increased table height so the full list is visible and scrolling works as expected.
+
+---
+
 ## Version 3.32.0 - Version parity with release & release info link (2026-03-09)
 
 ### App version & release link

@@ -551,7 +551,8 @@ func (s *VCInvestScreen) buildSyndicateTable() {
 	}
 
 	s.syndicateTable = components.NewGameTable("", columns, rows)
-	s.syndicateTable.SetSize(55, 10)
+	// Height 16 so 4+ syndicate rows visible with header (internal height 12); was 10 and only showed 2
+	s.syndicateTable.SetSize(55, 16)
 }
 
 func (s *VCInvestScreen) handleSyndicateAmountSubmit() (ScreenModel, tea.Cmd) {
