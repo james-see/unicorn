@@ -342,6 +342,7 @@ func (s *VCSetupScreen) startGame() tea.Cmd {
 			s.gameData.Difficulty,
 			s.gameData.PlayerUpgrades,
 		)
+		s.gameData.CurrentMode = "vc"
 
 		// Load reputation
 		dbRep, err := database.GetVCReputation(s.gameData.PlayerName)

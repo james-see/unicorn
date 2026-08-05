@@ -19,6 +19,7 @@ type AchievementsScreen struct {
 	width            int
 	height           int
 	playerName       string
+	currentMode      string // "vc", "founder", or "" (all)
 	unlockedAchs     []string
 	unlockedMap      map[string]bool
 	totalPoints      int
@@ -36,7 +37,7 @@ type AchievementsScreen struct {
 }
 
 // NewAchievementsScreen creates a new achievements screen
-func NewAchievementsScreen(width, height int, playerName string) *AchievementsScreen {
+func NewAchievementsScreen(width, height int, playerName, mode string) *AchievementsScreen {
 	// If no player name, show name input first
 	if playerName == "" {
 		nameInput := textinput.New()
@@ -46,10 +47,11 @@ func NewAchievementsScreen(width, height int, playerName string) *AchievementsSc
 		nameInput.Width = 30
 
 		return &AchievementsScreen{
-			width:     width,
-			height:    height,
-			needsName: true,
-			nameInput: nameInput,
+			width:       width,
+			height:      height,
+			needsName:   true,
+			nameInput:   nameInput,
+			currentMode: mode,
 		}
 	}
 
@@ -62,11 +64,13 @@ func NewAchievementsScreen(width, height int, playerName string) *AchievementsSc
 		unlockedMap[id] = true
 	}
 
-	// Calculate total points
+	// Calculate total points (filtered by mode)
 	totalPoints := 0
 	for _, id := range unlocked {
 		if ach, exists := achievements.AllAchievements[id]; exists {
-			totalPoints += ach.Points
+			if matchesMode(ach.GameMode, mode) {
+				totalPoints += ach.Points
+			}
 		}
 	}
 
@@ -85,7 +89,16 @@ func NewAchievementsScreen(width, height int, playerName string) *AchievementsSc
 		totalPoints:  totalPoints,
 		categories:   categories,
 		chainIDs:     chainIDs,
+		currentMode:  mode,
 	}
+}
+
+// matchesMode returns true if the achievement's mode matches the filter
+func matchesMode(achMode, filterMode string) bool {
+	if filterMode == "" || filterMode == "all" {
+		return true
+	}
+	return achMode == filterMode || achMode == ""
 }
 
 // Init initializes the achievements screen
@@ -108,7 +121,7 @@ func (s *AchievementsScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 			case msg.Type == tea.KeyEnter:
 				name := strings.TrimSpace(s.nameInput.Value())
 				if name != "" {
-					return NewAchievementsScreen(s.width, s.height, name), textinput.Blink
+					return NewAchievementsScreen(s.width, s.height, name, s.currentMode), textinput.Blink
 				}
 			}
 		}
@@ -175,11 +188,24 @@ func (s *AchievementsScreen) View() string {
 		Padding(0, 2).
 		Width(50)
 
-	unlockedCount := len(s.unlockedAchs)
-	totalCount := len(achievements.AllAchievements)
+	unlockedCount := 0
+	totalCount := 0
+	for _, ach := range achievements.AllAchievements {
+		if !matchesMode(ach.GameMode, s.currentMode) {
+			continue
+		}
+		totalCount++
+		if s.unlockedMap[ach.ID] {
+			unlockedCount++
+		}
+	}
 
-	stats := fmt.Sprintf("Player: %s\nUnlocked: %d/%d\nTotal Points: %d",
-		s.playerName, unlockedCount, totalCount, s.totalPoints)
+	modeLabel := s.currentMode
+	if modeLabel == "" || modeLabel == "all" {
+		modeLabel = "All"
+	}
+	stats := fmt.Sprintf("Player: %s | Mode: %s\nUnlocked: %d/%d\nTotal Points: %d",
+		s.playerName, modeLabel, unlockedCount, totalCount, s.totalPoints)
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(statsBox.Render(stats)))
 	b.WriteString("\n\n")
 
@@ -210,6 +236,11 @@ func (s *AchievementsScreen) View() string {
 	displayCount := 0
 
 	for _, ach := range achievements.AllAchievements {
+		// Filter by mode
+		if !matchesMode(ach.GameMode, s.currentMode) {
+			continue
+		}
+
 		// Filter by category
 		if s.categories[s.selectedCategory] != "All" {
 			if ach.Category != s.categories[s.selectedCategory] {

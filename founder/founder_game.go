@@ -1263,6 +1263,14 @@ func (fs *FounderState) ProcessMonthWithBaseline(baselineMRR int64) []string {
 	prMsgs := fs.UpdatePRProgram()
 	messages = append(messages, prMsgs...)
 
+	// Spawn new PR crises (random chance, gated by $1M ARR or Series A)
+	if fs.ActivePRCrisis == nil {
+		newCrisis := fs.SpawnPRCrisis()
+		if newCrisis != nil {
+			messages = append(messages, fmt.Sprintf("🚨 PR CRISIS: %s detected! Severity: %s", newCrisis.Type, newCrisis.Severity))
+		}
+	}
+
 	// Process PR crises
 	prCrisisMsgs := fs.ProcessPRCrises()
 	messages = append(messages, prCrisisMsgs...)

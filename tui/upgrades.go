@@ -33,7 +33,7 @@ type UpgradesScreen struct {
 }
 
 // NewUpgradesScreen creates a new upgrades screen
-func NewUpgradesScreen(width, height int, playerName string) *UpgradesScreen {
+func NewUpgradesScreen(width, height int, playerName, mode string) *UpgradesScreen {
 	// If no player name, show name input first
 	if playerName == "" {
 		nameInput := textinput.New()
@@ -75,32 +75,17 @@ func NewUpgradesScreen(width, height int, playerName string) *UpgradesScreen {
 		}
 	}
 
+	// Get mode-relevant upgrades
 	// Build menu items
 	var menuItems []components.MenuItem
-	for _, upgrade := range upgrades.AllUpgrades {
-		owned := false
-		for _, id := range ownedUpgrades {
-			if id == upgrade.ID {
-				owned = true
-				break
-			}
+	if mode != "" {
+		for _, upgrade := range upgrades.GetUpgradesForGameMode(mode) {
+			menuItems = append(menuItems, buildUpgradeMenuItem(upgrade, ownedUpgrades, totalPoints))
 		}
-
-		var title, desc string
-		if owned {
-			title = fmt.Sprintf("✓ %s %s", upgrade.Icon, upgrade.Name)
-			desc = "OWNED"
-		} else {
-			title = fmt.Sprintf("%s %s (%d pts)", upgrade.Icon, upgrade.Name, upgrade.Cost)
-			desc = upgrade.Description
+	} else {
+		for _, upgrade := range upgrades.AllUpgrades {
+			menuItems = append(menuItems, buildUpgradeMenuItem(upgrade, ownedUpgrades, totalPoints))
 		}
-
-		menuItems = append(menuItems, components.MenuItem{
-			ID:          upgrade.ID,
-			Title:       title,
-			Description: desc,
-			Disabled:    owned || totalPoints < upgrade.Cost,
-		})
 	}
 
 	menu := components.NewMenu("", menuItems)
@@ -125,6 +110,33 @@ func (s *UpgradesScreen) Init() tea.Cmd {
 	return nil
 }
 
+// buildUpgradeMenuItem builds a menu item for a single upgrade
+func buildUpgradeMenuItem(upgrade upgrades.Upgrade, ownedUpgrades []string, totalPoints int) components.MenuItem {
+	owned := false
+	for _, id := range ownedUpgrades {
+		if id == upgrade.ID {
+			owned = true
+			break
+		}
+	}
+
+	var title, desc string
+	if owned {
+		title = fmt.Sprintf("✓ %s %s", upgrade.Icon, upgrade.Name)
+		desc = "OWNED"
+	} else {
+		title = fmt.Sprintf("%s %s (%d pts)", upgrade.Icon, upgrade.Name, upgrade.Cost)
+		desc = upgrade.Description
+	}
+
+	return components.MenuItem{
+		ID:          upgrade.ID,
+		Title:       title,
+		Description: desc,
+		Disabled:    owned || totalPoints < upgrade.Cost,
+	}
+}
+
 // Update handles upgrades input
 func (s *UpgradesScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 	// Handle name input state
@@ -138,7 +150,7 @@ func (s *UpgradesScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				name := strings.TrimSpace(s.nameInput.Value())
 				if name != "" {
 					// Reload screen with player name
-					return NewUpgradesScreen(s.width, s.height, name), textinput.Blink
+					return NewUpgradesScreen(s.width, s.height, name, ""), textinput.Blink
 				}
 			}
 		}
@@ -208,7 +220,7 @@ func (s *UpgradesScreen) doPurchase() (ScreenModel, tea.Cmd) {
 	s.selectedUpgrade = nil
 
 	// Refresh screen
-	return NewUpgradesScreen(s.width, s.height, s.playerName), nil
+	return NewUpgradesScreen(s.width, s.height, s.playerName, ""), nil
 }
 
 // View renders the upgrades screen

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jamesacampbell/unicorn/database"
 	"github.com/jamesacampbell/unicorn/tui/components"
 	"github.com/jamesacampbell/unicorn/tui/keys"
 	"github.com/jamesacampbell/unicorn/tui/styles"
@@ -66,25 +67,32 @@ func NewMainMenuScreen(width, height int, gameData *GameData) *MainMenuScreen {
 			Description: "Deep dive into your performance",
 			Icon:        "📉",
 		},
-		{
+	}
+
+	// Only show VC Reputation menu item if the player has a saved reputation
+	if gameData.PlayerName != "" && database.HasVCReputation(gameData.PlayerName) {
+		menuItems = append(menuItems, components.MenuItem{
 			ID:          "reputation",
 			Title:       "VC Reputation",
 			Description: "View your reputation and deal flow quality",
 			Icon:        "⭐",
-		},
-		{
+		})
+	}
+
+	menuItems = append(menuItems,
+		components.MenuItem{
 			ID:          "help",
 			Title:       "Help & Info",
 			Description: "Learn how to play",
 			Icon:        "❓",
 		},
-		{
+		components.MenuItem{
 			ID:          "quit",
 			Title:       "Quit",
 			Description: "Exit the game",
 			Icon:        "🚪",
 		},
-	}
+	)
 
 	menu := components.NewMenu("", menuItems)
 	menu.SetSize(40, 20)

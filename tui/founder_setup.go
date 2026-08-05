@@ -324,6 +324,7 @@ func (s *FounderSetupScreen) startGame() tea.Cmd {
 
 			s.gameData.FounderState = founder.NewFounderGame(s.playerName, selectedTemplate, s.gameData.PlayerUpgrades)
 		}
+		s.gameData.CurrentMode = "founder"
 
 		return SwitchScreenMsg{Screen: ScreenFounderGame}
 	}

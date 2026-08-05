@@ -20,7 +20,6 @@ const (
 	ScreenSplash Screen = iota
 	ScreenMainMenu
 	ScreenVCSetup
-	ScreenVCGame
 	ScreenVCInvest
 	ScreenVCTurn
 	ScreenVCResults
@@ -100,6 +99,7 @@ type GameData struct {
 	FounderState   *founder.FounderState
 	PlayerUpgrades []string
 	AutoMode       bool
+	CurrentMode    string // "vc" or "founder"
 }
 
 // ScreenModel interface for all screen models
@@ -121,7 +121,6 @@ type App struct {
 	splash       ScreenModel
 	mainMenu     ScreenModel
 	vcSetup      ScreenModel
-	vcGame       ScreenModel
 	vcInvest     ScreenModel
 	vcTurn       ScreenModel
 	vcResults    ScreenModel
@@ -181,7 +180,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Global quit handler
-		if key.Matches(msg, appKeys.Quit) && a.currentScreen != ScreenVCGame && a.currentScreen != ScreenFounderGame && a.currentScreen != ScreenFounderResults {
+		if key.Matches(msg, appKeys.Quit) && a.currentScreen != ScreenFounderGame && a.currentScreen != ScreenFounderResults {
 			a.quitting = true
 			return a, tea.Quit
 		}
@@ -233,11 +232,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ScreenVCSetup:
 		if a.vcSetup != nil {
 			a.vcSetup, cmd = a.vcSetup.Update(msg)
-			cmds = append(cmds, cmd)
-		}
-	case ScreenVCGame:
-		if a.vcGame != nil {
-			a.vcGame, cmd = a.vcGame.Update(msg)
 			cmds = append(cmds, cmd)
 		}
 	case ScreenVCInvest:
@@ -335,10 +329,6 @@ func (a *App) View() string {
 		if a.vcSetup != nil {
 			content = a.vcSetup.View()
 		}
-	case ScreenVCGame:
-		if a.vcGame != nil {
-			content = a.vcGame.View()
-		}
 	case ScreenVCInvest:
 		if a.vcInvest != nil {
 			content = a.vcInvest.View()
@@ -424,10 +414,6 @@ func (a *App) switchScreen(screen Screen, data interface{}) (tea.Model, tea.Cmd)
 		a.vcSetup = NewVCSetupScreen(a.width, a.height, a.gameData)
 		cmd = a.vcSetup.Init()
 
-	case ScreenVCGame:
-		a.vcGame = NewVCGameScreen(a.width, a.height, a.gameData)
-		cmd = a.vcGame.Init()
-
 	case ScreenVCInvest:
 		a.vcInvest = NewVCInvestScreen(a.width, a.height, a.gameData)
 		cmd = a.vcInvest.Init()
@@ -457,11 +443,11 @@ func (a *App) switchScreen(screen Screen, data interface{}) (tea.Model, tea.Cmd)
 		cmd = a.leaderboard.Init()
 
 	case ScreenAchievements:
-		a.achievements = NewAchievementsScreen(a.width, a.height, a.gameData.PlayerName)
+		a.achievements = NewAchievementsScreen(a.width, a.height, a.gameData.PlayerName, a.gameData.CurrentMode)
 		cmd = a.achievements.Init()
 
 	case ScreenUpgrades:
-		a.upgrades = NewUpgradesScreen(a.width, a.height, a.gameData.PlayerName)
+		a.upgrades = NewUpgradesScreen(a.width, a.height, a.gameData.PlayerName, a.gameData.CurrentMode)
 		cmd = a.upgrades.Init()
 
 	case ScreenStats:

@@ -31,7 +31,12 @@ func (fs *FounderState) SpawnPRCrisis() *PRCrisis {
 	}
 
 	// Crisis types
-	crisisTypes := []string{"scandal", "product_failure", "layoffs", "founder_drama", "competitor_attack"}
+	crisisTypes := []string{
+		"scandal", "product_failure", "layoffs", "founder_drama", "competitor_attack",
+		"leaked_slack_memes", "ceo_tweet_disaster", "ai_hallucination_scandal",
+		"vape_in_office", "karaoke_video_leak", "linkedin_thoughtleader_post",
+		"all_hands_bloopers", "zoom_background_fail", "demo_day_meltdown",
+	}
 	crisisType := crisisTypes[rand.Intn(len(crisisTypes))]
 
 	// Severity

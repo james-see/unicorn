@@ -19,6 +19,7 @@ type GameScore struct {
 	SuccessfulExits int
 	TurnsPlayed     int
 	Difficulty      string
+	Mode            string // "vc" or "founder"
 	PlayedAt        time.Time
 }
 
@@ -155,6 +156,22 @@ func InitDB(dbPath string) error {
 		return fmt.Errorf("failed to add level_up_points column: %v", err)
 	}
 
+	// Add mode column to game_scores if it doesn't exist (migration)
+	_, err = db.Exec(`
+		ALTER TABLE game_scores 
+		ADD COLUMN mode TEXT NOT NULL DEFAULT 'vc'
+	`)
+	// Ignore error if column already exists
+	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("failed to add mode column: %v", err)
+	}
+
+	// Add index on mode
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_mode ON game_scores(mode)`)
+	if err != nil {
+		return fmt.Errorf("failed to create idx_mode index: %v", err)
+	}
+
 	return nil
 }
 
@@ -169,9 +186,14 @@ func CloseDB() error {
 // SaveGameScore saves a completed game to the database
 func SaveGameScore(score GameScore) error {
 	query := `
-		INSERT INTO game_scores (player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, played_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO game_scores (player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
+
+	mode := score.Mode
+	if mode == "" {
+		mode = "vc"
+	}
 
 	_, err := db.Exec(query,
 		score.PlayerName,
@@ -180,6 +202,7 @@ func SaveGameScore(score GameScore) error {
 		score.SuccessfulExits,
 		score.TurnsPlayed,
 		score.Difficulty,
+		mode,
 		score.PlayedAt,
 	)
 
@@ -1034,4 +1057,116 @@ func SaveVCReputation(rep *VCReputation) error {
 	}
 
 	return nil
+}
+
+// GetTopScoresByNetWorthAndMode returns the top N scores by net worth filtered by mode
+func GetTopScoresByNetWorthAndMode(limit int, difficulty, mode string) ([]GameScore, error) {
+	var query string
+	var args []interface{}
+
+	if (difficulty == "" || difficulty == "all") && (mode == "" || mode == "all") {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores ORDER BY final_net_worth DESC LIMIT ?`
+		args = []interface{}{limit}
+	} else if difficulty == "" || difficulty == "all" {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores WHERE mode = ? ORDER BY final_net_worth DESC LIMIT ?`
+		args = []interface{}{mode, limit}
+	} else if mode == "" || mode == "all" {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores WHERE difficulty = ? ORDER BY final_net_worth DESC LIMIT ?`
+		args = []interface{}{difficulty, limit}
+	} else {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores WHERE difficulty = ? AND mode = ? ORDER BY final_net_worth DESC LIMIT ?`
+		args = []interface{}{difficulty, mode, limit}
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query top scores: %v", err)
+	}
+	defer rows.Close()
+
+	var scores []GameScore
+	for rows.Next() {
+		var score GameScore
+		if err := rows.Scan(&score.ID, &score.PlayerName, &score.FinalNetWorth, &score.ROI, &score.SuccessfulExits, &score.TurnsPlayed, &score.Difficulty, &score.Mode, &score.PlayedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %v", err)
+		}
+		scores = append(scores, score)
+	}
+	return scores, nil
+}
+
+// GetTopScoresByROIAndMode returns the top N scores by ROI filtered by mode
+func GetTopScoresByROIAndMode(limit int, difficulty, mode string) ([]GameScore, error) {
+	var query string
+	var args []interface{}
+
+	if (difficulty == "" || difficulty == "all") && (mode == "" || mode == "all") {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores ORDER BY roi DESC LIMIT ?`
+		args = []interface{}{limit}
+	} else if difficulty == "" || difficulty == "all" {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores WHERE mode = ? ORDER BY roi DESC LIMIT ?`
+		args = []interface{}{mode, limit}
+	} else if mode == "" || mode == "all" {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores WHERE difficulty = ? ORDER BY roi DESC LIMIT ?`
+		args = []interface{}{difficulty, limit}
+	} else {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores WHERE difficulty = ? AND mode = ? ORDER BY roi DESC LIMIT ?`
+		args = []interface{}{difficulty, mode, limit}
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query top scores: %v", err)
+	}
+	defer rows.Close()
+
+	var scores []GameScore
+	for rows.Next() {
+		var score GameScore
+		if err := rows.Scan(&score.ID, &score.PlayerName, &score.FinalNetWorth, &score.ROI, &score.SuccessfulExits, &score.TurnsPlayed, &score.Difficulty, &score.Mode, &score.PlayedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %v", err)
+		}
+		scores = append(scores, score)
+	}
+	return scores, nil
+}
+
+// GetRecentGamesAndMode returns recent games filtered by mode
+func GetRecentGamesAndMode(limit int, mode string) ([]GameScore, error) {
+	var query string
+	var args []interface{}
+
+	if mode == "" || mode == "all" {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores ORDER BY played_at DESC LIMIT ?`
+		args = []interface{}{limit}
+	} else {
+		query = `SELECT id, player_name, final_net_worth, roi, successful_exits, turns_played, difficulty, mode, played_at FROM game_scores WHERE mode = ? ORDER BY played_at DESC LIMIT ?`
+		args = []interface{}{mode, limit}
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent games: %v", err)
+	}
+	defer rows.Close()
+
+	var scores []GameScore
+	for rows.Next() {
+		var score GameScore
+		if err := rows.Scan(&score.ID, &score.PlayerName, &score.FinalNetWorth, &score.ROI, &score.SuccessfulExits, &score.TurnsPlayed, &score.Difficulty, &score.Mode, &score.PlayedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %v", err)
+		}
+		scores = append(scores, score)
+	}
+	return scores, nil
+}
+
+// HasVCReputation returns true if the player has a saved VC reputation
+func HasVCReputation(playerName string) bool {
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM vc_reputation WHERE player_name = ?`, playerName).Scan(&count)
+	if err != nil {
+		return false
+	}
+	return count > 0
 }

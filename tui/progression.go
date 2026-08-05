@@ -9,32 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jamesacampbell/unicorn/database"
+	"github.com/jamesacampbell/unicorn/progression"
 	"github.com/jamesacampbell/unicorn/tui/keys"
 	"github.com/jamesacampbell/unicorn/tui/styles"
 )
-
-// getLevelTitleLocal returns the title for a given level
-func getLevelTitleLocal(level int) string {
-	titles := map[int]string{
-		1:  "Aspiring VC",
-		2:  "Associate",
-		3:  "Senior Associate",
-		4:  "Principal",
-		5:  "Junior Partner",
-		6:  "Partner",
-		7:  "Senior Partner",
-		8:  "Managing Partner",
-		9:  "Founding Partner",
-		10: "Legend",
-	}
-	if title, ok := titles[level]; ok {
-		return title
-	}
-	if level > 10 {
-		return "VC Legend"
-	}
-	return "Newcomer"
-}
 
 // ProgressionScreen shows player progression
 type ProgressionScreen struct {
@@ -166,7 +144,7 @@ func (s *ProgressionScreen) View() string {
 		} else {
 			// Level info
 			levelStyle := lipgloss.NewStyle().Foreground(styles.Gold).Bold(true)
-			title := getLevelTitleLocal(s.profile.Level)
+			title := progression.GetLevelInfo(s.profile.Level).Title
 			prog.WriteString(levelStyle.Render(fmt.Sprintf("Level %d - %s", s.profile.Level, title)))
 			prog.WriteString("\n\n")
 			

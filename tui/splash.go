@@ -86,12 +86,7 @@ func (s *SplashScreen) Init() tea.Cmd {
 func (s *SplashScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Any key press advances to main menu if ready
-		if s.ready {
-			return s, SwitchTo(ScreenMainMenu)
-		}
-		// Speed up if key pressed during animation
-		s.ready = true
+		// Any key press advances to main menu (intentional first-key-skip)
 		return s, SwitchTo(ScreenMainMenu)
 
 	case splashTickMsg:
@@ -131,10 +126,10 @@ func (s *SplashScreen) View() string {
 
 	// Tagline with fade-in effect based on phase
 	taglines := []string{
-		"The Ultimate VC Simulation Game",
-		"Build Your Portfolio",
-		"Hunt for Unicorns",
-		"Become a Legend",
+		"The Ultimate Startup Adventure",
+		"Invest as a VC, or Build as a Founder",
+		"Hunt for Unicorns, or Become One",
+		"Where Legends Are Made",
 	}
 
 	taglineStyle := lipgloss.NewStyle().

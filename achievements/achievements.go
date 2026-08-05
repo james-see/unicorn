@@ -18,6 +18,7 @@ type Achievement struct {
 	ChainID              string   // Group related achievements
 	ProgressTracking     bool     // Can show progress
 	MaxProgress          int      // For progress tracking (e.g., "Win 10 games")
+	GameMode             string   // "vc", "founder", or "" (both)
 }
 
 // PlayerAchievement tracks when a player unlocked an achievement
@@ -1123,6 +1124,30 @@ var AllAchievements = map[string]Achievement{
 		ProgressTracking:     true,
 		MaxProgress:          100,
 	},
+}
+
+func init() {
+	// Tag founder-only achievements with GameMode = "founder"
+	founderAchievements := []string{
+		"first_revenue", "profitable", "100k_mrr", "1m_mrr", "seed_raised", "series_a",
+		"ipo_exit", "acquired", "10000_customers", "bootstrapped",
+		"feature_factory", "innovation_leader", "perfect_roadmap", "enterprise_champion",
+		"vertical_domination", "pricing_wizard", "premium_positioning", "volume_play",
+		"sales_machine", "perfect_close", "pipeline_master", "content_machine", "seo_master",
+		"customer_champion", "churn_slayer", "know_thy_enemy", "technical_excellence",
+		"media_darling", "board_whisperer", "serial_acquirer", "synergy_master",
+		"integration_expert", "platform_builder", "network_effect", "marketplace_master",
+		"integration_master", "ecosystem_builder", "security_champion", "incident_response",
+		"compliance_master", "crisis_manager", "brand_resilience", "media_master",
+		"recession_survivor", "funding_winter_warrior", "market_leader", "succession_ready",
+		"retention_master", "crisis_leader",
+	}
+	for _, id := range founderAchievements {
+		if ach, ok := AllAchievements[id]; ok {
+			ach.GameMode = "founder"
+			AllAchievements[id] = ach
+		}
+	}
 }
 
 // CheckAchievements checks which achievements were earned this game

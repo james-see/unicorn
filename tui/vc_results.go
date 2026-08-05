@@ -11,6 +11,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jamesacampbell/unicorn/achievements"
 	"github.com/jamesacampbell/unicorn/database"
+	"github.com/jamesacampbell/unicorn/game"
+	"github.com/jamesacampbell/unicorn/leaderboard"
 	"github.com/jamesacampbell/unicorn/progression"
 	"github.com/jamesacampbell/unicorn/tui/components"
 	"github.com/jamesacampbell/unicorn/tui/keys"
@@ -163,19 +165,62 @@ func calculateRating(roi float64) (string, string) {
 func (s *VCResultsScreen) Init() tea.Cmd {
 	// Save score to database
 	gs := s.gameData.GameState
-	score := database.GameScore{
+		score := database.GameScore{
 		PlayerName:      gs.PlayerName,
 		FinalNetWorth:   s.netWorth,
 		ROI:             s.roi,
 		SuccessfulExits: s.successfulExits,
 		TurnsPlayed:     gs.Portfolio.Turn - 1,
 		Difficulty:      gs.Difficulty.Name,
+		Mode:            "vc",
 		PlayedAt:        time.Now(),
 	}
 
 	err := database.SaveGameScore(score)
 	if err == nil {
 		s.scoreSaved = true
+	}
+
+	// Auto-submit to global leaderboard (silent, skips on API unavailable)
+	if leaderboard.IsAPIAvailable("") {
+		submission := leaderboard.ScoreSubmission{
+			PlayerName:      gs.PlayerName,
+			FinalNetWorth:   s.netWorth,
+			ROI:             s.roi,
+			SuccessfulExits: s.successfulExits,
+			TurnsPlayed:     gs.Portfolio.Turn - 1,
+			Difficulty:      gs.Difficulty.Name,
+		}
+		_ = leaderboard.SubmitScore(submission, "")
+	}
+
+	// Update and save VC reputation
+	if gs.PlayerReputation != nil {
+		hadSuccessfulExit := s.successfulExits > 0
+		achievementPoints := 0
+		for _, ach := range s.newAchievementObjs {
+			achievementPoints += ach.Points
+		}
+		winStreak := 0 // Could be tracked from previous games
+		updatedRep := game.UpdateReputationAfterGame(
+			gs.PlayerReputation,
+			s.roi,
+			hadSuccessfulExit,
+			achievementPoints,
+			winStreak)
+		updatedRep.UpdateFounderScore(0) // avgFounderRelationship not tracked in VC mode
+
+		dbRep := &database.VCReputation{
+			PlayerName:       updatedRep.PlayerName,
+			PerformanceScore: updatedRep.PerformanceScore,
+			FounderScore:     updatedRep.FounderScore,
+			MarketScore:      updatedRep.MarketScore,
+			TotalGamesPlayed: updatedRep.TotalGamesPlayed,
+			SuccessfulExits:  updatedRep.SuccessfulExits,
+			AvgROILast5:      updatedRep.AvgROILast5,
+		}
+
+		_ = database.SaveVCReputation(dbRep)
 	}
 
 	// Get profile before XP is added

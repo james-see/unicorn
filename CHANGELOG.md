@@ -1,5 +1,48 @@
 # Changelog
 
+## Version 3.33.0 - Founder/VC mode parity & broken-menu fixes (2026-08-05)
+
+### Major: Mode parity pass
+This release closes the gaps between Founder and VC modes that accumulated through prior TUI revamps, and wires features that had become unreachable.
+
+**Dead code removal (-11k lines)**
+- Deleted the orphaned `ui/` package and transitively-dead `menu/`, `clear/`, `animations/`, `logo/`, `ascii/` packages (never imported by the active `tui/` entry point).
+- Removed dead `ScreenVCGame` enum entry and `NewVCGameScreen` wrapper (only `ScreenVCTurn` is routed).
+- Removed the unused `pendingBoardSubAction` field in the founder game.
+
+**Broken VC features wired**
+- **Secondary market buy/sell**: accept (`a`) / reject (`r`) handlers now call `game.AcceptSecondaryOffer` / `game.DeclineSecondaryOffer`; selected offer is highlighted. The screen was render-only after the revamp.
+- **VC reputation now saved**: `game.UpdateReputationAfterGame` + `database.SaveVCReputation` are called from the active VC results screen (was only wired in the deleted `ui/` package).
+- **Deal flow quality**: `LoadStartups` now filters available startups by reputation tier (hot / standard / struggling) using `GetAggregateReputation`.
+
+**Broken founder features wired**
+- **PR program reachable**: new `pr_program` action in the founder Actions menu launches a PR firm (`LaunchPRProgram`). The previously-unreachable `pr_crisis` menu item now works because `HasPRFirm` can be true.
+- **PR crises spawn**: `SpawnPRCrisis` is now called each month in `ProcessMonthWithBaseline` (was never invoked).
+- **Funnier crisis types**: added `leaked_slack_memes`, `ceo_tweet_disaster`, `ai_hallucination_scandal`, `vape_in_office`, `karaoke_video_leak`, `linkedin_thoughtleader_post`, `all_hands_bloopers`, `zoom_background_fail`, `demo_day_meltdown` to the crisis pool.
+
+**Global leaderboard auto-submit (both modes)**
+- Founder mode: `submitToGlobalLeaderboard` is now called from the leaderboard phase (was defined-but-uncalled).
+- VC mode: `leaderboard.SubmitScore` is now called from the VC leaderboard phase.
+- Both auto-submit silently and skip when the API is unavailable.
+
+**Mode-aware shared screens + DB migration**
+- `game_scores.mode` column added (TEXT NOT NULL DEFAULT 'vc') via migration with a new index; existing rows backfill to `'vc'`.
+- Leaderboard: new Mode filter tab (All / VC / Founder) alongside the existing difficulty filters, plus a Mode column in the table.
+- Achievements: filtered by current game mode; founder-only achievements no longer show to VC players and vice versa. Added `GameMode` field to the `Achievement` struct and tagged the 48 founder-only achievements in an `init()`.
+- Progression: deleted the duplicate `getLevelTitleLocal` in `tui/progression.go`; `progression.getLevelTitle` is now mode-aware with a 50-level founder title scale (First-Time Founder → Centicorn Visionary) and the existing VC scale. Results screens use `GetLevelInfoForMode`.
+- Upgrades: now filtered by mode via `GetUpgradesForGameMode` (VC no longer sees Founder Perks).
+- `App.CurrentMode` is set during setup (`vc_setup.go` / `founder_setup.go`) and threaded through to achievements, upgrades, and results screens.
+
+**UX parity**
+- VC mode now shows a quit confirmation view (previously quit immediately; founder already had one).
+- `q` and `esc` both return to the turn summary from VC sub-views (Dashboard / Value-Add / Secondary Market).
+- Main menu gates "VC Reputation" behind `database.HasVCReputation(name)` so founder-only players don't see a VC-only entry.
+- Splash taglines now mention both modes instead of VC-only.
+- Help screen documents both VC and Founder modes, including the founder `Enter`/`n`/`esc` keys and the VC secondary-market `a`/`r` keys.
+- Splash first-key-skip behavior simplified and documented.
+
+---
+
 ## Version 3.32.4 - TUI layout and border fixes (2026-03-13)
 
 ### TUI fixes

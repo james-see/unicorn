@@ -75,33 +75,65 @@ func (s *HelpScreen) View() string {
 	
 	var help strings.Builder
 	
-	help.WriteString(titleStyle.Render("🦄 UNICORN - The VC Simulation Game"))
+	help.WriteString(titleStyle.Render("🦄 UNICORN - Startup Adventure"))
 	help.WriteString("\n\n")
 	
-	help.WriteString(sectionStyle.Render("HOW TO PLAY"))
+	help.WriteString(sectionStyle.Render("TWO GAME MODES"))
 	help.WriteString("\n")
 	help.WriteString(`
-In VC Mode, you manage a venture capital fund:
-• Start with a pool of capital
+🎩 VC Investor Mode
+   Manage a VC fund, invest in startups, compete with AI investors.
+   Goal: Maximize net worth over 60 turns (5 years).
+
+🚀 Startup Founder Mode
+   Build your own startup from scratch. Hire, fundraise, acquire customers.
+   Goal: Grow to $20M ARR and IPO, or get acquired.
+`)
+	
+	help.WriteString(sectionStyle.Render("VC MODE - HOW TO PLAY"))
+	help.WriteString("\n")
+	help.WriteString(`
+• Start with a pool of capital ($500K-$1M)
 • Invest in promising startups
 • Navigate market events and funding rounds
-• Compete against AI investors
-• Exit investments for profit
+• Compete against AI investors like CARL
+• Exit investments for profit via secondary market
 
 Goal: Maximize your net worth by game end!
+`)
+	
+	help.WriteString(sectionStyle.Render("FOUNDER MODE - HOW TO PLAY"))
+	help.WriteString("\n")
+	help.WriteString(`
+• Choose a startup template (SaaS, DeepTech, GovTech, Hardware)
+• Hire team: engineers, sales, CS, marketing, C-suite
+• Acquire customers via direct sales, affiliates, partnerships
+• Raise funding rounds: Seed, Series A, B, C
+• Manage board, advisors, equity, PR, security, tech debt
+• Respond to crises, competitors, and market conditions
+• Exit via IPO or acquisition
+
+Goal: Build a unicorn and exit successfully!
 `)
 	
 	help.WriteString(sectionStyle.Render("GAME MECHANICS"))
 	help.WriteString("\n")
 	help.WriteString(`
-• Each turn = 1 month
+VC Mode:
+• Each turn = 1 month (60 turns total)
 • Startups can: grow, raise rounds, get acquired, fail
 • Dilution happens when companies raise new rounds
 • Pro-rata rights let you maintain ownership
 • Board seats give you voting power
+
+Founder Mode:
+• Each turn = 1 month
+• MRR grows with marketing, sales, product maturity
+• Churn decreases as product matures
+• Cash flow = MRR - team costs - infrastructure
 `)
 	
-	help.WriteString(sectionStyle.Render("INVESTMENT TERMS"))
+	help.WriteString(sectionStyle.Render("INVESTMENT TERMS (VC)"))
 	help.WriteString("\n")
 	help.WriteString(`
 • Common Stock: Basic ownership
@@ -113,13 +145,21 @@ Goal: Maximize your net worth by game end!
 	help.WriteString(sectionStyle.Render("KEYBOARD SHORTCUTS"))
 	help.WriteString("\n")
 	help.WriteString(`
+Global:
 • ↑/↓/←/→ or hjkl: Navigate
 • Enter: Select/Confirm
 • Esc: Back/Cancel
-• q: Quit
-• d: Dashboard (in game)
-• v: Value-Add (in game)
-• s: Secondary Market (in game)
+• q: Quit (with confirmation in VC mode)
+
+VC Mode (in game):
+• d: Dashboard
+• v: Value-Add actions
+• s: Secondary Market (1-9 select, a accept, r reject)
+
+Founder Mode (in game):
+• Enter: Open Actions menu
+• n: Quick advance to next month
+• Esc/q: Quit confirmation
 `)
 	
 	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(helpBox.Render(help.String())))

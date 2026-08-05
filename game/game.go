@@ -92,6 +92,7 @@ type Startup struct {
 	PercentMargin          int     `json:"Percent Margin Per Unit"`
 	RiskScore              float64 // 0-1, higher is riskier
 	GrowthPotential        float64 // 0-1, higher is better
+	QualityTier            int     // 1=hot, 2=standard, 3=struggling (set by reputation)
 
 	// Financial tracking
 	MonthlyRevenue          int64   // Revenue this month
@@ -358,7 +359,7 @@ func NewGame(playerName string, firmName string, difficulty Difficulty, playerUp
 		},
 	}
 
-	gs.LoadStartups(playerUpgrades)
+	gs.LoadStartups(playerUpgrades, gs.PlayerReputation)
 	gs.LoadEvents()
 	gs.InitializeAIPlayers()
 	gs.ScheduleFundingRounds()
@@ -371,7 +372,7 @@ func NewGame(playerName string, firmName string, difficulty Difficulty, playerUp
 	return gs
 }
 
-func (gs *GameState) LoadStartups(playerUpgrades []string) {
+func (gs *GameState) LoadStartups(playerUpgrades []string, reputation *VCReputation) {
 	gs.AvailableStartups = []Startup{}
 	allStartups := []Startup{}
 
@@ -408,8 +409,35 @@ func (gs *GameState) LoadStartups(playerUpgrades []string) {
 		allStartups = append(allStartups, startup)
 	}
 
-	// Randomly select 15 from the 30 startups
-	if len(allStartups) > 15 {
+	// Apply reputation-based deal quality filtering
+	if reputation != nil {
+		aggregateRep := reputation.GetAggregateReputation()
+
+		// Tag each startup with a quality tier based on metrics
+		// Better growth/risk score = higher tier
+		for i := range allStartups {
+			score := allStartups[i].GrowthPotential - allStartups[i].RiskScore
+			if score > 0.3 {
+				allStartups[i].QualityTier = 1 // Hot deal
+			} else if score > -0.1 {
+				allStartups[i].QualityTier = 2 // Standard deal
+			} else {
+				allStartups[i].QualityTier = 3 // Struggling deal
+			}
+		}
+
+		// Determine target distribution based on reputation
+		var tier1Target, tier2Target float64
+		if aggregateRep >= 70 {
+			tier1Target, tier2Target = 0.25, 0.60 // 25% hot, 60% standard
+		} else if aggregateRep >= 40 {
+			tier1Target, tier2Target = 0.05, 0.75 // 5% hot, 75% standard
+		} else {
+			tier1Target, tier2Target = 0.00, 0.40 // 0% hot, 40% standard
+		}
+
+		// Select startups to match target distribution
+		count := 15
 		// Apply early_access upgrade - show extra startups
 		extraStartups := 0
 		for _, upgradeID := range playerUpgrades {
@@ -417,17 +445,82 @@ func (gs *GameState) LoadStartups(playerUpgrades []string) {
 				extraStartups += 2
 			}
 			if upgradeID == "founder_network" {
-				extraStartups += 1 // Add one more startup
+				extraStartups += 1
+			}
+		}
+		count += extraStartups
+
+		tier1Count := int(float64(count) * tier1Target)
+		tier2Count := int(float64(count) * tier2Target)
+		tier3Count := count - tier1Count - tier2Count
+
+		// Sort by tier
+		tier1 := []Startup{}
+		tier2 := []Startup{}
+		tier3 := []Startup{}
+		for _, s := range allStartups {
+			switch s.QualityTier {
+			case 1:
+				tier1 = append(tier1, s)
+			case 2:
+				tier2 = append(tier2, s)
+			case 3:
+				tier3 = append(tier3, s)
 			}
 		}
 
-		// Shuffle and take first 15+extra
-		rand.Shuffle(len(allStartups), func(i, j int) {
-			allStartups[i], allStartups[j] = allStartups[j], allStartups[i]
-		})
-		gs.AvailableStartups = allStartups[:15+extraStartups]
+		// Shuffle each tier
+		rand.Shuffle(len(tier1), func(i, j int) { tier1[i], tier1[j] = tier1[j], tier1[i] })
+		rand.Shuffle(len(tier2), func(i, j int) { tier2[i], tier2[j] = tier2[j], tier2[i] })
+		rand.Shuffle(len(tier3), func(i, j int) { tier3[i], tier3[j] = tier3[j], tier3[i] })
+
+		// Select from each tier
+		selected := []Startup{}
+		for i := 0; i < tier1Count && i < len(tier1); i++ {
+			selected = append(selected, tier1[i])
+		}
+		for i := 0; i < tier2Count && i < len(tier2); i++ {
+			selected = append(selected, tier2[i])
+		}
+		for i := 0; i < tier3Count && i < len(tier3); i++ {
+			selected = append(selected, tier3[i])
+		}
+
+		// If not enough, fill from remaining
+		if len(selected) < count {
+			remaining := []Startup{}
+			remaining = append(remaining, tier1[tier1Count:]...)
+			remaining = append(remaining, tier2[tier2Count:]...)
+			remaining = append(remaining, tier3[tier3Count:]...)
+			rand.Shuffle(len(remaining), func(i, j int) { remaining[i], remaining[j] = remaining[j], remaining[i] })
+			for i := 0; i < count-len(selected) && i < len(remaining); i++ {
+				selected = append(selected, remaining[i])
+			}
+		}
+
+		gs.AvailableStartups = selected
 	} else {
-		gs.AvailableStartups = allStartups
+		// No reputation - random selection
+		count := 15
+		extraStartups := 0
+		for _, upgradeID := range playerUpgrades {
+			if upgradeID == "early_access" {
+				extraStartups += 2
+			}
+			if upgradeID == "founder_network" {
+				extraStartups += 1
+			}
+		}
+		count += extraStartups
+
+		if len(allStartups) > count {
+			rand.Shuffle(len(allStartups), func(i, j int) {
+				allStartups[i], allStartups[j] = allStartups[j], allStartups[i]
+			})
+			gs.AvailableStartups = allStartups[:count]
+		} else {
+			gs.AvailableStartups = allStartups
+		}
 	}
 }
 

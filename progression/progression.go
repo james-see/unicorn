@@ -76,14 +76,19 @@ func CalculateXPReward(gameStats *achievements.GameStats, unlockedAchievements [
 	return totalXP
 }
 
-// GetLevelInfo returns detailed information about a level
+// GetLevelInfo returns detailed information about a level (VC mode default)
 func GetLevelInfo(level int) LevelInfo {
+	return GetLevelInfoForMode(level, "vc")
+}
+
+// GetLevelInfoForMode returns detailed information about a level for the given mode
+func GetLevelInfoForMode(level int, mode string) LevelInfo {
 	return LevelInfo{
 		Level:      level,
 		XPRequired: database.GetLevelRequirement(level),
 		TotalXP:    getTotalXPForLevel(level),
 		Unlocks:    GetUnlockablesAtLevel(level),
-		Title:      getLevelTitle(level),
+		Title:      getLevelTitle(level, mode),
 	}
 }
 
@@ -100,8 +105,30 @@ func getTotalXPForLevel(level int) int {
 	return total
 }
 
-// getLevelTitle returns a title/rank for a level
-func getLevelTitle(level int) string {
+// getLevelTitle returns a title/rank for a level for the given mode ("vc" or "founder")
+func getLevelTitle(level int, mode string) string {
+	if mode == "founder" {
+		switch {
+		case level < 5:
+			return "First-Time Founder"
+		case level < 10:
+			return "Startup Builder"
+		case level < 15:
+			return "Scale-Up Operator"
+		case level < 20:
+			return "Growth Founder"
+		case level < 25:
+			return "Scale-Up CEO"
+		case level < 30:
+			return "Serial Founder"
+		case level < 40:
+			return "Unicorn Builder"
+		case level < 50:
+			return "Decacorn Founder"
+		default:
+			return "Centicorn Visionary"
+		}
+	}
 	switch {
 	case level < 5:
 		return "Novice Investor"

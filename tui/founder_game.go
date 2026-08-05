@@ -57,6 +57,7 @@ const (
 	// New features for parity
 	FounderViewStrategicOpportunity
 	FounderViewContentMarketing
+	FounderViewPRProgram
 	FounderViewCSPlaybooks
 	FounderViewCompetitiveIntel
 	FounderViewReferralProgram
@@ -139,6 +140,7 @@ type FounderGameScreen struct {
 	// New feature menus for parity
 	strategicOpportunityMenu *components.Menu
 	contentMarketingMenu     *components.Menu
+	prProgramMenu           *components.Menu
 	csPlaybooksMenu          *components.Menu
 	competitiveIntelMenu     *components.Menu
 	referralProgramMenu      *components.Menu
@@ -174,9 +176,6 @@ type FounderGameScreen struct {
 
 	// Confirm quit state
 	confirmQuitMenu *components.Menu
-
-	// Board sub-action tracking (for chairman selection vs fire)
-	pendingBoardSubAction string
 
 	// Executive offer negotiation
 	execOffers   []founder.ExecOffer
@@ -450,6 +449,20 @@ func (s *FounderGameScreen) rebuildActionsMenu() {
 		} else {
 			items = append(items, components.MenuItem{
 				ID: "content_marketing", Title: "Manage Content Marketing", Description: fmt.Sprintf("SEO Score: %d, Traffic: %d", fg.ContentProgram.SEOScore, fg.ContentProgram.OrganicTraffic), Icon: "📝",
+			})
+		}
+	}
+
+	// PR Program (unlock: marketing hire OR $100k MRR)
+	hasMarketingForPR := len(fg.Team.Marketing) > 0
+	if hasMarketingForPR || fg.MRR >= 100000 {
+		if fg.PRProgram == nil {
+			items = append(items, components.MenuItem{
+				ID: "pr_program", Title: "Launch PR Program", Description: "Hire PR firm, manage brand", Icon: "📢",
+			})
+		} else if fg.PRProgram.HasPRFirm {
+			items = append(items, components.MenuItem{
+				ID: "pr_program", Title: "Manage PR Program", Description: fmt.Sprintf("Brand: %d, Crisis: %v", fg.PRProgram.BrandScore, fg.ActivePRCrisis != nil), Icon: "📢",
 			})
 		}
 	}
@@ -1026,6 +1039,12 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				return s, nil
 			}
 
+		case FounderViewPRProgram:
+			if key.Matches(msg, keys.Global.Back) {
+				s.view = FounderViewActions
+				return s, nil
+			}
+
 		case FounderViewCSPlaybooks:
 			if key.Matches(msg, keys.Global.Back) {
 				s.view = FounderViewActions
@@ -1166,6 +1185,8 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 			return s.handleStrategicOpportunitySelection(msg.ID)
 		case FounderViewContentMarketing:
 			return s.handleContentMarketingSelection(msg.ID)
+		case FounderViewPRProgram:
+			return s.handlePRProgramSelection(msg.ID)
 		case FounderViewCSPlaybooks:
 			return s.handleCSPlaybooksSelection(msg.ID)
 		case FounderViewCompetitiveIntel:
@@ -1287,6 +1308,10 @@ func (s *FounderGameScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 	case FounderViewContentMarketing:
 		if s.contentMarketingMenu != nil {
 			s.contentMarketingMenu, cmd = s.contentMarketingMenu.Update(msg)
+		}
+	case FounderViewPRProgram:
+		if s.prProgramMenu != nil {
+			s.prProgramMenu, cmd = s.prProgramMenu.Update(msg)
 		}
 	case FounderViewCSPlaybooks:
 		if s.csPlaybooksMenu != nil {
@@ -1556,6 +1581,11 @@ func (s *FounderGameScreen) handleAction(id string) (ScreenModel, tea.Cmd) {
 	case "content_marketing":
 		s.rebuildContentMarketingMenu()
 		s.view = FounderViewContentMarketing
+		return s, nil
+
+	case "pr_program":
+		s.rebuildPRProgramMenu()
+		s.view = FounderViewPRProgram
 		return s, nil
 
 	case "cs_playbooks":
@@ -2483,7 +2513,6 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 			return s, nil
 		}
 		// Multiple advisors - show menu
-		s.pendingBoardSubAction = "set_chairman"
 		items = append(items, components.MenuItem{ID: "cancel", Title: "Cancel", Icon: "←"})
 		s.boardMenu = components.NewMenu("SELECT CHAIRMAN", items)
 		s.boardMenu.SetSize(55, 15)
@@ -2526,7 +2555,6 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 			s.view = FounderViewBoard
 			return s, nil
 		}
-		s.pendingBoardSubAction = "fire_board_member"
 		items = append(items, components.MenuItem{ID: "cancel", Title: "Cancel", Icon: "←"})
 		s.boardMenu = components.NewMenu("FIRE BOARD MEMBER", items)
 		s.boardMenu.SetSize(55, 15)
@@ -2548,7 +2576,6 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 				"   Additional 0.25% equity granted",
 			}
 		}
-		s.pendingBoardSubAction = ""
 		s.rebuildBoardMenu()
 		s.view = FounderViewBoard
 		return s, nil
@@ -2566,7 +2593,6 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 				"   ⚠️  Board sentiment worsened",
 			}
 		}
-		s.pendingBoardSubAction = ""
 		s.rebuildBoardMenu()
 		s.view = FounderViewBoard
 		return s, nil
@@ -4139,6 +4165,157 @@ func (s *FounderGameScreen) handleCSPlaybooksSelection(id string) (ScreenModel, 
 	return s, nil
 }
 
+// PR Program
+func (s *FounderGameScreen) rebuildPRProgramMenu() {
+	fg := s.gameData.FounderState
+
+	items := []components.MenuItem{}
+
+	if fg.PRProgram == nil {
+		items = append(items,
+			components.MenuItem{ID: "launch_5k", Title: "Hire PR Firm ($5k/mo)", Description: "Basic PR representation", Icon: "📢"},
+			components.MenuItem{ID: "launch_10k", Title: "Hire PR Firm ($10k/mo)", Description: "Experienced PR team", Icon: "📢"},
+			components.MenuItem{ID: "launch_20k", Title: "Hire PR Firm ($20k/mo)", Description: "Top-tier PR agency", Icon: "📢"},
+		)
+	} else if fg.PRProgram.HasPRFirm {
+		items = append(items,
+			components.MenuItem{ID: "view", Title: "View PR Status", Description: fmt.Sprintf("Brand Score: %d, Monthly: $%s", fg.PRProgram.BrandScore, formatCompactMoney(fg.PRProgram.MonthlyRetainer)), Icon: "👁️"},
+			components.MenuItem{ID: "crisis_plan", Title: "Crisis Response Plan", Description: "Prepare for potential crises", Icon: "📋"},
+		)
+		if fg.ActivePRCrisis != nil {
+			items = append(items,
+				components.MenuItem{ID: "manage_crisis", Title: "Manage Active Crisis", Description: fmt.Sprintf("Crisis: %s (%s)", fg.ActivePRCrisis.Type, fg.ActivePRCrisis.Severity), Icon: "🚨"},
+			)
+		}
+	}
+
+	items = append(items, components.MenuItem{ID: "cancel", Title: "Back", Icon: "←"})
+
+	s.prProgramMenu = components.NewMenu("PR PROGRAM", items)
+	s.prProgramMenu.SetSize(55, 12)
+	s.prProgramMenu.SetHideHelp(true)
+}
+
+func (s *FounderGameScreen) handlePRProgramSelection(id string) (ScreenModel, tea.Cmd) {
+	fg := s.gameData.FounderState
+
+	if id == "cancel" {
+		s.view = FounderViewActions
+		return s, nil
+	}
+
+	switch id {
+	case "launch_5k":
+		err := fg.LaunchPRProgram(5000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Hired PR firm ($5k/mo)"}
+		}
+	case "launch_10k":
+		err := fg.LaunchPRProgram(10000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Hired PR firm ($10k/mo)"}
+		}
+	case "launch_20k":
+		err := fg.LaunchPRProgram(20000)
+		if err != nil {
+			s.turnMessages = []string{fmt.Sprintf("❌ Error: %v", err)}
+		} else {
+			s.turnMessages = []string{"✓ Hired PR firm ($20k/mo)"}
+		}
+	case "view":
+		if fg.PRProgram != nil {
+			s.turnMessages = []string{
+				"📢 PR Program Status:",
+				fmt.Sprintf("   Has PR Firm: %v", fg.PRProgram.HasPRFirm),
+				fmt.Sprintf("   Monthly Retainer: $%s", formatCompactMoney(fg.PRProgram.MonthlyRetainer)),
+				fmt.Sprintf("   Brand Score: %d/100", fg.PRProgram.BrandScore),
+				fmt.Sprintf("   Months Active: %d", fg.Turn-fg.PRProgram.LaunchedMonth),
+			}
+			if fg.ActivePRCrisis != nil {
+				s.turnMessages = append(s.turnMessages,
+					fmt.Sprintf("   🚨 ACTIVE CRISIS: %s (%s)", fg.ActivePRCrisis.Type, fg.ActivePRCrisis.Severity),
+					fmt.Sprintf("   Media: %v", fg.ActivePRCrisis.MediaCoverage),
+				)
+			}
+		}
+	case "crisis_plan":
+		s.turnMessages = []string{
+			"📋 Crisis Response Plan:",
+			"   Your PR firm will auto-respond to crises based on severity.",
+			"   Response effectiveness scales with retainer amount.",
+			"   Higher retainer = better crisis mitigation.",
+		}
+	case "manage_crisis":
+		if fg.ActivePRCrisis != nil {
+			s.rebuildPRCrisisMenu()
+			s.view = FounderViewPRCrisis
+			return s, nil
+		}
+	}
+
+	s.view = FounderViewMain
+	return s, nil
+}
+
+func (s *FounderGameScreen) renderPRProgram() string {
+	fg := s.gameData.FounderState
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Magenta).
+		Bold(true).
+		Width(60).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("📢 PR PROGRAM")))
+	b.WriteString("\n\n")
+
+	if fg.PRProgram == nil {
+		infoStyle := lipgloss.NewStyle().
+			Foreground(styles.Yellow).
+			Width(s.width).
+			Align(lipgloss.Center)
+		b.WriteString(infoStyle.Render("No PR program active. Hire a PR firm to manage your brand."))
+	} else {
+		statusStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Magenta).
+			Padding(1, 2).
+			Width(50)
+
+		var status strings.Builder
+		status.WriteString(fmt.Sprintf("Monthly Retainer: $%s\n", formatCompactMoney(fg.PRProgram.MonthlyRetainer)))
+		status.WriteString(fmt.Sprintf("Brand Score: %d/100\n", fg.PRProgram.BrandScore))
+		status.WriteString(fmt.Sprintf("Months Active: %d\n", fg.Turn-fg.PRProgram.LaunchedMonth))
+		status.WriteString(fmt.Sprintf("Has PR Firm: %v\n", fg.PRProgram.HasPRFirm))
+
+		if fg.ActivePRCrisis != nil {
+			status.WriteString("\n")
+			crisisStyle := lipgloss.NewStyle().Foreground(styles.Red).Bold(true)
+			status.WriteString(crisisStyle.Render(fmt.Sprintf("🚨 ACTIVE CRISIS: %s (%s)", fg.ActivePRCrisis.Type, fg.ActivePRCrisis.Severity)))
+			status.WriteString("\n")
+			status.WriteString(fmt.Sprintf("   Media Coverage: %v\n", fg.ActivePRCrisis.MediaCoverage))
+			status.WriteString(fmt.Sprintf("   Duration: %d months remaining\n", fg.ActivePRCrisis.DurationMonths))
+			if fg.ActivePRCrisis.Response != "none" {
+				status.WriteString(fmt.Sprintf("   Response: %s (Cost: $%s)\n", fg.ActivePRCrisis.Response, formatCompactMoney(fg.ActivePRCrisis.ResponseCost)))
+			}
+		}
+
+		b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(statusStyle.Render(status.String())))
+	}
+
+	b.WriteString("\n")
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("Enter to select • esc back"))
+
+	return b.String()
+}
+
 // Competitive Intelligence
 func (s *FounderGameScreen) rebuildCompetitiveIntelMenu() {
 	fg := s.gameData.FounderState
@@ -4556,6 +4733,8 @@ func (s *FounderGameScreen) View() string {
 		return s.renderStrategicOpportunity()
 	case FounderViewContentMarketing:
 		return s.renderContentMarketing()
+	case FounderViewPRProgram:
+		return s.renderPRProgram()
 	case FounderViewCSPlaybooks:
 		return s.renderCSPlaybooks()
 	case FounderViewCompetitiveIntel:

@@ -166,12 +166,18 @@ func (s *FounderResultsScreen) Init() tea.Cmd {
 		SuccessfulExits: successfulExits,
 		TurnsPlayed:     actualTurns,
 		Difficulty:      "Founder",
+		Mode:            "founder",
 		PlayedAt:        time.Now(),
 	}
 
 	err := database.SaveGameScore(score)
 	if err == nil {
 		s.scoreSaved = true
+	}
+
+	// Auto-submit to global leaderboard (silent, skips on API unavailable)
+	if leaderboard.IsAPIAvailable("") {
+		s.submitToGlobalLeaderboard()
 	}
 
 	// Get profile before XP is added
@@ -780,7 +786,7 @@ func (s *FounderResultsScreen) renderXPBreakdown() string {
 
 		var levelContent strings.Builder
 		levelStyle := lipgloss.NewStyle().Foreground(styles.Magenta).Bold(true)
-		levelInfo := progression.GetLevelInfo(s.profileAfter.Level)
+		levelInfo := progression.GetLevelInfoForMode(s.profileAfter.Level, "founder")
 
 		levelContent.WriteString(levelStyle.Render(fmt.Sprintf("Level %d - %s", s.profileAfter.Level, levelInfo.Title)))
 		levelContent.WriteString("\n\n")
@@ -829,8 +835,8 @@ func (s *FounderResultsScreen) renderLevelUp() string {
 	arrowStyle := lipgloss.NewStyle().Foreground(styles.White).Bold(true)
 	newStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
 
-	oldLevelInfo := progression.GetLevelInfo(s.oldLevel)
-	newLevelInfo := progression.GetLevelInfo(s.newLevel)
+	oldLevelInfo := progression.GetLevelInfoForMode(s.oldLevel, "founder")
+	newLevelInfo := progression.GetLevelInfoForMode(s.newLevel, "founder")
 
 	levelContent.WriteString(oldStyle.Render(fmt.Sprintf("Level %d - %s", s.oldLevel, oldLevelInfo.Title)))
 	levelContent.WriteString("\n")

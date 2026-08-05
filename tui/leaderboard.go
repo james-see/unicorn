@@ -22,68 +22,82 @@ type LeaderboardScreen struct {
 	menu          *components.Menu
 	currentView   string
 	currentFilter string
+	currentMode   string // "all", "vc", "founder"
 }
 
 // NewLeaderboardScreen creates a new leaderboard screen
 func NewLeaderboardScreen(width, height int) *LeaderboardScreen {
 	// Filter menu
 	menuItems := []components.MenuItem{
-		{ID: "net_worth_all", Title: "By Net Worth (All)", Icon: "💰"},
-		{ID: "roi_all", Title: "By ROI (All)", Icon: "📈"},
+		{ID: "header_mode", Title: "── MODE ──", Disabled: true, Icon: ""},
+		{ID: "mode_all", Title: "All Modes", Icon: "🌟"},
+		{ID: "mode_vc", Title: "VC Mode", Icon: "🎩"},
+		{ID: "mode_founder", Title: "Founder Mode", Icon: "🚀"},
+		{ID: "header_sort", Title: "── SORT ──", Disabled: true, Icon: ""},
+		{ID: "net_worth", Title: "By Net Worth", Icon: "💰"},
+		{ID: "roi", Title: "By ROI", Icon: "📈"},
+		{ID: "recent", Title: "Recent Games", Icon: "🕐"},
+		{ID: "header_diff", Title: "── DIFFICULTY ──", Disabled: true, Icon: ""},
 		{ID: "easy", Title: "Easy Difficulty", Icon: "🟢"},
 		{ID: "medium", Title: "Medium Difficulty", Icon: "🟡"},
 		{ID: "hard", Title: "Hard Difficulty", Icon: "🔴"},
 		{ID: "expert", Title: "Expert Difficulty", Icon: "💀"},
-		{ID: "recent", Title: "Recent Games", Icon: "🕐"},
 	}
 	menu := components.NewMenu("LEADERBOARD FILTERS", menuItems)
-	menu.SetSize(35, 15)
+	menu.SetSize(35, 18)
 	menu.SetHideHelp(true)
 
 	s := &LeaderboardScreen{
 		width:       width,
 		height:      height,
 		menu:        menu,
-		currentView: "net_worth_all",
+		currentView: "net_worth",
+		currentMode: "all",
 	}
 
-	s.loadLeaderboard("net_worth", "all")
+	s.loadLeaderboard("net_worth", "all", "all")
 	return s
 }
 
-func (s *LeaderboardScreen) loadLeaderboard(sortBy, difficulty string) {
+func (s *LeaderboardScreen) loadLeaderboard(sortBy, difficulty, mode string) {
 	var scores []database.GameScore
 	var err error
 
-	if sortBy == "recent" {
-		scores, err = database.GetRecentGames(20)
-	} else if sortBy == "roi" {
-		scores, err = database.GetTopScoresByROI(20, difficulty)
-	} else {
-		scores, err = database.GetTopScoresByNetWorth(20, difficulty)
+	switch sortBy {
+	case "recent":
+		scores, err = database.GetRecentGamesAndMode(20, mode)
+	case "roi":
+		scores, err = database.GetTopScoresByROIAndMode(20, difficulty, mode)
+	default:
+		scores, err = database.GetTopScoresByNetWorthAndMode(20, difficulty, mode)
 	}
 
 	if err != nil || len(scores) == 0 {
-		// Empty table
 		columns := []table.Column{
 			{Title: "#", Width: 4},
 			{Title: "Player", Width: 15},
 			{Title: "Net Worth", Width: 12},
 			{Title: "ROI", Width: 8},
+			{Title: "Mode", Width: 9},
 			{Title: "Difficulty", Width: 10},
 		}
 		s.table = components.NewGameTable("", columns, []table.Row{})
-		s.table.SetSize(55, 12)
+		s.table.SetSize(62, 12)
 		return
 	}
 
 	rows := make([]table.Row, len(scores))
 	for i, score := range scores {
+		modeStr := score.Mode
+		if modeStr == "" {
+			modeStr = "vc"
+		}
 		rows[i] = table.Row{
 			fmt.Sprintf("%d", i+1),
 			truncate(score.PlayerName, 15),
 			fmt.Sprintf("$%s", formatCompactMoney(score.FinalNetWorth)),
 			fmt.Sprintf("%.1f%%", score.ROI),
+			modeStr,
 			score.Difficulty,
 		}
 	}
@@ -93,11 +107,12 @@ func (s *LeaderboardScreen) loadLeaderboard(sortBy, difficulty string) {
 		{Title: "Player", Width: 15},
 		{Title: "Net Worth", Width: 12},
 		{Title: "ROI", Width: 8},
+		{Title: "Mode", Width: 9},
 		{Title: "Difficulty", Width: 10},
 	}
 
 	s.table = components.NewGameTable("", columns, rows)
-	s.table.SetSize(55, 12)
+	s.table.SetSize(62, 12)
 }
 
 // Init initializes the leaderboard screen
@@ -114,23 +129,65 @@ func (s *LeaderboardScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		}
 
 	case components.MenuSelectedMsg:
-		s.currentView = msg.ID
 		switch msg.ID {
-		case "net_worth_all":
-			s.loadLeaderboard("net_worth", "all")
-		case "roi_all":
-			s.loadLeaderboard("roi", "all")
-		case "easy":
-			s.loadLeaderboard("net_worth", "Easy")
-		case "medium":
-			s.loadLeaderboard("net_worth", "Medium")
-		case "hard":
-			s.loadLeaderboard("net_worth", "Hard")
-		case "expert":
-			s.loadLeaderboard("net_worth", "Expert")
+		// Mode filters
+		case "mode_all":
+			s.currentMode = "all"
+		case "mode_vc":
+			s.currentMode = "vc"
+		case "mode_founder":
+			s.currentMode = "founder"
+		// Sort
+		case "net_worth":
+			s.currentView = "net_worth"
+		case "roi":
+			s.currentView = "roi"
 		case "recent":
-			s.loadLeaderboard("recent", "all")
+			s.currentView = "recent"
+		// Difficulty (only applies to VC mode; founder uses "Founder" tag)
+		case "easy":
+			s.currentView = "net_worth"
+			s.loadLeaderboard("net_worth", "Easy", s.currentMode)
+			s.currentView = "easy"
+			var cmd tea.Cmd
+			s.menu, cmd = s.menu.Update(msg)
+			return s, cmd
+		case "medium":
+			s.currentView = "net_worth"
+			s.loadLeaderboard("net_worth", "Medium", s.currentMode)
+			s.currentView = "medium"
+			var cmd tea.Cmd
+			s.menu, cmd = s.menu.Update(msg)
+			return s, cmd
+		case "hard":
+			s.currentView = "net_worth"
+			s.loadLeaderboard("net_worth", "Hard", s.currentMode)
+			s.currentView = "hard"
+			var cmd tea.Cmd
+			s.menu, cmd = s.menu.Update(msg)
+			return s, cmd
+		case "expert":
+			s.currentView = "net_worth"
+			s.loadLeaderboard("net_worth", "Expert", s.currentMode)
+			s.currentView = "expert"
+			var cmd tea.Cmd
+			s.menu, cmd = s.menu.Update(msg)
+			return s, cmd
 		}
+
+		// Reload with current sort + mode + difficulty
+		difficulty := "all"
+		switch s.currentView {
+		case "easy":
+			difficulty = "Easy"
+		case "medium":
+			difficulty = "Medium"
+		case "hard":
+			difficulty = "Hard"
+		case "expert":
+			difficulty = "Expert"
+		}
+		s.loadLeaderboard(s.currentView, difficulty, s.currentMode)
 	}
 
 	var cmd tea.Cmd

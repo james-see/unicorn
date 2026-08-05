@@ -28,6 +28,7 @@ const (
 	ViewFollowOn       // Follow-on investment opportunity
 	ViewBoardVote      // Board vote required
 	ViewFollowOnAmount // Entering follow-on amount
+	ViewConfirmQuit    // Quit confirmation
 )
 
 // VCTurnScreen handles the main game turn loop
@@ -58,6 +59,12 @@ type VCTurnScreen struct {
 	valueAddPhase   int    // 0 = select company, 1 = select action
 	valueAddMsg     string // Feedback message
 
+	// Secondary market state
+	selectedSecondaryOffer int // Selected offer index (-1 = none)
+
+	// Quit confirmation
+	confirmQuitMenu *components.Menu
+
 	// Auto mode
 	autoTicker *time.Ticker
 }
@@ -71,11 +78,12 @@ func NewVCTurnScreen(width, height int, gameData *GameData) *VCTurnScreen {
 	followOnInput.Width = 20
 
 	s := &VCTurnScreen{
-		width:          width,
-		height:         height,
-		gameData:       gameData,
-		view:           ViewTurnSummary,
-		followOnAmount: followOnInput,
+		width:                   width,
+		height:                  height,
+		gameData:                gameData,
+		view:                    ViewTurnSummary,
+		followOnAmount:          followOnInput,
+		selectedSecondaryOffer:  -1,
 	}
 
 	s.refreshPortfolioTable()
@@ -203,14 +211,42 @@ func (s *VCTurnScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 				return s, nil
 
 			case key.Matches(msg, keys.Global.Back), msg.String() == "q":
-				// Quit confirmation would go here
-				return s, SwitchTo(ScreenMainMenu)
+				// Show quit confirmation
+				s.confirmQuitMenu = components.NewMenu("QUIT GAME?", []components.MenuItem{
+					{ID: "confirm_quit", Title: "Yes, quit to main menu", Icon: "✓"},
+					{ID: "cancel", Title: "No, keep playing", Icon: "←"},
+				})
+				s.confirmQuitMenu.SetSize(40, 6)
+				s.confirmQuitMenu.SetHideHelp(true)
+				s.view = ViewConfirmQuit
+				return s, nil
 			}
 
 		case ViewDashboard, ViewSecondaryMarket:
-			if key.Matches(msg, keys.Global.Back) {
+			if key.Matches(msg, keys.Global.Back) || msg.String() == "q" {
 				s.view = ViewTurnSummary
+				s.selectedSecondaryOffer = -1
 				return s, nil
+			}
+			// Handle number keys for secondary market offer selection
+			if s.view == ViewSecondaryMarket {
+				keyStr := msg.String()
+				if len(keyStr) == 1 && keyStr[0] >= '1' && keyStr[0] <= '9' {
+					num := int(keyStr[0] - '0')
+					gs := s.gameData.GameState
+					if num <= len(gs.SecondaryMarketOffers) {
+						s.selectedSecondaryOffer = num - 1
+						return s, nil
+					}
+				}
+				// Accept selected offer
+				if msg.String() == "a" && s.selectedSecondaryOffer >= 0 {
+					return s.handleSecondaryMarketAccept()
+				}
+				// Reject selected offer
+				if msg.String() == "r" && s.selectedSecondaryOffer >= 0 {
+					return s.handleSecondaryMarketReject()
+				}
 			}
 
 		case ViewValueAdd:
@@ -265,6 +301,20 @@ func (s *VCTurnScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 			case msg.String() == "b" || msg.String() == "2":
 				return s.handleBoardVote(false) // Reject/Decline
 			}
+
+		case ViewConfirmQuit:
+			switch {
+			case key.Matches(msg, keys.Global.Back):
+				s.view = ViewTurnSummary
+				s.confirmQuitMenu = nil
+				return s, nil
+			case msg.String() == "y" || msg.String() == "enter":
+				return s, SwitchTo(ScreenMainMenu)
+			case msg.String() == "n" || msg.String() == "esc":
+				s.view = ViewTurnSummary
+				s.confirmQuitMenu = nil
+				return s, nil
+			}
 		}
 
 	case tickMsg:
@@ -289,6 +339,10 @@ func (s *VCTurnScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 		s.portfolioTable, cmd = s.portfolioTable.Update(msg)
 	case ViewFollowOnAmount:
 		s.followOnAmount, cmd = s.followOnAmount.Update(msg)
+	case ViewConfirmQuit:
+		if s.confirmQuitMenu != nil {
+			s.confirmQuitMenu, cmd = s.confirmQuitMenu.Update(msg)
+		}
 	}
 
 	return s, cmd
@@ -403,6 +457,44 @@ func (s *VCTurnScreen) handleBoardVote(approve bool) (ScreenModel, tea.Cmd) {
 		s.refreshLeaderboard()
 	}
 
+	return s, nil
+}
+
+func (s *VCTurnScreen) handleSecondaryMarketAccept() (ScreenModel, tea.Cmd) {
+	gs := s.gameData.GameState
+	idx := s.selectedSecondaryOffer
+	if idx < 0 || idx >= len(gs.SecondaryMarketOffers) {
+		s.selectedSecondaryOffer = -1
+		return s, nil
+	}
+
+	offer := gs.SecondaryMarketOffers[idx]
+	err := gs.AcceptSecondaryOffer(idx)
+	if err != nil {
+		s.turnMessages = append(s.turnMessages, fmt.Sprintf("❌ Failed to accept offer: %v", err))
+	} else {
+		s.turnMessages = append(s.turnMessages, fmt.Sprintf("✓ Accepted offer for %s: $%s", offer.CompanyName, formatCompactMoney(offer.OfferAmount)))
+	}
+	s.selectedSecondaryOffer = -1
+	return s, nil
+}
+
+func (s *VCTurnScreen) handleSecondaryMarketReject() (ScreenModel, tea.Cmd) {
+	gs := s.gameData.GameState
+	idx := s.selectedSecondaryOffer
+	if idx < 0 || idx >= len(gs.SecondaryMarketOffers) {
+		s.selectedSecondaryOffer = -1
+		return s, nil
+	}
+
+	offer := gs.SecondaryMarketOffers[idx]
+	err := gs.DeclineSecondaryOffer(idx)
+	if err != nil {
+		s.turnMessages = append(s.turnMessages, fmt.Sprintf("❌ Failed to reject offer: %v", err))
+	} else {
+		s.turnMessages = append(s.turnMessages, fmt.Sprintf("✗ Declined offer for %s", offer.CompanyName))
+	}
+	s.selectedSecondaryOffer = -1
 	return s, nil
 }
 
@@ -613,6 +705,8 @@ func (s *VCTurnScreen) View() string {
 		return s.renderFollowOn()
 	case ViewBoardVote:
 		return s.renderBoardVote()
+	case ViewConfirmQuit:
+		return s.renderConfirmQuit()
 	default:
 		return s.renderTurnSummary()
 	}
@@ -1043,14 +1137,22 @@ func (s *VCTurnScreen) renderSecondaryMarket() string {
 	} else {
 		// List offers
 		for i, offer := range gs.SecondaryMarketOffers {
+			borderColor := styles.Orange
+			if i == s.selectedSecondaryOffer {
+				borderColor = styles.Green
+			}
 			offerStyle := lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder()).
-				BorderForeground(styles.Orange).
+				BorderForeground(borderColor).
 				Padding(0, 1).
 				Width(50)
 
 			offerText := fmt.Sprintf("%d. %s - %.1f%% stake @ $%s",
 				i+1, offer.CompanyName, offer.EquityOffered, formatCompactMoney(offer.OfferAmount))
+
+			if i == s.selectedSecondaryOffer {
+				offerText = "► " + offerText + " ◄"
+			}
 
 			b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(offerStyle.Render(offerText)))
 			b.WriteString("\n")
@@ -1059,7 +1161,11 @@ func (s *VCTurnScreen) renderSecondaryMarket() string {
 
 	b.WriteString("\n")
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
-	b.WriteString(helpStyle.Render("esc back"))
+	if s.selectedSecondaryOffer >= 0 {
+		b.WriteString(helpStyle.Render("a accept • r reject • esc back"))
+	} else {
+		b.WriteString(helpStyle.Render("1-9 select offer • esc back"))
+	}
 
 	return b.String()
 }
@@ -1270,6 +1376,39 @@ func (s *VCTurnScreen) renderBoardVote() string {
 	b.WriteString("\n\n")
 	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
 	b.WriteString(helpStyle.Render("Press A to Accept/Approve • Press B to Reject/Decline"))
+
+	return b.String()
+}
+
+func (s *VCTurnScreen) renderConfirmQuit() string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Black).
+		Background(styles.Red).
+		Bold(true).
+		Width(50).
+		Align(lipgloss.Center)
+
+	b.WriteString(lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center).Render(headerStyle.Render("⚠️ QUIT GAME? ⚠️")))
+	b.WriteString("\n\n")
+
+	warnStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(warnStyle.Render("Your progress in this game will be lost."))
+	b.WriteString("\n\n")
+
+	if s.confirmQuitMenu != nil {
+		menuBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Red).
+			Padding(0, 1)
+		menuContainer := lipgloss.NewStyle().Width(s.width).Align(lipgloss.Center)
+		b.WriteString(menuContainer.Render(menuBox.Render(s.confirmQuitMenu.View())))
+	}
+
+	b.WriteString("\n")
+	helpStyle := lipgloss.NewStyle().Foreground(styles.Gray).Width(s.width).Align(lipgloss.Center)
+	b.WriteString(helpStyle.Render("↑/↓ select • enter confirm • esc cancel"))
 
 	return b.String()
 }
