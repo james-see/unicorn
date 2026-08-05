@@ -5082,7 +5082,7 @@ func (s *FounderGameScreen) renderBoardSentimentPanel() string {
 
 	var b strings.Builder
 	titleStyle := lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
-	b.WriteString(titleStyle.Render("🏛️  BOARD"))
+	b.WriteString(titleStyle.Render("🏛️  BOARD "))
 	b.WriteString("\n\n")
 
 	labelStyle := lipgloss.NewStyle().Foreground(styles.Yellow)

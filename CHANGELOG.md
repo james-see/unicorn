@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 3.33.3 - Founder board panel right border fix (2026-08-05)
+
+### Bug fixes
+- **Founder BOARD panel**: added trailing space in the `🏛️  BOARD ` title so the right border of the panel aligns correctly (the U+FE0F variation selector was consuming a width column).
+
+---
+
 ## Version 3.33.2 - Founder board header spacing fix (2026-08-05)
 
 ### Bug fixes
