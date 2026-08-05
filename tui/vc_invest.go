@@ -192,21 +192,28 @@ func (s *VCInvestScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 					s.phase = PhaseSyndicateList
 					return s, nil
 				}
-			case key.Matches(msg, keys.Global.Enter):
-				// Select startup for investment
-				tableIdx := s.startupTable.Cursor()
-				if tableIdx >= 0 && tableIdx < len(s.rowToStartupIdx) {
-					// Map table row to actual startup index
-					startupIdx := s.rowToStartupIdx[tableIdx]
-					s.selectedIdx = startupIdx
-					s.selectedStartup = &gs.AvailableStartups[startupIdx]
-					s.phase = PhaseAmountInput
-					s.amountInput.Focus()
-					s.amountInput.SetValue("")
-					s.errorMsg = ""
-					return s, textinput.Blink
-				}
+		case key.Matches(msg, keys.Global.Enter):
+			// Select startup for investment
+			// Block new investments when the initial-investment cap is reached.
+			// Follow-ons (MakeFollowOnInvestment) and syndicates remain available.
+			maxInitial := gs.Difficulty.MaxInitialInvestments
+			if maxInitial > 0 && len(gs.Portfolio.Investments) >= maxInitial {
+				s.errorMsg = fmt.Sprintf("Initial investment cap reached (%d). Deploy follow-ons or syndicates instead.", maxInitial)
+				return s, nil
 			}
+			tableIdx := s.startupTable.Cursor()
+			if tableIdx >= 0 && tableIdx < len(s.rowToStartupIdx) {
+				// Map table row to actual startup index
+				startupIdx := s.rowToStartupIdx[tableIdx]
+				s.selectedIdx = startupIdx
+				s.selectedStartup = &gs.AvailableStartups[startupIdx]
+				s.phase = PhaseAmountInput
+				s.amountInput.Focus()
+				s.amountInput.SetValue("")
+				s.errorMsg = ""
+				return s, textinput.Blink
+			}
+		}
 
 		case PhaseAmountInput:
 			switch {
@@ -753,6 +760,27 @@ func (s *VCInvestScreen) renderStartupList() string {
 			Width(s.width).
 			Align(lipgloss.Center)
 		b.WriteString(investStyle.Render(fmt.Sprintf("✓ %d investments made", len(gs.Portfolio.Investments))))
+		b.WriteString("\n")
+	}
+
+	// Initial-investment cap indicator (follow-ons and syndicates are not capped)
+	maxInitial := gs.Difficulty.MaxInitialInvestments
+	if maxInitial > 0 {
+		used := len(gs.Portfolio.Investments)
+		remaining := maxInitial - used
+		if remaining < 0 {
+			remaining = 0
+		}
+		capStyle := lipgloss.NewStyle().
+			Width(s.width).
+			Align(lipgloss.Center)
+		if remaining == 0 {
+			capStyle = capStyle.Foreground(styles.Red).Bold(true)
+			b.WriteString(capStyle.Render(fmt.Sprintf("🔒 Initial investment cap reached (%d/%d). Use follow-ons & syndicates to keep deploying.", used, maxInitial)))
+		} else {
+			capStyle = capStyle.Foreground(styles.Yellow)
+			b.WriteString(capStyle.Render(fmt.Sprintf("📊 Initial bets: %d/%d (%d remaining)", used, maxInitial, remaining)))
+		}
 		b.WriteString("\n")
 	}
 

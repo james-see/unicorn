@@ -1,5 +1,41 @@
 # Changelog
 
+## Version 3.34.0 - Founder board seats & VC capital rebalance (2026-08-05)
+
+### Major: Founder mode board seats
+Advisors and funding rounds now have explicit board-seat tracking. Previously the `BoardSeats` counter was decoupled from actual members and there was no way to mark an advisor as holding a seat, an observer, or having no seat.
+
+- **New `HasBoardSeat` field on `BoardMember`** (`founder/founder_types.go`): boolean per member.
+- **Add-advisor flow asks for a seat grant**: the confirm menu now offers "Hire + Board Seat" vs "Hire as Advisor only". Granting a seat increments `BoardSeats` (no separate equity-pool draw — the advisor's `EquityCost` already covers it).
+- **Funding rounds create real investor directors**: `TermSheetOption` gains `BoardSeatsOffered` (Seed 0-1, Series A 1, Series B 1-2; investor-heavy options add seats). `RaiseFundingWithTerms` now appends `Type:"investor"` `BoardMember` entries with `HasBoardSeat:true` for the lead investor(s). The "Investor Directors" section of the board table is no longer always empty.
+- **New "Invite Independent Director" board action** replaces the standalone "Add Board Seat" counter-only action. Creates a real `Type:"independent"` seated director (0.5% equity from the pool) with a name from a pool of governance/experience names.
+- **`renderBoardTable` redesigned**: shows "X filled / Y total" board seats, a 🪑 badge per seated member, and a new INDEPENDENT DIRECTORS section alongside the existing Advisors and Investor Directors sections.
+- **Seat accounting fixed on removal**: `RemoveAdvisor` and `FireBoardMember` now decrement `BoardSeats` only when the removed member actually held a seat (previously `FireBoardMember` decremented unconditionally).
+
+### Major: VC mode capital rebalance
+The follow-on reserve was far too small relative to how valuations scale, so players got crushed by dilution in later rounds even when they wanted to participate. Initial capital and LP commitments now scale per-difficulty, with a new cap on the number of first-check investments to enforce reserve discipline (mirrors real fund strategy of reserve > initial deployment).
+
+- **New `Difficulty` fields**: `FollowOnReserveAmount`, `LPCommitMultiplier`, `MaxInitialInvestments`.
+
+  | Difficulty | Cash | Reserve | LP× | Max new bets |
+  |---|---|---|---|---|
+  | Easy | $1M | $2.5M | 3.0 | 12 |
+  | Medium | $1.5M | $3M | 3.0 | 10 |
+  | Hard | $2M | $3.5M | 3.5 | 8 |
+  | Expert | $2.5M | $4M | 3.5 | 8 |
+
+- **`NewGame` uses `difficulty.FollowOnReserveAmount`** (replaces the old `$100k + 18 × $50k` ≈ $1M formula). The `follow_on_reserve_boost` upgrade still adds +$200k on top.
+- **`initializeLPCommitments` takes the per-difficulty multiplier** (3.0-3.5× starting cash) so quarterly capital calls replenish a larger, realistic dry-powder pool. AI players use the same multiplier.
+- **New first-check investment cap** in `MakeInvestmentWithTerms`: blocks new bets once `len(Portfolio.Investments) >= MaxInitialInvestments`. **Follow-ons and syndicates are explicitly NOT capped** — you can still defend existing positions.
+- **Follow-on per-round caps raised**: 20%→30% of pre-money valuation, and 50%→60% of the raise amount, so the larger reserve can actually move the needle in big later rounds instead of being capped out.
+- **VC invest UI surfaces the cap**: "📊 Initial bets: X/Y (Z remaining)" on the startup list, with a clear error and red "🔒 cap reached" indicator when at the limit. Syndicate and follow-on flows remain open.
+- **ROI denominator auto-scales**: `totalStartingCapital = InitialFundSize + FollowOnReserve` (`metrics.go`, `game.go`) uses the new larger reserve with no hardcoding. Absolute ROI % will be lower for the same exit value, which is honest — bigger funds naturally produce smaller % returns.
+
+### Syndicates
+No change. Still gated at Level 2 (unlock after ~2 games). Working as designed.
+
+---
+
 ## Version 3.33.3 - Founder board panel right border fix (2026-08-05)
 
 ### Bug fixes

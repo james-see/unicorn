@@ -117,12 +117,15 @@ type GameEvent struct {
 
 // Difficulty represents game difficulty level
 type Difficulty struct {
-	Name           string
-	StartingCash   int64
-	EventFrequency float64 // 0-1, chance of event per turn
-	Volatility     float64 // 0-1, market volatility
-	MaxTurns       int
-	Description    string
+	Name                  string
+	StartingCash          int64
+	EventFrequency        float64 // 0-1, chance of event per turn
+	Volatility            float64 // 0-1, market volatility
+	MaxTurns              int
+	Description           string
+	FollowOnReserveAmount int64   // Initial dry powder reserved for follow-on investments
+	LPCommitMultiplier    float64 // LP committed capital as a multiple of starting cash
+	MaxInitialInvestments int     // Cap on new (first-check) investments per fund
 }
 
 // AIPlayer represents a computer-controlled VC
@@ -228,39 +231,51 @@ type SyndicateOpportunity struct {
 // Predefined difficulty levels
 var (
 	EasyDifficulty = Difficulty{
-		Name:           "Easy",
-		StartingCash:   1000000, // $1M fund
-		EventFrequency: 0.20,    // 20% chance
-		Volatility:     0.03,    // 3% volatility
-		MaxTurns:       60,      // 5 years
-		Description:    "$1M fund, lower volatility, 5 years",
+		Name:                  "Easy",
+		StartingCash:          1000000, // $1M fund
+		EventFrequency:        0.20,    // 20% chance
+		Volatility:            0.03,    // 3% volatility
+		MaxTurns:              60,      // 5 years
+		Description:           "$1M fund, lower volatility, 5 years",
+		FollowOnReserveAmount: 2500000, // $2.5M dry powder for follow-ons
+		LPCommitMultiplier:    3.0,     // LPs commit 3x starting cash
+		MaxInitialInvestments: 12,      // Up to 12 first-check bets
 	}
 
 	MediumDifficulty = Difficulty{
-		Name:           "Medium",
-		StartingCash:   1500000, // $1.5M fund
-		EventFrequency: 0.30,    // 30% chance
-		Volatility:     0.05,    // 5% volatility
-		MaxTurns:       60,      // 5 years
-		Description:    "$1.5M fund - balanced challenge, 5 years",
+		Name:                  "Medium",
+		StartingCash:          1500000, // $1.5M fund
+		EventFrequency:        0.30,    // 30% chance
+		Volatility:            0.05,    // 5% volatility
+		MaxTurns:              60,      // 5 years
+		Description:           "$1.5M fund - balanced challenge, 5 years",
+		FollowOnReserveAmount: 3000000, // $3M dry powder
+		LPCommitMultiplier:    3.0,     // LPs commit 3x starting cash
+		MaxInitialInvestments: 10,      // Up to 10 first-check bets
 	}
 
 	HardDifficulty = Difficulty{
-		Name:           "Hard",
-		StartingCash:   2000000, // $2M fund
-		EventFrequency: 0.40,    // 40% chance
-		Volatility:     0.07,    // 7% volatility
-		MaxTurns:       60,      // 5 years
-		Description:    "$2M fund, higher volatility, 5 years",
+		Name:                  "Hard",
+		StartingCash:          2000000, // $2M fund
+		EventFrequency:        0.40,    // 40% chance
+		Volatility:            0.07,    // 7% volatility
+		MaxTurns:              60,      // 5 years
+		Description:           "$2M fund, higher volatility, 5 years",
+		FollowOnReserveAmount: 3500000, // $3.5M dry powder
+		LPCommitMultiplier:    3.5,     // LPs commit 3.5x starting cash
+		MaxInitialInvestments: 8,       // Up to 8 first-check bets
 	}
 
 	ExpertDifficulty = Difficulty{
-		Name:           "Expert",
-		StartingCash:   2500000, // $2.5M fund
-		EventFrequency: 0.50,    // 50% chance
-		Volatility:     0.10,    // 10% volatility
-		MaxTurns:       60,      // 5 years
-		Description:    "$2.5M fund, extreme volatility, 5 years",
+		Name:                  "Expert",
+		StartingCash:          2500000, // $2.5M fund
+		EventFrequency:        0.50,    // 50% chance
+		Volatility:            0.10,    // 10% volatility
+		MaxTurns:              60,      // 5 years
+		Description:           "$2.5M fund, extreme volatility, 5 years",
+		FollowOnReserveAmount: 4000000, // $4M dry powder
+		LPCommitMultiplier:    3.5,     // LPs commit 3.5x starting cash
+		MaxInitialInvestments: 8,       // Up to 8 first-check bets
 	}
 )
 
@@ -275,16 +290,16 @@ type PlayerScore struct {
 	IsPlayer bool
 }
 
-// initializeLPCommitments sets up LP commitments and capital call schedule
-func initializeLPCommitments(startingCash int64, maxTurns int) (int64, []int) {
-	// Typical VC fund: LPs commit 2-3x the initial fund size
-	// Capital calls happen quarterly (every 3 months) or semi-annually
-	lpCommittedCapital := startingCash * 2 // 2x committed capital
-	capitalCallFrequency := 3              // Quarterly capital calls (every 3 months)
+// initializeLPCommitments sets up LP commitments and capital call schedule.
+// lpCommitMultiplier controls how many times the starting cash LPs commit in
+// total (called quarterly over the life of the fund).
+func initializeLPCommitments(startingCash int64, maxTurns int, lpCommitMultiplier float64) (int64, []int) {
+	lpCommittedCapital := int64(float64(startingCash) * lpCommitMultiplier)
+	capitalCallFrequency := 3 // Quarterly capital calls (every 3 months)
 	capitalCallSchedule := []int{}
 
-	// Schedule capital calls: first call at turn 1, then every 3 months
-	// Each call is 25% of committed capital (4 calls total over 12 months)
+	// Schedule capital calls: first call at turn 1, then every 3 months.
+	// Each call draws a proportional slice of committed capital.
 	for turn := 1; turn <= maxTurns; turn += capitalCallFrequency {
 		capitalCallSchedule = append(capitalCallSchedule, turn)
 	}
@@ -307,10 +322,11 @@ func GenerateDefaultFirmName(playerName string) string {
 func NewGame(playerName string, firmName string, difficulty Difficulty, playerUpgrades []string) *GameState {
 	rand.Seed(time.Now().UnixNano())
 
-	// Calculate follow-on reserve: $100k base + $50k per potential funding round
-	// Assume ~60% of companies will have at least one round we can participate in
-	expectedRounds := int64(15 * 0.6 * 2) // 15 companies, 60% raise, avg 2 rounds
-	followOnReserve := int64(100000) + (expectedRounds * 50000)
+	// Follow-on reserve scales with difficulty so the fund can participate in
+	// expensive later rounds without being crushed by dilution. The previous
+	// formula ($100k + 18 × $50k ≈ $1M) was far too small relative to late-stage
+	// valuations; per-difficulty values give realistic dry powder.
+	followOnReserve := difficulty.FollowOnReserveAmount
 
 	// Apply upgrades
 	startingCash := difficulty.StartingCash
@@ -335,8 +351,8 @@ func NewGame(playerName string, firmName string, difficulty Difficulty, playerUp
 		}
 	}
 
-	// Initialize LP Commitments
-	lpCommittedCapital, capitalCallSchedule := initializeLPCommitments(startingCash, maxTurns)
+	// Initialize LP Commitments (scaled by difficulty)
+	lpCommittedCapital, capitalCallSchedule := initializeLPCommitments(startingCash, maxTurns, difficulty.LPCommitMultiplier)
 
 	gs := &GameState{
 		PlayerName:     playerName,

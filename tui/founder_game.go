@@ -1987,6 +1987,10 @@ func (s *FounderGameScreen) handleTermSelection(num int) (ScreenModel, tea.Cmd) 
 			fmt.Sprintf("   Your equity: %.1f%%", 100.0-fg.EquityGivenAway-fg.EquityPool),
 			fmt.Sprintf("   New runway: %s", runway),
 		}
+		if selectedSheet.BoardSeatsOffered > 0 {
+			s.turnMessages = append(s.turnMessages,
+				fmt.Sprintf("   Board seats granted: %d", selectedSheet.BoardSeatsOffered))
+		}
 	}
 
 	s.view = FounderViewMain
@@ -2351,9 +2355,9 @@ func (s *FounderGameScreen) rebuildBoardMenu() {
 
 	items := []components.MenuItem{
 		{ID: "view", Title: "View Board & Advisors", Description: "See current board members", Icon: "👁️"},
-		{ID: "add_seat", Title: "Add Board Seat", Description: "~2% from equity pool", Icon: "➕"},
+		{ID: "add_independent", Title: "Invite Independent Director", Description: "Adds a board seat (~0.5% eq)", Icon: "🪑"},
 		{ID: "expand_pool", Title: "Expand Equity Pool", Description: "Dilute 1-10%", Icon: "📊"},
-		{ID: "add_advisor", Title: "Add Advisor", Description: "0.25-1% equity for guidance", Icon: "🧠"},
+		{ID: "add_advisor", Title: "Add Advisor", Description: "0.25-1% equity, optional board seat", Icon: "🧠"},
 	}
 
 	// Check for advisors who can be promoted to chairman
@@ -2422,12 +2426,47 @@ func (s *FounderGameScreen) handleBoardSelection(id string) (ScreenModel, tea.Cm
 		s.view = FounderViewBoardTable
 		return s, nil
 
-	case "add_seat":
-		fg.AddBoardSeat("Strategic advisor")
+	case "add_independent":
+		// Invite an independent director — creates a real board seat with light equity cost.
+		availPool := fg.EquityPool - fg.EquityAllocated
+		if availPool < 0.5 {
+			s.turnMessages = []string{
+				"❌ Not enough equity pool to invite an independent director (need 0.5%).",
+				"   Expand the equity pool first.",
+			}
+			s.rebuildBoardMenu()
+			s.view = FounderViewBoard
+			return s, nil
+		}
+		independentNames := []string{
+			"Prof. Sharon Chen", "Amb. David Reeves", "Dr. Lena Park",
+			"Gov. Marcus Webb", "Gen. Priya Anand", "Justice R. Holloway",
+		}
+		name := independentNames[len(fg.BoardMembers)%len(independentNames)]
+		equityCost := 0.5
+		director := founder.BoardMember{
+			Name:         name,
+			Type:         "independent",
+			Expertise:    "governance",
+			MonthAdded:   fg.Turn,
+			EquityCost:   equityCost,
+			IsActive:     true,
+			HasBoardSeat: true,
+		}
+		fg.BoardMembers = append(fg.BoardMembers, director)
+		fg.BoardSeats++
+		fg.EquityAllocated += equityCost
+		fg.CapTable = append(fg.CapTable, founder.CapTableEntry{
+			Name:         name,
+			Type:         "independent",
+			Equity:       equityCost,
+			MonthGranted: fg.Turn,
+		})
 		s.turnMessages = []string{
-			"✓ Added board seat",
-			fmt.Sprintf("   New board seats: %d", fg.BoardSeats),
-			fmt.Sprintf("   Remaining equity pool: %.1f%%", fg.EquityPool),
+			fmt.Sprintf("✓ Invited independent director: %s", name),
+			fmt.Sprintf("   Board seat granted (seats: %d)", fg.BoardSeats),
+			fmt.Sprintf("   Equity cost: %.2f%%", equityCost),
+			fmt.Sprintf("   Remaining equity pool: %.1f%%", fg.EquityPool-fg.EquityAllocated),
 		}
 		s.rebuildBoardMenu()
 		s.view = FounderViewBoard
@@ -5487,6 +5526,9 @@ func (s *FounderGameScreen) renderFundingTerms() string {
 		terms.WriteString(fmt.Sprintf("%d. %s\n", i+1, sheet.Terms))
 		terms.WriteString(fmt.Sprintf("   Amount: $%s | Valuation: $%s\n", formatCompactMoney(sheet.Amount), formatCompactMoney(sheet.PostValuation)))
 		terms.WriteString(fmt.Sprintf("   Equity: %.1f%% | Your equity after: %.1f%%", sheet.Equity, newEquity))
+		if sheet.BoardSeatsOffered > 0 {
+			terms.WriteString(fmt.Sprintf(" | Board seats: %d", sheet.BoardSeatsOffered))
+		}
 		if newEquity < 50.0 && currentEquity >= 50.0 {
 			terms.WriteString(" ⚠️ LOSES CONTROL")
 		}
@@ -6967,8 +7009,14 @@ func (s *FounderGameScreen) renderBoardTable() string {
 	labelStyle := lipgloss.NewStyle().Foreground(styles.Yellow)
 	valStyle := lipgloss.NewStyle().Foreground(styles.White)
 
-	content.WriteString(labelStyle.Render("Board Seats: "))
-	content.WriteString(valStyle.Render(fmt.Sprintf("%d", fg.BoardSeats)))
+		content.WriteString(labelStyle.Render("Board Seats: "))
+	filledSeats := 0
+	for _, m := range fg.BoardMembers {
+		if m.IsActive && m.HasBoardSeat {
+			filledSeats++
+		}
+	}
+	content.WriteString(valStyle.Render(fmt.Sprintf("%d filled / %d total", filledSeats, fg.BoardSeats)))
 	content.WriteString("    ")
 	availablePool := fg.EquityPool - fg.EquityAllocated
 	if availablePool < 0 {
@@ -7051,9 +7099,13 @@ func (s *FounderGameScreen) renderBoardTable() string {
 		}
 		nameStyle := lipgloss.NewStyle().Foreground(styles.White)
 		content.WriteString(nameStyle.Render(fmt.Sprintf("   %s", m.Name)))
+		seatTag := ""
+		if m.HasBoardSeat {
+			seatTag = " 🪑 Board"
+		}
 		detailStyle := lipgloss.NewStyle().Foreground(styles.Gray)
-		content.WriteString(detailStyle.Render(fmt.Sprintf(" (%s) %.2f%% eq, Score: %.0f%%",
-			m.Expertise, m.EquityCost, m.ContributionScore*100)))
+		content.WriteString(detailStyle.Render(fmt.Sprintf(" (%s) %.2f%% eq, Score: %.0f%%%s",
+			m.Expertise, m.EquityCost, m.ContributionScore*100, seatTag)))
 		content.WriteString("\n")
 		advisorCount++
 	}
@@ -7075,13 +7127,47 @@ func (s *FounderGameScreen) renderBoardTable() string {
 		nameStyle := lipgloss.NewStyle().Foreground(styles.White)
 		content.WriteString(nameStyle.Render(fmt.Sprintf("   %s", m.Name)))
 		detailStyle := lipgloss.NewStyle().Foreground(styles.Gray)
-		content.WriteString(detailStyle.Render(fmt.Sprintf(" (%s) %.2f%% equity", m.Expertise, m.EquityCost)))
+		seatTag := ""
+		if m.HasBoardSeat {
+			seatTag = " 🪑 Board"
+		}
+		content.WriteString(detailStyle.Render(fmt.Sprintf(" %.2f%% equity%s", m.EquityCost, seatTag)))
 		content.WriteString("\n")
 		investorCount++
 	}
+	if investorCount > 0 {
+		content.WriteString("\n")
+	}
+
+	// Independent directors
+	independentCount := 0
+	for _, m := range fg.BoardMembers {
+		if !m.IsActive || m.Type != "independent" {
+			continue
+		}
+		if independentCount == 0 {
+			sectionStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+			content.WriteString(sectionStyle.Render("🪑 INDEPENDENT DIRECTORS"))
+			content.WriteString("\n")
+		}
+		nameStyle := lipgloss.NewStyle().Foreground(styles.White)
+		content.WriteString(nameStyle.Render(fmt.Sprintf("   %s", m.Name)))
+		detailStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+		seatTag := ""
+		if m.HasBoardSeat {
+			seatTag = " 🪑 Board"
+		}
+		content.WriteString(detailStyle.Render(fmt.Sprintf(" (%s) %.2f%% eq%s",
+			m.Expertise, m.EquityCost, seatTag)))
+		content.WriteString("\n")
+		independentCount++
+	}
+	if independentCount > 0 {
+		content.WriteString("\n")
+	}
 
 	// Empty state
-	if chairman == nil && advisorCount == 0 && investorCount == 0 {
+	if chairman == nil && advisorCount == 0 && investorCount == 0 && independentCount == 0 {
 		emptyStyle := lipgloss.NewStyle().Foreground(styles.Gray).Italic(true)
 		content.WriteString(emptyStyle.Render("   No board members yet. Add advisors to get guidance!"))
 		content.WriteString("\n")
@@ -7203,17 +7289,24 @@ func (s *FounderGameScreen) handleAdvisorExpertiseSelection(id string) (ScreenMo
 	}
 	s.pendingAdvisorSetup = setupFees[id]
 
-	// Build confirmation menu
+	// Build confirmation menu — choose whether to grant a board seat
 	items := []components.MenuItem{
 		{
-			ID:    "confirm",
-			Title: fmt.Sprintf("Hire %s ($%sK setup + %.2f%% equity)", s.pendingAdvisorName, formatCompactMoney(s.pendingAdvisorSetup), equityCost),
+			ID:    "confirm_seat",
+			Title: fmt.Sprintf("Hire %s + Board Seat ($%sK + %.2f%% eq)", s.pendingAdvisorName, formatCompactMoney(s.pendingAdvisorSetup), equityCost),
+			Description: "Advisor joins board as a director",
+			Icon:  "🪑",
+		},
+		{
+			ID:    "confirm_noseat",
+			Title: fmt.Sprintf("Hire %s as Advisor only ($%sK + %.2f%% eq)", s.pendingAdvisorName, formatCompactMoney(s.pendingAdvisorSetup), equityCost),
+			Description: "Advisor provides guidance, no board seat",
 			Icon:  "✓",
 		},
 		{ID: "cancel", Title: "Cancel", Icon: "←"},
 	}
 	s.advisorConfirmMenu = components.NewMenu("CONFIRM ADVISOR", items)
-	s.advisorConfirmMenu.SetSize(60, 8)
+	s.advisorConfirmMenu.SetSize(60, 9)
 	s.advisorConfirmMenu.SetHideHelp(true)
 	s.view = FounderViewAdvisorConfirm
 	return s, nil
@@ -7226,22 +7319,37 @@ func (s *FounderGameScreen) handleAdvisorConfirmSelection(id string) (ScreenMode
 		return s, nil
 	}
 
+	if id != "confirm_seat" && id != "confirm_noseat" {
+		// Unknown id — bail safely
+		s.rebuildAdvisorExpertiseMenu()
+		s.view = FounderViewAdvisorExpertise
+		return s, nil
+	}
+
 	fg := s.gameData.FounderState
+	grantSeat := id == "confirm_seat"
 
 	// Deduct setup fee
 	fg.Cash -= s.pendingAdvisorSetup
 
 	// Create advisor
 	advisor := founder.BoardMember{
-		Name:       s.pendingAdvisorName,
-		Type:       "advisor",
-		Expertise:  s.selectedExpertise,
-		MonthAdded: fg.Turn,
-		EquityCost: s.pendingAdvisorCost,
-		IsActive:   true,
+		Name:         s.pendingAdvisorName,
+		Type:         "advisor",
+		Expertise:    s.selectedExpertise,
+		MonthAdded:   fg.Turn,
+		EquityCost:   s.pendingAdvisorCost,
+		IsActive:     true,
+		HasBoardSeat: grantSeat,
 	}
 	fg.BoardMembers = append(fg.BoardMembers, advisor)
 	fg.EquityAllocated += s.pendingAdvisorCost // Allocate from pool, don't shrink pool itself
+
+	// Granting a board seat increments the seats counter (founder equity already
+	// covers it via advisor EquityCost — no separate equity-pool draw).
+	if grantSeat {
+		fg.BoardSeats++
+	}
 
 	// Add to cap table
 	fg.CapTable = append(fg.CapTable, founder.CapTableEntry{
@@ -7251,8 +7359,13 @@ func (s *FounderGameScreen) handleAdvisorConfirmSelection(id string) (ScreenMode
 		MonthGranted: fg.Turn,
 	})
 
+	seatMsg := "Advisor only (no board seat)"
+	if grantSeat {
+		seatMsg = "Board seat granted"
+	}
 	s.turnMessages = []string{
 		fmt.Sprintf("✓ Hired advisor: %s (%s)", advisor.Name, advisor.Expertise),
+		fmt.Sprintf("   %s", seatMsg),
 		fmt.Sprintf("   Setup fee: $%s", formatCompactMoney(s.pendingAdvisorSetup)),
 		fmt.Sprintf("   Equity cost: %.2f%%", advisor.EquityCost),
 		fmt.Sprintf("   Cash remaining: $%s", formatCompactMoney(fg.Cash)),
@@ -7319,14 +7432,19 @@ func (s *FounderGameScreen) handleRemoveAdvisorSelection(id string) (ScreenModel
 					if fg.EquityAllocated < 0 {
 						fg.EquityAllocated = 0
 					}
-					// Remove from cap table
-					for j := len(fg.CapTable) - 1; j >= 0; j-- {
-						if fg.CapTable[j].Name == name && fg.CapTable[j].Type == "advisor" {
-							fg.CapTable = append(fg.CapTable[:j], fg.CapTable[j+1:]...)
-							break
-						}
+				// Remove from cap table
+				for j := len(fg.CapTable) - 1; j >= 0; j-- {
+					if fg.CapTable[j].Name == name && fg.CapTable[j].Type == "advisor" {
+						fg.CapTable = append(fg.CapTable[:j], fg.CapTable[j+1:]...)
+						break
 					}
-					fg.BoardMembers[i].IsActive = false
+				}
+				// Release board seat if this advisor held one
+				if fg.BoardMembers[i].HasBoardSeat && fg.BoardSeats > 1 {
+					fg.BoardSeats--
+					fg.BoardMembers[i].HasBoardSeat = false
+				}
+				fg.BoardMembers[i].IsActive = false
 					s.turnMessages = []string{
 						fmt.Sprintf("✓ Removed advisor: %s", name),
 						fmt.Sprintf("   Bought back %.2f%% equity for $%s", fg.BoardMembers[i].EquityCost, formatCompactMoney(buybackCost)),

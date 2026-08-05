@@ -701,6 +701,11 @@ func (fs *FounderState) RemoveAdvisor(advisorName string, buybackEquity bool) er
 		}
 	}
 
+	// If this advisor held a board seat, release it
+	if advisor.HasBoardSeat && fs.BoardSeats > 1 {
+		fs.BoardSeats--
+	}
+
 	// Mark advisor as inactive
 	advisor.IsActive = false
 
@@ -756,9 +761,10 @@ func (fs *FounderState) FireBoardMember(memberName string) error {
 		fs.BoardSentiment = "angry"
 	}
 
-	// Reduce board seats
-	if fs.BoardSeats > 1 {
+	// Reduce board seats only if the fired member actually held a seat
+	if member.HasBoardSeat && fs.BoardSeats > 1 {
 		fs.BoardSeats--
+		member.HasBoardSeat = false
 	}
 
 	// Mark member as inactive

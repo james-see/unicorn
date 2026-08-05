@@ -146,6 +146,14 @@ func (gs *GameState) MakeInvestmentWithTerms(startupIndex int, amount int64, ter
 		}
 	}
 
+	// Cap on the number of first-check investments this fund can make.
+	// Follow-ons and syndicates are NOT subject to this cap — only new bets.
+	// This mirrors real fund strategy of reserve > initial deployment.
+	maxInitial := gs.Difficulty.MaxInitialInvestments
+	if maxInitial > 0 && len(gs.Portfolio.Investments) >= maxInitial {
+		return fmt.Errorf("max initial investments reached (%d). Deploy follow-ons on existing portfolio companies instead.", maxInitial)
+	}
+
 	// Minimum investment is $10,000 (standard VC practice)
 	minInvestment := int64(10000)
 	if amount < minInvestment {
@@ -246,20 +254,22 @@ func (gs *GameState) GetFollowOnOpportunities() []FollowOnOpportunity {
 							preMoneyVal := startup.Valuation
 							postMoneyVal := preMoneyVal + event.RaiseAmount
 
-							// Calculate min/max investment amounts
-							minInvestment := int64(10000) // $10k minimum
-							// Maximum investment is 20% of pre-money valuation (standard VC practice)
-							maxInvestmentByValuation := int64(float64(preMoneyVal) * 0.20)
-							// Use available cash (uninvested money from beginning) + follow-on reserve
-							availableCash := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
-							// Maximum is the lower of: 20% of valuation, available cash, or 50% of raise amount
-							maxInvestment := maxInvestmentByValuation
-							if maxInvestment > availableCash {
-								maxInvestment = availableCash
-							}
-							if maxInvestment > event.RaiseAmount/2 {
-								maxInvestment = event.RaiseAmount / 2 // Can't invest more than half the round
-							}
+						// Calculate min/max investment amounts
+						minInvestment := int64(10000) // $10k minimum
+						// Maximum follow-on is 30% of pre-money valuation — raised from 20%
+						// so the (now larger) follow-on reserve can meaningfully defend
+						// ownership in expensive later rounds.
+						maxInvestmentByValuation := int64(float64(preMoneyVal) * 0.30)
+						// Use available cash (uninvested money from beginning) + follow-on reserve
+						availableCash := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
+						// Maximum is the lower of: 30% of valuation, available cash, or 60% of raise amount
+						maxInvestment := maxInvestmentByValuation
+						if maxInvestment > availableCash {
+							maxInvestment = availableCash
+						}
+						if maxInvestment > int64(float64(event.RaiseAmount)*0.60) {
+							maxInvestment = int64(float64(event.RaiseAmount) * 0.60) // Can't invest more than 60% of the round
+						}
 
 							opportunities = append(opportunities, FollowOnOpportunity{
 								CompanyName:   event.CompanyName,
@@ -336,18 +346,18 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 		return fmt.Errorf("company %s not found", companyName)
 	}
 
-	// Maximum follow-on investment is 20% of current pre-money valuation for THIS round
-	maxInvestment := int64(float64(preMoneyVal) * 0.20)
+	// Maximum follow-on investment is 30% of current pre-money valuation for THIS round
+	maxInvestment := int64(float64(preMoneyVal) * 0.30)
 
 	// Find the investment
 	for i := range gs.Portfolio.Investments {
 		if gs.Portfolio.Investments[i].CompanyName == companyName {
 			inv := &gs.Portfolio.Investments[i]
 
-			// Check if this follow-on investment exceeds 20% limit for THIS round
-			// The 20% limit applies to each round separately, not cumulatively
+			// Check if this follow-on investment exceeds 30% limit for THIS round
+			// The 30% limit applies to each round separately, not cumulatively
 			if amount > maxInvestment {
-				return fmt.Errorf("follow-on investment of $%d exceeds maximum of $%d (20%% of current pre-money valuation: $%d)", amount, maxInvestment, preMoneyVal)
+				return fmt.Errorf("follow-on investment of $%d exceeds maximum of $%d (30%% of current pre-money valuation: $%d)", amount, maxInvestment, preMoneyVal)
 			}
 
 			// Update total amount invested

@@ -47,6 +47,7 @@ type BoardMember struct {
 	EquityCost        float64 // Equity given for this seat
 	IsActive          bool
 	IsChairman        bool    // Whether this member is the chairman of the board
+	HasBoardSeat      bool    // Whether this member holds a board seat (vs. observer/no seat)
 	ContributionScore float64 // 0-1, how valuable their advice has been
 }
 
@@ -245,12 +246,13 @@ type FundingRound struct {
 
 // TermSheetOption represents different fundraising options to choose from
 type TermSheetOption struct {
-	Amount        int64
-	PostValuation int64
-	PreValuation  int64
-	Equity        float64
-	Terms         string
-	Description   string
+	Amount             int64
+	PostValuation      int64
+	PreValuation       int64
+	Equity             float64
+	Terms              string
+	Description        string
+	BoardSeatsOffered  int // Number of board seats investors receive in this round
 }
 
 // AcquisitionOffer represents an offer to buy the company

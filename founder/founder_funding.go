@@ -27,18 +27,39 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 
 	options := []TermSheetOption{}
 
-	// Option 1: Less money, founder-friendly (lower dilution)
+	// Board seats investors expect by round (lead-investor-heavy rounds get more)
+	var baseBoardSeats int
+	switch roundName {
+	case "Seed":
+		baseBoardSeats = 1 // optional observer/seat for lead
+	case "Series A":
+		baseBoardSeats = 1 // lead takes a seat
+	case "Series B":
+		baseBoardSeats = 2 // lead + co-lead often take seats
+	default:
+		baseBoardSeats = 0
+	}
+
+	// Option 1: Less money, founder-friendly (lower dilution, fewer seats)
 	option1Amount := int64(float64(baseRaise) * 0.7)
 	option1Equity := baseEquityPercent * 0.85 // 85% of base (lower dilution)
 	option1PostVal := int64(float64(option1Amount) / (option1Equity / 100.0))
 	option1PreVal := option1PostVal - option1Amount
+	option1Seats := baseBoardSeats
+	if option1Seats > 1 {
+		option1Seats = 1 // founder-friendly caps at 1 seat
+	}
+	if baseBoardSeats == 0 {
+		option1Seats = 0
+	}
 	options = append(options, TermSheetOption{
-		Amount:        option1Amount,
-		PostValuation: option1PostVal,
-		PreValuation:  option1PreVal,
-		Equity:        option1Equity,
-		Terms:         "Founder-friendly",
-		Description:   "Lower dilution, founder-friendly terms, but less capital",
+		Amount:            option1Amount,
+		PostValuation:     option1PostVal,
+		PreValuation:      option1PreVal,
+		Equity:            option1Equity,
+		Terms:             "Founder-friendly",
+		Description:       "Lower dilution, founder-friendly terms, but less capital",
+		BoardSeatsOffered: option1Seats,
 	})
 
 	// Option 2: Standard terms (balanced)
@@ -47,12 +68,13 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 	option2PostVal := int64(float64(option2Amount) / (option2Equity / 100.0))
 	option2PreVal := option2PostVal - option2Amount
 	options = append(options, TermSheetOption{
-		Amount:        option2Amount,
-		PostValuation: option2PostVal,
-		PreValuation:  option2PreVal,
-		Equity:        option2Equity,
-		Terms:         "Standard",
-		Description:   "Fair terms, balanced approach",
+		Amount:            option2Amount,
+		PostValuation:     option2PostVal,
+		PreValuation:      option2PreVal,
+		Equity:            option2Equity,
+		Terms:             "Standard",
+		Description:       "Fair terms, balanced approach",
+		BoardSeatsOffered: baseBoardSeats,
 	})
 
 	// Option 3: More money, higher dilution
@@ -60,13 +82,18 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 	option3Equity := baseEquityPercent * 1.15 // 15% more equity (higher dilution)
 	option3PostVal := int64(float64(option3Amount) / (option3Equity / 100.0))
 	option3PreVal := option3PostVal - option3Amount
+	option3Seats := baseBoardSeats
+	if baseBoardSeats > 0 && option3Seats < 2 {
+		option3Seats = 2 // growth-focused often adds a second seat
+	}
 	options = append(options, TermSheetOption{
-		Amount:        option3Amount,
-		PostValuation: option3PostVal,
-		PreValuation:  option3PreVal,
-		Equity:        option3Equity,
-		Terms:         "Growth-focused",
-		Description:   "More capital to scale faster, but higher dilution",
+		Amount:            option3Amount,
+		PostValuation:     option3PostVal,
+		PreValuation:      option3PreVal,
+		Equity:            option3Equity,
+		Terms:             "Growth-focused",
+		Description:       "More capital to scale faster, but higher dilution",
+		BoardSeatsOffered: option3Seats,
 	})
 
 	// Option 4: Maximum money, investor-heavy terms
@@ -74,13 +101,18 @@ func (fs *FounderState) GenerateTermSheetOptions(roundName string) []TermSheetOp
 	option4Equity := baseEquityPercent * 1.35 // 35% more equity (investor-heavy)
 	option4PostVal := int64(float64(option4Amount) / (option4Equity / 100.0))
 	option4PreVal := option4PostVal - option4Amount
+	option4Seats := baseBoardSeats + 1 // investor-heavy adds a seat
+	if option4Seats > 3 {
+		option4Seats = 3
+	}
 	options = append(options, TermSheetOption{
-		Amount:        option4Amount,
-		PostValuation: option4PostVal,
-		PreValuation:  option4PreVal,
-		Equity:        option4Equity,
-		Terms:         "Investor-heavy",
-		Description:   "Maximum capital, but significant dilution and investor control",
+		Amount:            option4Amount,
+		PostValuation:     option4PostVal,
+		PreValuation:      option4PreVal,
+		Equity:            option4Equity,
+		Terms:             "Investor-heavy",
+		Description:       "Maximum capital, but significant dilution and investor control",
+		BoardSeatsOffered: option4Seats,
 	})
 
 	return options
@@ -213,6 +245,36 @@ func (fs *FounderState) RaiseFundingWithTerms(roundName string, option TermSheet
 			Equity:       equityPerInvestor,
 			MonthGranted: fs.Turn,
 		})
+	}
+
+	// Grant board seats to lead investor(s) as specified by the term sheet.
+	// Leads are the first N investors in the list.
+	seatsToFill := option.BoardSeatsOffered
+	if seatsToFill > len(investors) {
+		seatsToFill = len(investors)
+	}
+	for i := 0; i < seatsToFill; i++ {
+		// Avoid creating a duplicate BoardMember for an already-seated investor
+		alreadySeated := false
+		for _, m := range fs.BoardMembers {
+			if m.IsActive && m.Name == investors[i] && m.HasBoardSeat {
+				alreadySeated = true
+				break
+			}
+		}
+		if alreadySeated {
+			continue
+		}
+		fs.BoardMembers = append(fs.BoardMembers, BoardMember{
+			Name:         investors[i],
+			Type:         "investor",
+			Expertise:    "investor",
+			MonthAdded:   fs.Turn,
+			EquityCost:   equityPerInvestor,
+			IsActive:     true,
+			HasBoardSeat: true,
+		})
+		fs.BoardSeats++
 	}
 
 	fs.CalculateRunway()

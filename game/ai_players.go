@@ -5,8 +5,8 @@ import (
 )
 
 func (gs *GameState) InitializeAIPlayers() {
-	// Initialize LP commitments for AI players
-	lpCommittedCapital, capitalCallSchedule := initializeLPCommitments(gs.Difficulty.StartingCash, gs.Difficulty.MaxTurns)
+	// Initialize LP commitments for AI players (use same difficulty multiplier as the player)
+	lpCommittedCapital, capitalCallSchedule := initializeLPCommitments(gs.Difficulty.StartingCash, gs.Difficulty.MaxTurns, gs.Difficulty.LPCommitMultiplier)
 
 	// Randomly select 3-5 AI players from the pool
 	allAIPlayers := []AIPlayer{
