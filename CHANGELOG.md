@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 3.33.2 - Founder board header spacing fix (2026-08-05)
+
+### Bug fixes
+- **Founder BOARD header**: added missing spaces around the 🏛️ emoji in the board view header (`🏛️ BOARD` → `🏛️  BOARD`) for consistent rendering.
+
+---
+
 ## Version 3.33.1 - Main menu border alignment fix (2026-08-05)
 
 ### Bug fixes
