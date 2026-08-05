@@ -47,13 +47,13 @@ func NewMainMenuScreen(width, height int, gameData *GameData) *MainMenuScreen {
 			ID:          "achievements",
 			Title:       "Achievements",
 			Description: "View unlocked achievements",
-			Icon:        "🎖️",
+			Icon:        "🏅",
 		},
 		{
 			ID:          "upgrades",
 			Title:       "Upgrades",
 			Description: "Purchase upgrades with achievement points",
-			Icon:        "⬆️",
+			Icon:        "⚡",
 		},
 		{
 			ID:          "progression",

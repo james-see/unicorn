@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 3.33.1 - Main menu border alignment fix (2026-08-05)
+
+### Bug fixes
+- **Main menu border misalignment**: swapped the `🎖️` (Achievements) and `⬆️` (Upgrades) icons for `🏅` and `⚡` respectively. The variation-selector-16 code points in those emojis caused lipgloss to miscount line widths, shifting the right border of the menu box on those rows. The replacement emojis render at a consistent width.
+
+---
+
 ## Version 3.33.0 - Founder/VC mode parity & broken-menu fixes (2026-08-05)
 
 ### Major: Mode parity pass
