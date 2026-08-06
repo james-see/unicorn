@@ -1,5 +1,43 @@
 # Changelog
 
+## Version 3.36.1 - README, QuickStart, and landing page overhaul (2026-08-05)
+
+### Fix: Documentation accuracy + landing page corrections
+Adversarial UX audit found 8 RED issues across the README, QuickStart, and GitHub Pages landing page — all caused by stale content from older versions.
+
+**README.md (rewritten):**
+- Added "Download Binary" install path for non-developers (links to Releases page)
+- Added Homebrew prerequisite link to [brew.sh](https://brew.sh)
+- Fixed `go get` → `go install ...@latest` with link to Go downloads
+- Updated difficulty levels to match actual game code ($1M-$2.5M, not $500K-$1M)
+- Added opportunity fund to difficulty table
+- Replaced 332-line feature wall with compact features-at-a-glance table + difficulty table
+- Updated "What's New" to v3.36.0 (was tagged v3.26.0 as "LATEST" — 10 versions stale)
+- Collapsed older release notes into `<details>` accordion
+- Removed 2019 demo GIF (shows completely different game version)
+- Added Tech section with stack info
+- Added game image alt text
+
+**docs/QUICKSTART.md (rewritten):**
+- Updated all difficulty numbers to match game code
+- Fixed turn count (60, not 90-120)
+- Fixed startup count (45, not 10)
+- Fixed starting cash references
+- Updated main menu to show all 9 items (was 4)
+- Added opportunity fund mention in pro tips
+- Added VC mode and founder mode quick start flows
+- Fixed broken emoji characters
+- Added binary download path alongside Homebrew
+
+**docs/index.html (GitHub Pages landing page):**
+- Fixed version label from v4.9.6 → v3.36.0
+- Fixed all GitHub links from `jamesacampbell/unicorn` → `james-see/unicorn` (7 links)
+- Fixed author link from `@jamesacampbell` → `@james-see`
+- Fixed startup count from "30" → "45" (3 locations)
+- Fixed fund size from "$500K-$1M" → "$1M-$2.5M"
+- Fixed `go get` → `go install ...@latest` with Go download link
+- Fixed license from "MIT" → "AGPL-3.0"
+
 ## Version 3.36.0 - Opportunity Fund for breakout follow-ons (2026-08-05)
 
 ### Major: Opportunity Fund mechanic
