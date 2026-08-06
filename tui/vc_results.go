@@ -66,6 +66,11 @@ type VCResultsScreen struct {
 
 	// Score saved
 	scoreSaved bool
+
+	// Animated counters for spring-animated number displays
+	netWorthCounter *components.AnimatedCounter
+	roiCounter      *components.AnimatedCounter
+	animating       bool
 }
 
 // NewVCResultsScreen creates a new results screen
@@ -165,7 +170,7 @@ func calculateRating(roi float64) (string, string) {
 func (s *VCResultsScreen) Init() tea.Cmd {
 	// Save score to database
 	gs := s.gameData.GameState
-		score := database.GameScore{
+	score := database.GameScore{
 		PlayerName:      gs.PlayerName,
 		FinalNetWorth:   s.netWorth,
 		ROI:             s.roi,
@@ -244,7 +249,16 @@ func (s *VCResultsScreen) Init() tea.Cmd {
 		s.profileAfter, _ = database.GetPlayerProfile(gs.PlayerName)
 	}
 
-	return nil
+	// Initialize animated counters for the results display
+	s.netWorthCounter = components.NewAnimatedCounter(s.netWorth, "Final Net Worth", 50)
+	s.roiCounter = components.NewAnimatedCounter(int64(s.roi), "ROI", 50)
+	s.roiCounter.SetPrefix("")
+	s.roiCounter.SetSuffix("%")
+	if s.roi < 0 {
+		s.roiCounter.SetStyle(lipgloss.NewStyle().Foreground(styles.Red).Bold(true))
+	}
+	s.animating = true
+	return tea.Batch(s.netWorthCounter.Init(), s.roiCounter.Init())
 }
 
 func (s *VCResultsScreen) calculateXPBreakdown() {
@@ -324,6 +338,29 @@ func (s *VCResultsScreen) checkAchievements() {
 
 // Update handles results screen input
 func (s *VCResultsScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
+	// Drive animated counters on tick
+	if s.animating {
+		switch msg.(type) {
+		case components.AnimTickMsg:
+			var cmd tea.Cmd
+			var cmds []tea.Cmd
+			if s.netWorthCounter != nil {
+				s.netWorthCounter, cmd = s.netWorthCounter.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+			if s.roiCounter != nil {
+				s.roiCounter, cmd = s.roiCounter.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+			// Stop animating when both counters are done
+			if (s.netWorthCounter == nil || s.netWorthCounter.Done()) &&
+				(s.roiCounter == nil || s.roiCounter.Done()) {
+				s.animating = false
+			}
+			return s, tea.Batch(cmds...)
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -427,20 +464,30 @@ func (s *VCResultsScreen) renderResults() string {
 	results.WriteString(resultsHeader.Render("═══ FINANCIAL RESULTS ═══"))
 	results.WriteString("\n\n")
 
-	// Net worth
-	netWorthStyle := lipgloss.NewStyle().Foreground(styles.Green).Bold(true)
-	results.WriteString("Final Net Worth: ")
-	results.WriteString(netWorthStyle.Render(fmt.Sprintf("$%s", formatCompactMoney(s.netWorth))))
-	results.WriteString("\n")
-
-	// ROI
-	roiStyle := lipgloss.NewStyle().Foreground(styles.Green)
-	if s.roi < 0 {
-		roiStyle = lipgloss.NewStyle().Foreground(styles.Red)
+	// Net worth — animated counter while spring is running, static when done
+	if s.netWorthCounter != nil && !s.netWorthCounter.Done() {
+		results.WriteString(s.netWorthCounter.View())
+		results.WriteString("\n")
+	} else {
+		netWorthStyle := lipgloss.NewStyle().Foreground(styles.Green).Bold(true)
+		results.WriteString("Final Net Worth: ")
+		results.WriteString(netWorthStyle.Render(fmt.Sprintf("$%s", formatCompactMoney(s.netWorth))))
+		results.WriteString("\n")
 	}
-	results.WriteString("ROI: ")
-	results.WriteString(roiStyle.Render(fmt.Sprintf("%.1f%%", s.roi)))
-	results.WriteString("\n")
+
+	// ROI — animated counter while spring is running, static when done
+	if s.roiCounter != nil && !s.roiCounter.Done() {
+		results.WriteString(s.roiCounter.View())
+		results.WriteString("\n")
+	} else {
+		roiStyle := lipgloss.NewStyle().Foreground(styles.Green)
+		if s.roi < 0 {
+			roiStyle = lipgloss.NewStyle().Foreground(styles.Red)
+		}
+		results.WriteString("ROI: ")
+		results.WriteString(roiStyle.Render(fmt.Sprintf("%.1f%%", s.roi)))
+		results.WriteString("\n")
+	}
 
 	// Exits
 	results.WriteString(fmt.Sprintf("Successful Exits (5x+): %d", s.successfulExits))
