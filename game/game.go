@@ -75,6 +75,12 @@ type Portfolio struct {
 	LPCalledCapital     int64 // Capital already called from LPs
 	LastCapitalCallTurn int   // Last turn when capital was called
 	CapitalCallSchedule []int // Scheduled turns for capital calls (e.g., [1, 13, 25, 37, 49])
+
+	// Opportunity Fund (separate capital pool for doubling down on breakout winners)
+	OpportunityFund        int64 // Total opportunity fund capital available
+	OpportunityFundUsed    int64 // Capital deployed from the opportunity fund
+	OpportunityFundUnlocked bool  // Whether the opp fund has been unlocked this game
+	OpportunityFundCompanies []string // Companies that qualified for opp fund use
 }
 
 // Startup represents a company available for investment
@@ -126,6 +132,7 @@ type Difficulty struct {
 	FollowOnReserveAmount int64   // Initial dry powder reserved for follow-on investments
 	LPCommitMultiplier    float64 // LP committed capital as a multiple of starting cash
 	MaxInitialInvestments int     // Cap on new (first-check) investments per fund
+	OpportunityFundMultiple float64 // Opportunity fund as a multiple of starting cash (e.g., 1.5 = 150% of fund)
 }
 
 // AIPlayer represents a computer-controlled VC
@@ -240,6 +247,7 @@ var (
 		FollowOnReserveAmount: 2500000, // $2.5M dry powder for follow-ons
 		LPCommitMultiplier:    3.0,     // LPs commit 3x starting cash
 		MaxInitialInvestments: 12,      // Up to 12 first-check bets
+		OpportunityFundMultiple: 1.5,  // $1.5M opportunity fund (150% of starting cash)
 	}
 
 	MediumDifficulty = Difficulty{
@@ -252,6 +260,7 @@ var (
 		FollowOnReserveAmount: 3000000, // $3M dry powder
 		LPCommitMultiplier:    3.0,     // LPs commit 3x starting cash
 		MaxInitialInvestments: 10,      // Up to 10 first-check bets
+		OpportunityFundMultiple: 1.5,  // $2.25M opportunity fund
 	}
 
 	HardDifficulty = Difficulty{
@@ -264,6 +273,7 @@ var (
 		FollowOnReserveAmount: 3500000, // $3.5M dry powder
 		LPCommitMultiplier:    3.5,     // LPs commit 3.5x starting cash
 		MaxInitialInvestments: 8,       // Up to 8 first-check bets
+		OpportunityFundMultiple: 1.25, // $2.5M opportunity fund (smaller relative to harder game)
 	}
 
 	ExpertDifficulty = Difficulty{
@@ -276,6 +286,7 @@ var (
 		FollowOnReserveAmount: 4000000, // $4M dry powder
 		LPCommitMultiplier:    3.5,     // LPs commit 3.5x starting cash
 		MaxInitialInvestments: 8,       // Up to 8 first-check bets
+		OpportunityFundMultiple: 1.0,  // $2.5M opportunity fund (100% — harder to unlock on expert)
 	}
 )
 
@@ -354,6 +365,11 @@ func NewGame(playerName string, firmName string, difficulty Difficulty, playerUp
 	// Initialize LP Commitments (scaled by difficulty)
 	lpCommittedCapital, capitalCallSchedule := initializeLPCommitments(startingCash, maxTurns, difficulty.LPCommitMultiplier)
 
+	// Initialize opportunity fund (separate capital pool for breakout follow-ons).
+	// Scales with difficulty: Easy 1.5x, Medium 1.5x, Hard 1.25x, Expert 1.0x.
+	// Unlocked when a portfolio company hits 3x growth threshold.
+	opportunityFund := int64(float64(startingCash) * difficulty.OpportunityFundMultiple)
+
 	gs := &GameState{
 		PlayerName:     playerName,
 		PlayerFirmName: firmName,
@@ -372,6 +388,10 @@ func NewGame(playerName string, firmName string, difficulty Difficulty, playerUp
 			LPCalledCapital:     0,
 			LastCapitalCallTurn: 0,
 			CapitalCallSchedule: capitalCallSchedule,
+			OpportunityFund:         opportunityFund,
+			OpportunityFundUsed:      0,
+			OpportunityFundUnlocked: false,
+			OpportunityFundCompanies: []string{},
 		},
 	}
 
@@ -609,6 +629,21 @@ func (gs *GameState) ProcessTurn() []string {
 	roundMessages := gs.ProcessFundingRounds()
 	messages = append(messages, roundMessages...)
 
+	// Check for opportunity fund qualification (3x growth threshold)
+	newlyQualified := gs.CheckOpportunityFundQualification()
+	for _, company := range newlyQualified {
+		if !gs.Portfolio.OpportunityFundUnlocked || len(gs.Portfolio.OpportunityFundCompanies) == 1 {
+			// First unlock
+			messages = append(messages, fmt.Sprintf(
+				"🎯 Opportunity Fund unlocked! %s hit 3x growth — $%s available for breakout follow-ons.",
+				company, formatCurrency(gs.Portfolio.OpportunityFund)))
+		} else {
+			messages = append(messages, fmt.Sprintf(
+				"🎯 %s qualified for Opportunity Fund follow-on investment.",
+				company))
+		}
+	}
+
 	// Process dramatic events (scandals, co-founder splits, etc.)
 	dramaMessages := gs.ProcessDramaticEvents()
 	messages = append(messages, dramaMessages...)
@@ -710,6 +745,12 @@ func (gs *GameState) ProcessTurn() []string {
 
 func (gs *GameState) updateNetWorth() {
 	netWorth := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
+
+	// Add unused opportunity fund capital (separate pool for breakout follow-ons)
+	oppFundRemaining := gs.Portfolio.OpportunityFund - gs.Portfolio.OpportunityFundUsed
+	if oppFundRemaining > 0 {
+		netWorth += oppFundRemaining
+	}
 
 	for _, inv := range gs.Portfolio.Investments {
 		// Value of investment = (equity % / 100) * current valuation
@@ -954,8 +995,8 @@ func (gs *GameState) CalculateCarryInterest() (projectedCarry int64, hurdleRetur
 func (gs *GameState) GetFinalScore() (netWorth int64, roi float64, successfulExits int) {
 	netWorth = gs.Portfolio.NetWorth
 
-	// Calculate ROI based on TOTAL starting capital (cash + follow-on reserve)
-	totalStartingCapital := gs.Portfolio.InitialFundSize + gs.Portfolio.FollowOnReserve
+	// Calculate ROI based on TOTAL starting capital (cash + follow-on reserve + opportunity fund)
+	totalStartingCapital := gs.Portfolio.InitialFundSize + gs.Portfolio.FollowOnReserve + gs.Portfolio.OpportunityFund
 	roi = ((float64(netWorth) - float64(totalStartingCapital)) / float64(totalStartingCapital)) * 100.0
 
 	// Calculate carry interest (20% of profits above 8% annual hurdle rate)

@@ -254,22 +254,29 @@ func (gs *GameState) GetFollowOnOpportunities() []FollowOnOpportunity {
 							preMoneyVal := startup.Valuation
 							postMoneyVal := preMoneyVal + event.RaiseAmount
 
-						// Calculate min/max investment amounts
-						minInvestment := int64(10000) // $10k minimum
-						// Maximum follow-on is 30% of pre-money valuation — raised from 20%
-						// so the (now larger) follow-on reserve can meaningfully defend
-						// ownership in expensive later rounds.
-						maxInvestmentByValuation := int64(float64(preMoneyVal) * 0.30)
-						// Use available cash (uninvested money from beginning) + follow-on reserve
-						availableCash := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
-						// Maximum is the lower of: 30% of valuation, available cash, or 60% of raise amount
-						maxInvestment := maxInvestmentByValuation
-						if maxInvestment > availableCash {
-							maxInvestment = availableCash
-						}
-						if maxInvestment > int64(float64(event.RaiseAmount)*0.60) {
-							maxInvestment = int64(float64(event.RaiseAmount) * 0.60) // Can't invest more than 60% of the round
-						}
+							// Calculate min/max investment amounts
+							minInvestment := int64(10000) // $10k minimum
+							// Maximum follow-on is 30% of pre-money valuation — raised from 20%
+							// so the (now larger) follow-on reserve can meaningfully defend
+							// ownership in expensive later rounds.
+							maxInvestmentByValuation := int64(float64(preMoneyVal) * 0.30)
+							// Use available cash (uninvested money from beginning) + follow-on reserve
+							availableCash := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
+
+							// If this company qualified for the opportunity fund, add that capital too
+							oppFundAvailable := gs.GetOpportunityFundForCompany(event.CompanyName)
+							if oppFundAvailable > 0 {
+								availableCash += oppFundAvailable
+							}
+
+							// Maximum is the lower of: 30% of valuation, available cash, or 60% of raise amount
+							maxInvestment := maxInvestmentByValuation
+							if maxInvestment > availableCash {
+								maxInvestment = availableCash
+							}
+							if maxInvestment > int64(float64(event.RaiseAmount)*0.60) {
+								maxInvestment = int64(float64(event.RaiseAmount) * 0.60) // Can't invest more than 60% of the round
+							}
 
 							opportunities = append(opportunities, FollowOnOpportunity{
 								CompanyName:   event.CompanyName,
@@ -292,21 +299,132 @@ func (gs *GameState) GetFollowOnOpportunities() []FollowOnOpportunity {
 	return opportunities
 }
 
+// GetOpportunityFundForCompany returns the available opportunity fund capital
+// for a specific company, or 0 if the company hasn't qualified or the fund
+// hasn't been unlocked.
+func (gs *GameState) GetOpportunityFundForCompany(companyName string) int64 {
+	if !gs.Portfolio.OpportunityFundUnlocked {
+		return 0
+	}
+	for _, name := range gs.Portfolio.OpportunityFundCompanies {
+		if name == companyName {
+			remaining := gs.Portfolio.OpportunityFund - gs.Portfolio.OpportunityFundUsed
+			if remaining < 0 {
+				return 0
+			}
+			return remaining
+		}
+	}
+	return 0
+}
+
+// CheckOpportunityFundQualification checks if any portfolio company has hit
+// the 3x growth threshold and unlocks the opportunity fund if so.
+// Returns the list of newly qualifying companies (for UI notification).
+func (gs *GameState) CheckOpportunityFundQualification() []string {
+	newlyQualified := []string{}
+
+	if gs.Portfolio.OpportunityFundUnlocked {
+		// Already unlocked — just check for new qualifying companies
+		for i := range gs.Portfolio.Investments {
+			inv := &gs.Portfolio.Investments[i]
+			if inv.InitialValuation <= 0 {
+				continue
+			}
+			growthMultiple := float64(inv.CurrentValuation) / float64(inv.InitialValuation)
+			if growthMultiple >= 3.0 {
+				alreadyListed := false
+				for _, name := range gs.Portfolio.OpportunityFundCompanies {
+					if name == inv.CompanyName {
+						alreadyListed = true
+						break
+					}
+				}
+				if !alreadyListed {
+					gs.Portfolio.OpportunityFundCompanies = append(gs.Portfolio.OpportunityFundCompanies, inv.CompanyName)
+					newlyQualified = append(newlyQualified, inv.CompanyName)
+				}
+			}
+		}
+		return newlyQualified
+	}
+
+	// Not yet unlocked — check if any company qualifies
+	for i := range gs.Portfolio.Investments {
+		inv := &gs.Portfolio.Investments[i]
+		if inv.InitialValuation <= 0 {
+			continue
+		}
+		growthMultiple := float64(inv.CurrentValuation) / float64(inv.InitialValuation)
+		if growthMultiple >= 3.0 {
+			alreadyListed := false
+			for _, name := range gs.Portfolio.OpportunityFundCompanies {
+				if name == inv.CompanyName {
+					alreadyListed = true
+					break
+				}
+			}
+			if !alreadyListed {
+				gs.Portfolio.OpportunityFundCompanies = append(gs.Portfolio.OpportunityFundCompanies, inv.CompanyName)
+				newlyQualified = append(newlyQualified, inv.CompanyName)
+			}
+		}
+	}
+
+	// Unlock the fund if at least one company qualified
+	if len(newlyQualified) > 0 {
+		gs.Portfolio.OpportunityFundUnlocked = true
+	}
+
+	return newlyQualified
+}
+
 func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("investment amount must be positive")
 	}
 
-	if amount > gs.Portfolio.Cash+gs.Portfolio.FollowOnReserve {
-		return fmt.Errorf("insufficient follow-on funds (have $%d, need $%d)", gs.Portfolio.Cash+gs.Portfolio.FollowOnReserve, amount)
+	// Calculate total available capital: cash + follow-on reserve + opp fund (if qualified)
+	availableCash := gs.Portfolio.Cash + gs.Portfolio.FollowOnReserve
+	oppFundAvailable := gs.GetOpportunityFundForCompany(companyName)
+	availableCash += oppFundAvailable
+
+	if amount > availableCash {
+		return fmt.Errorf("insufficient follow-on funds (have $%d, need $%d)", availableCash, amount)
 	}
 
-	// Use cash first, then follow-on reserve
-	drawnFromCash := amount
+	// Draw capital in priority order: cash first, then follow-on reserve, then opp fund
+	remaining := amount
+
+	// 1. Draw from cash
+	drawnFromCash := remaining
 	if drawnFromCash > gs.Portfolio.Cash {
 		drawnFromCash = gs.Portfolio.Cash
 	}
-	drawnFromReserve := amount - drawnFromCash
+	gs.Portfolio.Cash -= drawnFromCash
+	remaining -= drawnFromCash
+
+	// 2. Draw from follow-on reserve
+	drawnFromReserve := int64(0)
+	if remaining > 0 {
+		drawnFromReserve = remaining
+		if drawnFromReserve > gs.Portfolio.FollowOnReserve {
+			drawnFromReserve = gs.Portfolio.FollowOnReserve
+		}
+		gs.Portfolio.FollowOnReserve -= drawnFromReserve
+		remaining -= drawnFromReserve
+	}
+
+	// 3. Draw from opportunity fund (only for qualified companies)
+	drawnFromOppFund := int64(0)
+	if remaining > 0 && oppFundAvailable > 0 {
+		drawnFromOppFund = remaining
+		if drawnFromOppFund > (gs.Portfolio.OpportunityFund - gs.Portfolio.OpportunityFundUsed) {
+			drawnFromOppFund = gs.Portfolio.OpportunityFund - gs.Portfolio.OpportunityFundUsed
+		}
+		gs.Portfolio.OpportunityFundUsed += drawnFromOppFund
+		remaining -= drawnFromOppFund
+	}
 
 	// Find the funding round event for this turn to get the post-money valuation
 	var postMoneyVal int64
@@ -401,9 +519,7 @@ func (gs *GameState) MakeFollowOnInvestment(companyName string, amount int64) er
 			inv.EquityPercent = newEquityPercent
 			inv.FollowOnThisTurn = true // Mark that follow-on was made this turn
 
-			// Deduct from cash first, then follow-on reserve
-			gs.Portfolio.Cash -= drawnFromCash
-			gs.Portfolio.FollowOnReserve -= drawnFromReserve
+			// Capital was already drawn from cash/reserve/opp-fund above
 			gs.updateNetWorth()
 
 			return nil

@@ -1,5 +1,20 @@
 # Changelog
 
+## Version 3.36.0 - Opportunity Fund for breakout follow-ons (2026-08-05)
+
+### Major: Opportunity Fund mechanic
+Adds a separate capital pool (the "Opportunity Fund") that unlocks when a portfolio company hits 3x growth — mirroring how real VCs raise separate opportunity funds / SPVs to double down on breakout winners without burning their main reserve.
+
+- **New `OpportunityFundMultiple` field on `Difficulty`**: scales the fund size as a multiple of starting cash. Easy/Medium 1.5x ($1.5M/$2.25M), Hard 1.25x ($2.5M), Expert 1.0x ($2.5M).
+- **New `OpportunityFund` fields on `Portfolio`**: `OpportunityFund` (total), `OpportunityFundUsed`, `OpportunityFundUnlocked`, `OpportunityFundCompanies` (which companies qualified).
+- **3x growth threshold**: `CheckOpportunityFundQualification()` runs after each `ProcessFundingRounds`. When any portfolio company's `CurrentValuation / InitialValuation >= 3.0`, the fund unlocks and that company becomes eligible for opportunity fund follow-ons.
+- **Capital drawing priority**: `MakeFollowOnInvestment` now draws in order: Cash → FollowOnReserve → OpportunityFund. The opp fund is only available for qualified companies.
+- **`GetFollowOnOpportunities` expanded**: when a qualified company has a funding round, the opportunity fund capital is added to the available funds and the max investment calculation.
+- **`updateNetWorth` includes opp fund**: unused opportunity fund capital counts toward net worth.
+- **`GetFinalScore` ROI denominator expanded**: total starting capital now includes the opportunity fund, so ROI is measured against the full capital pool.
+- **TUI follow-on screen**: shows "⭐ Breakout qualified!" badge and opp fund amount for qualified companies. Shows opp fund remaining with "not qualified — 3x growth required" for non-qualified companies when the fund is unlocked.
+- **Turn messages**: when the fund unlocks, a `🎯 Opportunity Fund unlocked!` message appears in the turn summary.
+
 ## Version 3.35.1 - Fix auto-mode follow-on investment input (2026-08-05)
 
 ### Fix: Auto-mode tick no longer preempts follow-on investment input

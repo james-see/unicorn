@@ -1231,9 +1231,35 @@ func (s *VCTurnScreen) renderFollowOn() string {
 	fundStyle := lipgloss.NewStyle().Foreground(styles.Green)
 	details.WriteString(labelStyle.Render("Available Funds: "))
 	details.WriteString(fundStyle.Render(fmt.Sprintf("$%s", formatCompactMoney(availableFunds))))
-	details.WriteString(fmt.Sprintf(" (Cash: $%s + Reserve: $%s)\n",
+	details.WriteString(fmt.Sprintf(" (Cash: $%s + Reserve: $%s)",
 		formatCompactMoney(gs.Portfolio.Cash),
 		formatCompactMoney(gs.Portfolio.FollowOnReserve)))
+
+	// Show opportunity fund if unlocked and this company qualifies
+	oppFundAvailable := gs.GetOpportunityFundForCompany(opp.CompanyName)
+	if oppFundAvailable > 0 {
+		oppFundStyle := lipgloss.NewStyle().Foreground(styles.Magenta).Bold(true)
+		details.WriteString("\n")
+		details.WriteString(labelStyle.Render("Opportunity Fund: "))
+		details.WriteString(oppFundStyle.Render(fmt.Sprintf("$%s", formatCompactMoney(oppFundAvailable))))
+		details.WriteString(oppFundStyle.Render(" ⭐ Breakout qualified!"))
+		totalAvailable := availableFunds + oppFundAvailable
+		details.WriteString("\n")
+		details.WriteString(labelStyle.Render("Total Available: "))
+		details.WriteString(fundStyle.Render(fmt.Sprintf("$%s", formatCompactMoney(totalAvailable))))
+	}
+
+	// Show opportunity fund status if unlocked but company not qualified
+	if gs.Portfolio.OpportunityFundUnlocked && oppFundAvailable == 0 {
+		oppRemaining := gs.Portfolio.OpportunityFund - gs.Portfolio.OpportunityFundUsed
+		if oppRemaining > 0 {
+			oppStyle := lipgloss.NewStyle().Foreground(styles.Gray)
+			details.WriteString("\n")
+			details.WriteString(labelStyle.Render("Opportunity Fund: "))
+			details.WriteString(oppStyle.Render(fmt.Sprintf("$%s (not qualified — 3x growth required)",
+				formatCompactMoney(oppRemaining))))
+		}
+	}
 
 	details.WriteString("\n")
 	details.WriteString(labelStyle.Render("Investment Range: "))
