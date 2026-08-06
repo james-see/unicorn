@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🦄 Unicorn - VC Investment Game</title>
     <meta name="description" content="Play as a VC and make bets on startups. Can you find the next unicorn?">
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦄</text></svg>">
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="🦄 Unicorn - VC Investment Game">
+    <meta property="og:description" content="A text-based startup simulation game. Play as a VC investor or build your own startup. 45 startups, 10 templates, 50 levels, global leaderboards.">
+    <meta property="og:image" content="https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196">
+    <meta property="og:url" content="https://james-see.github.io/unicorn/">
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="🦄 Unicorn - VC Investment Game">
+    <meta name="twitter:description" content="A text-based startup simulation game. Play as a VC investor or build your own startup.">
+    <meta name="twitter:image" content="https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196">
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#667eea">
     <style>
         * {
             margin: 0;
@@ -324,13 +339,14 @@
         /* ASCII Art */
         .ascii-art {
             font-family: monospace;
-            font-size: 0.5rem;
-            line-height: 1;
+            font-size: 0.7rem;
+            line-height: 1.1;
             white-space: pre;
             color: #ffd700;
             text-align: center;
             margin: 2rem 0;
             text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            overflow-x: auto;
         }
 
         /* Leaderboard Styles */
@@ -562,6 +578,8 @@
    ~~ :           `~` `~`  `      ``;,  ``;" ';, : ~~
     ~~:                             `'   `'  `'  :~~
      ~`-----------------------------------------`~</div>
+
+            <img src="https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196" alt="Unicorn game splash screen showing the VC investment interface" style="width: 100%; max-width: 674px; border-radius: 12px; margin: 2rem auto; display: block; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.2);">
         </div>
 
         <div class="card download-section">
@@ -628,7 +646,7 @@
                 <button class="filter-tab" onclick="loadFounderLeaderboard('', 'equity', event)">Best Equity %</button>
             </div>
 
-            <button class="refresh-btn" onclick="currentMode === 'vc' ? loadVCLeaderboard(currentFilter, currentSort, null) : loadFounderLeaderboard('', currentSort, null)">🔄 Refresh</button>
+            <button class="refresh-btn" onclick="refreshLeaderboard()">🔄 Refresh</button>
 
             <div id="leaderboard-content">
                 <div class="loading">Loading global leaderboard...</div>
@@ -820,6 +838,7 @@
         let currentMode = 'vc'; // 'vc' or 'founder'
         let currentFilter = 'all';
         let currentSort = 'net_worth';
+        let founderSort = 'payout'; // separate sort key for founder mode
 
         // Format money with commas
         function formatMoney(amount) {
@@ -851,6 +870,11 @@
                 }
             });
             
+            // Clear active state on ALL filter tabs before switching
+            document.querySelectorAll('#vc-filters .filter-tab, #founder-filters .filter-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
             // Show/hide appropriate filters
             const vcFilters = document.getElementById('vc-filters');
             const founderFilters = document.getElementById('founder-filters');
@@ -866,6 +890,15 @@
             }
         }
         
+        // Refresh current leaderboard (mode-aware)
+        function refreshLeaderboard() {
+            if (currentMode === 'vc') {
+                loadVCLeaderboard(currentFilter, currentSort, null);
+            } else {
+                loadFounderLeaderboard('', founderSort, null);
+            }
+        }
+
         // Load VC leaderboard data
         async function loadVCLeaderboard(difficulty = currentFilter, sortBy = currentSort, event = null) {
             currentFilter = difficulty;
@@ -962,8 +995,25 @@
 
         // Load Founder leaderboard data
         async function loadFounderLeaderboard(template = '', sortBy = 'payout', event = null) {
+            founderSort = sortBy;
+
             const content = document.getElementById('leaderboard-content');
             content.innerHTML = '<div class="loading">Loading...</div>';
+
+            // Update active tab — only among founder filter tabs
+            const founderTabs = document.querySelectorAll('#founder-filters .filter-tab');
+            founderTabs.forEach(tab => tab.classList.remove('active'));
+            if (event && event.target) {
+                event.target.classList.add('active');
+            } else {
+                // Find and activate the matching tab
+                founderTabs.forEach(tab => {
+                    const onclick = tab.getAttribute('onclick');
+                    if (onclick && onclick.includes(`'${sortBy}'`)) {
+                        tab.classList.add('active');
+                    }
+                });
+            }
 
             try {
                 // Build query parameters
