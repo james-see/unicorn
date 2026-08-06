@@ -1,5 +1,16 @@
 # Changelog
 
+## Version 3.35.0 - Spring physics animations with Harmonica (2026-08-05)
+
+### Major: Harmonica spring physics for TUI animations
+Replaced the splash screen's hard phase-step animation with smooth spring-driven transitions using the Charmbracelet Harmonica library (already a transitive dependency, now directly used).
+
+- **Splash screen spring-driven fade-in**: Title color interpolates from gray→magenta via a critically-damped spring. Info box slides in with its own spring after a 1.2s delay. "Press any key" prompt pulses between two opacity levels using a slow spring. Taglines cycle on a time-based schedule instead of tick-counted phases. Animation runs at ~60fps (16ms ticks) instead of the old 500ms intervals.
+- **New `AnimatedCounter` component** (`tui/components/animated_counter.go`): A reusable spring-animated number counter. Counts from 0 to a target value using a critically-damped Harmonica spring (frequency 6.0, damping 1.0, ~0.4s settle). Supports configurable prefix ($), suffix (%), label, width, and custom styles. Shows a subtle `▸` indicator while animating, stops when settled.
+- **VC results screen**: Net worth and ROI now spring-animate from 0 to final values on the results display.
+- **Founder results screen**: Company valuation and founder payout now spring-animate from 0 to final values.
+- **Exported `AnimTickMsg`**: The 60fps tick message is exported so screens can intercept it in their `Update` methods to drive counter updates.
+
 ## Version 3.34.0 - Founder board seats & VC capital rebalance (2026-08-05)
 
 ### Major: Founder mode board seats

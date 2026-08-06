@@ -13,6 +13,7 @@ import (
 	"github.com/jamesacampbell/unicorn/founder"
 	"github.com/jamesacampbell/unicorn/leaderboard"
 	"github.com/jamesacampbell/unicorn/progression"
+	"github.com/jamesacampbell/unicorn/tui/components"
 	"github.com/jamesacampbell/unicorn/tui/keys"
 	"github.com/jamesacampbell/unicorn/tui/styles"
 )
@@ -53,6 +54,11 @@ type FounderResultsScreen struct {
 	// Leaderboard submission
 	leaderboardSubmitted bool
 	leaderboardError     string
+
+	// Animated counters for spring-animated number displays
+	payoutCounter    *components.AnimatedCounter
+	valuationCounter *components.AnimatedCounter
+	animating        bool
 }
 
 // NewFounderResultsScreen creates a new founder results screen
@@ -201,7 +207,11 @@ func (s *FounderResultsScreen) Init() tea.Cmd {
 		s.profileAfter, _ = database.GetPlayerProfile(fs.FounderName)
 	}
 
-	return nil
+	// Initialize animated counters for the results display
+	s.payoutCounter = components.NewAnimatedCounter(s.founderPayout, "Founder Payout", 50)
+	s.valuationCounter = components.NewAnimatedCounter(s.valuation, "Company Valuation", 50)
+	s.animating = true
+	return tea.Batch(s.payoutCounter.Init(), s.valuationCounter.Init())
 }
 
 func (s *FounderResultsScreen) calculateXPBreakdown() {
@@ -440,6 +450,29 @@ func calculateInnovationLeader(fs *founder.FounderState) bool {
 
 // Update handles results screen input
 func (s *FounderResultsScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
+	// Drive animated counters on tick
+	if s.animating {
+		switch msg.(type) {
+		case components.AnimTickMsg:
+			var cmd tea.Cmd
+			var cmds []tea.Cmd
+			if s.payoutCounter != nil {
+				s.payoutCounter, cmd = s.payoutCounter.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+			if s.valuationCounter != nil {
+				s.valuationCounter, cmd = s.valuationCounter.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+			// Stop animating when both counters are done
+			if (s.payoutCounter == nil || s.payoutCounter.Done()) &&
+				(s.valuationCounter == nil || s.valuationCounter.Done()) {
+				s.animating = false
+			}
+			return s, tea.Batch(cmds...)
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -574,7 +607,21 @@ func (s *FounderResultsScreen) renderResults() string {
 	results.WriteString(resultsHeader.Render("═══ FINANCIAL RESULTS ═══"))
 	results.WriteString("\n\n")
 
-	if fs.HasExited {
+	// Animated valuation counter (while spring is running)
+	if s.valuationCounter != nil && !s.valuationCounter.Done() {
+		results.WriteString(s.valuationCounter.View())
+		results.WriteString("\n")
+	} else if fs.HasExited {
+		results.WriteString(fmt.Sprintf("Exit Valuation: $%s\n", formatCompactMoney(fs.ExitValuation)))
+	} else {
+		results.WriteString(fmt.Sprintf("Company Valuation: $%s\n", formatCompactMoney(s.valuation)))
+	}
+
+	// Animated payout counter (while spring is running)
+	if s.payoutCounter != nil && !s.payoutCounter.Done() {
+		results.WriteString(s.payoutCounter.View())
+		results.WriteString("\n")
+	} else if fs.HasExited {
 		results.WriteString(fmt.Sprintf("Exit Valuation: $%s\n", formatCompactMoney(fs.ExitValuation)))
 		results.WriteString(fmt.Sprintf("Your Equity: %.1f%%\n", s.founderEquity))
 
