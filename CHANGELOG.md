@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 3.35.1 - Fix auto-mode follow-on investment input (2026-08-05)
+
+### Fix: Auto-mode tick no longer preempts follow-on investment input
+In auto mode, the 1-second `tickMsg` timer was unconditionally calling `processTurn()` on every tick. When a follow-on investment opportunity appeared and the user pressed `i` to invest, the next tick would fire before they could finish entering the amount and hit Enter — either skipping the follow-on or resetting the input state.
+
+- **`tickMsg` handler now only auto-advances from `ViewTurnSummary`** — all other views (`ViewFollowOn`, `ViewFollowOnAmount`, `ViewBoardVote`, `ViewDashboard`, etc.) are left alone for user input. The tick is still scheduled so the game resumes auto-advancing once the user returns to the turn summary.
+
 ## Version 3.35.0 - Spring physics animations with Harmonica (2026-08-05)
 
 ### Major: Harmonica spring physics for TUI animations

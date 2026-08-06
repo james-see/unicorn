@@ -319,12 +319,17 @@ func (s *VCTurnScreen) Update(msg tea.Msg) (ScreenModel, tea.Cmd) {
 
 	case tickMsg:
 		if s.gameData.AutoMode && !gs.IsGameOver() {
-			s.processTurn()
-			s.refreshPortfolioTable()
-			s.refreshLeaderboard()
+			// Don't auto-advance when waiting for user input on follow-ons,
+			// board votes, or other interactive views. Only auto-advance
+			// from the turn summary view.
+			if s.view == ViewTurnSummary {
+				s.processTurn()
+				s.refreshPortfolioTable()
+				s.refreshLeaderboard()
 
-			if gs.IsGameOver() {
-				return s, SwitchTo(ScreenVCResults)
+				if gs.IsGameOver() {
+					return s, SwitchTo(ScreenVCResults)
+				}
 			}
 			return s, doTick()
 		}
