@@ -156,6 +156,8 @@
         .hero-copy {
             max-width: 34rem;
             min-width: 0;
+            container-type: inline-size;
+            container-name: hero-copy;
         }
 
         .hero-kicker {
@@ -170,12 +172,15 @@
         .hero h1 {
             font-family: var(--font-display);
             font-weight: 800;
-            font-size: clamp(2.5rem, 6vw, 5rem);
+            /* Syne ExtraBold ~8em wide for "UNICORN" → ~12.5cqi of the copy column */
+            font-size: clamp(2rem, 12.5cqi, 4.75rem);
             line-height: 0.95;
-            letter-spacing: -0.03em;
+            letter-spacing: -0.04em;
             color: var(--white);
             margin-bottom: 1.15rem;
             white-space: nowrap;
+            overflow: hidden;
+            max-width: 100%;
         }
 
         .hero-lead {
@@ -630,7 +635,7 @@
             }
 
             .hero h1 {
-                font-size: min(3rem, 12.5vw);
+                font-size: clamp(2rem, 11.5cqi, 3rem);
             }
         }
 
