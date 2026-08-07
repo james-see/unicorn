@@ -170,12 +170,12 @@
         .hero h1 {
             font-family: var(--font-display);
             font-weight: 800;
-            font-size: clamp(2.75rem, 6.5vw, 5.25rem);
-            line-height: 0.92;
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            line-height: 0.95;
             letter-spacing: -0.03em;
             color: var(--white);
             margin-bottom: 1.15rem;
-            overflow-wrap: anywhere;
+            white-space: nowrap;
         }
 
         .hero-lead {
@@ -440,7 +440,7 @@
             background: var(--paper);
             color: var(--paper-ink);
             border: 1px solid #ddd4c4;
-            padding: 2rem 1.5rem;
+            padding: 2.25rem 1.5rem 2rem;
         }
 
         .leaderboard-panel .section-label { color: #2A7A58; }
@@ -630,7 +630,7 @@
             }
 
             .hero h1 {
-                font-size: clamp(2.6rem, 13vw, 4.25rem);
+                font-size: min(3rem, 12.5vw);
             }
         }
 
