@@ -112,37 +112,26 @@
         /* —— Hero —— */
         .hero {
             position: relative;
-            min-height: min(92vh, 860px);
-            display: grid;
-            align-items: end;
             isolation: isolate;
             overflow: hidden;
             border-bottom: 1px solid var(--ink-line);
-        }
-
-        .hero-bg {
-            position: absolute;
-            inset: 0;
-            z-index: 0;
             background:
-                linear-gradient(105deg, rgba(7, 17, 31, 0.96) 0%, rgba(7, 17, 31, 0.78) 42%, rgba(7, 17, 31, 0.45) 100%),
-                url("https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196") center / cover no-repeat;
+                radial-gradient(ellipse 80% 60% at 85% 20%, rgba(61, 220, 151, 0.09), transparent 55%),
+                radial-gradient(ellipse 50% 40% at 10% 90%, rgba(232, 168, 56, 0.05), transparent 50%),
+                var(--ink);
         }
 
-        .hero-bg::after {
+        .hero::before {
             content: "";
             position: absolute;
             inset: 0;
-            background:
-                repeating-linear-gradient(
-                    0deg,
-                    transparent,
-                    transparent 2px,
-                    rgba(0, 0, 0, 0.08) 2px,
-                    rgba(0, 0, 0, 0.08) 3px
-                );
+            z-index: 0;
+            background-image:
+                linear-gradient(rgba(26, 43, 66, 0.55) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(26, 43, 66, 0.55) 1px, transparent 1px);
+            background-size: 48px 48px;
+            mask-image: linear-gradient(180deg, rgba(0,0,0,0.55), transparent 85%);
             pointer-events: none;
-            opacity: 0.45;
         }
 
         .hero-inner {
@@ -150,13 +139,23 @@
             z-index: 1;
             width: min(100% - 2.5rem, var(--max));
             margin: 0 auto;
-            padding: 5.5rem 0 4rem;
+            padding: 3.5rem 0 3.25rem;
+            display: grid;
+            grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+            gap: 2.5rem 2.75rem;
+            align-items: center;
+            min-height: min(88vh, 780px);
             animation: heroIn 0.9s var(--ease) both;
         }
 
         @keyframes heroIn {
             from { opacity: 0; transform: translateY(18px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hero-copy {
+            max-width: 34rem;
+            min-width: 0;
         }
 
         .hero-kicker {
@@ -171,18 +170,19 @@
         .hero h1 {
             font-family: var(--font-display);
             font-weight: 800;
-            font-size: clamp(3.4rem, 12vw, 7.5rem);
-            line-height: 0.9;
+            font-size: clamp(2.75rem, 6.5vw, 5.25rem);
+            line-height: 0.92;
             letter-spacing: -0.03em;
             color: var(--white);
-            margin-bottom: 1.25rem;
+            margin-bottom: 1.15rem;
+            overflow-wrap: anywhere;
         }
 
         .hero-lead {
-            max-width: 32rem;
-            font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+            max-width: 30rem;
+            font-size: clamp(1.05rem, 2vw, 1.3rem);
             color: rgba(247, 244, 238, 0.88);
-            margin-bottom: 2rem;
+            margin-bottom: 1.75rem;
         }
 
         .hero-cta {
@@ -190,6 +190,39 @@
             flex-wrap: wrap;
             gap: 0.75rem;
             align-items: center;
+        }
+
+        .hero-meta {
+            margin-top: 1.35rem;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+        }
+
+        .hero-shot {
+            position: relative;
+            animation: heroIn 1.05s var(--ease) 0.08s both;
+        }
+
+        .hero-shot img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border: 1px solid var(--ink-line);
+            box-shadow:
+                0 0 0 1px rgba(61, 220, 151, 0.08),
+                0 28px 80px rgba(0, 0, 0, 0.45);
+            background: var(--ink-elevated);
+        }
+
+        .hero-shot figcaption {
+            margin-top: 0.65rem;
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
         }
 
         .btn {
@@ -233,6 +266,16 @@
             width: min(100% - 2.5rem, var(--max));
             margin: 0 auto;
             padding: 5rem 0;
+            scroll-margin-top: 5.5rem;
+        }
+
+        #global-leaderboard {
+            scroll-margin-top: 5.5rem;
+            padding-top: 1.5rem;
+        }
+
+        #global-leaderboard .leaderboard-panel h2 {
+            padding-top: 0.15rem;
         }
 
         .section-label {
@@ -404,11 +447,24 @@
         .leaderboard-panel h2 { color: var(--paper-ink); }
         .leaderboard-panel .section-lead { color: #5A5348; margin-bottom: 1.5rem; }
 
+        .filter-group {
+            margin-bottom: 0.85rem;
+        }
+
+        .filter-group-label {
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 0.62rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #7A7164;
+            margin-bottom: 0.4rem;
+        }
+
         .filter-tabs {
             display: flex;
             flex-wrap: wrap;
             gap: 0.4rem;
-            margin-bottom: 0.85rem;
         }
 
         .filter-tab {
@@ -442,10 +498,10 @@
             text-transform: uppercase;
             background: transparent;
             color: #5A5348;
-            border: 1px dashed #cfc5b4;
+            border: 1px solid #cfc5b4;
             padding: 0.45rem 0.75rem;
             cursor: pointer;
-            margin: 0.5rem 0 1.25rem;
+            margin: 0.25rem 0 1.25rem;
         }
 
         .refresh-btn:hover { color: var(--paper-ink); border-color: var(--paper-ink); }
@@ -565,12 +621,24 @@
         footer a { color: var(--muted); text-decoration: none; }
         footer a:hover { color: var(--phosphor); }
 
+        @media (max-width: 960px) {
+            .hero-inner {
+                grid-template-columns: 1fr;
+                min-height: 0;
+                padding: 3rem 0 2.5rem;
+                gap: 2rem;
+            }
+
+            .hero h1 {
+                font-size: clamp(2.6rem, 13vw, 4.25rem);
+            }
+        }
+
         @media (max-width: 800px) {
             .site-nav .nav-links a:not(.nav-cta) { display: none; }
             .modes { grid-template-columns: 1fr; }
             .mode + .mode { border-left: none; border-top: 1px solid var(--ink-line); }
             .proof-grid { grid-template-columns: 1fr; }
-            .hero-inner { padding: 4rem 0 3rem; }
             .leaderboard-table th:nth-child(5),
             .leaderboard-table td:nth-child(5),
             .leaderboard-table th:nth-child(6),
@@ -609,15 +677,21 @@
     </nav>
 
     <header class="hero">
-        <div class="hero-bg" aria-hidden="true"></div>
         <div class="hero-inner">
-            <p class="hero-kicker">Terminal startup simulation · v3.36</p>
-            <h1>UNICORN</h1>
-            <p class="hero-lead">Deploy a fund or found a company. Sixty turns. One shot at the exit that makes the letterhead.</p>
-            <div class="hero-cta">
-                <a class="btn btn-primary" href="#install">Install with Homebrew</a>
-                <a class="btn btn-ghost" href="https://github.com/james-see/unicorn/releases/latest">Download binary</a>
+            <div class="hero-copy">
+                <p class="hero-kicker">Free terminal game · macOS / Linux / Windows · v3.36</p>
+                <h1>UNICORN</h1>
+                <p class="hero-lead">Play as a VC writing checks—or as a founder building the company. Sixty turns. One shot at the exit that makes the letterhead.</p>
+                <div class="hero-cta">
+                    <a class="btn btn-primary" href="#install">Install with Homebrew</a>
+                    <a class="btn btn-ghost" href="https://github.com/james-see/unicorn/releases/latest">Download binary</a>
+                </div>
+                <p class="hero-meta">Open source · runs in your terminal · no account required</p>
             </div>
+            <figure class="hero-shot">
+                <img src="https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196" width="674" height="489" alt="UNICORN terminal splash: choose VC or Founder mode">
+                <figcaption>The game, in your terminal</figcaption>
+            </figure>
         </div>
     </header>
 
@@ -672,31 +746,50 @@
         </div>
     </section>
 
-    <section class="section" id="global-leaderboard" style="padding-top: 0;">
+    <section class="section" id="global-leaderboard">
         <div class="leaderboard-panel">
             <p class="section-label">Live scores</p>
             <h2>Global leaderboards</h2>
             <p class="section-lead">Top runs worldwide. Filter by mode, difficulty, and ranking metric.</p>
 
-            <div class="filter-tabs">
-                <button class="filter-tab active" onclick="switchLeaderboardMode('vc')">VC Mode</button>
-                <button class="filter-tab" onclick="switchLeaderboardMode('founder')">Founder Mode</button>
+            <div class="filter-group">
+                <span class="filter-group-label">Mode</span>
+                <div class="filter-tabs" id="mode-filters">
+                    <button type="button" class="filter-tab active" data-mode="vc" onclick="switchLeaderboardMode('vc')">VC Mode</button>
+                    <button type="button" class="filter-tab" data-mode="founder" onclick="switchLeaderboardMode('founder')">Founder Mode</button>
+                </div>
             </div>
 
-            <div id="vc-filters" class="filter-tabs">
-                <button class="filter-tab active" onclick="loadVCLeaderboard('all', 'net_worth', event)">Top by Net Worth</button>
-                <button class="filter-tab" onclick="loadVCLeaderboard('all', 'roi', event)">Top by ROI</button>
-                <button class="filter-tab" onclick="loadVCLeaderboard('Easy', 'net_worth', event)">Easy</button>
-                <button class="filter-tab" onclick="loadVCLeaderboard('Medium', 'net_worth', event)">Medium</button>
-                <button class="filter-tab" onclick="loadVCLeaderboard('Hard', 'net_worth', event)">Hard</button>
-                <button class="filter-tab" onclick="loadVCLeaderboard('Expert', 'net_worth', event)">Expert</button>
+            <div id="vc-filters">
+                <div class="filter-group">
+                    <span class="filter-group-label">Rank by</span>
+                    <div class="filter-tabs" id="vc-sort-filters">
+                        <button type="button" class="filter-tab active" data-sort="net_worth" onclick="loadVCLeaderboard(currentFilter, 'net_worth', event)">Net Worth</button>
+                        <button type="button" class="filter-tab" data-sort="roi" onclick="loadVCLeaderboard(currentFilter, 'roi', event)">ROI</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-group-label">Difficulty</span>
+                    <div class="filter-tabs" id="vc-diff-filters">
+                        <button type="button" class="filter-tab active" data-diff="all" onclick="loadVCLeaderboard('all', currentSort, event)">All</button>
+                        <button type="button" class="filter-tab" data-diff="Easy" onclick="loadVCLeaderboard('Easy', currentSort, event)">Easy</button>
+                        <button type="button" class="filter-tab" data-diff="Medium" onclick="loadVCLeaderboard('Medium', currentSort, event)">Medium</button>
+                        <button type="button" class="filter-tab" data-diff="Hard" onclick="loadVCLeaderboard('Hard', currentSort, event)">Hard</button>
+                        <button type="button" class="filter-tab" data-diff="Expert" onclick="loadVCLeaderboard('Expert', currentSort, event)">Expert</button>
+                    </div>
+                </div>
             </div>
 
-            <div id="founder-filters" class="filter-tabs" style="display: none;">
-                <button class="filter-tab active" onclick="loadFounderLeaderboard('', 'payout', event)">Top by Payout</button>
-                <button class="filter-tab" onclick="loadFounderLeaderboard('', 'valuation', event)">Top by Valuation</button>
-                <button class="filter-tab" onclick="loadFounderLeaderboard('', 'arr', event)">Top by ARR</button>
-                <button class="filter-tab" onclick="loadFounderLeaderboard('', 'equity', event)">Best Equity %</button>
+            <div id="founder-filters" style="display: none;">
+                <div class="filter-group">
+                    <span class="filter-group-label">Rank by</span>
+                    <div class="filter-tabs" id="founder-sort-filters">
+                        <button type="button" class="filter-tab active" data-sort="payout" onclick="loadFounderLeaderboard('', 'payout', event)">Payout</button>
+                        <button type="button" class="filter-tab" data-sort="valuation" onclick="loadFounderLeaderboard('', 'valuation', event)">Valuation</button>
+                        <button type="button" class="filter-tab" data-sort="arr" onclick="loadFounderLeaderboard('', 'arr', event)">ARR</button>
+                        <button type="button" class="filter-tab" data-sort="equity" onclick="loadFounderLeaderboard('', 'equity', event)">Equity %</button>
+                    </div>
+                </div>
             </div>
 
             <button class="refresh-btn" onclick="refreshLeaderboard()">Refresh</button>
@@ -772,32 +865,37 @@
         function switchLeaderboardMode(mode) {
             currentMode = mode;
 
-            document.querySelectorAll('.filter-tab').forEach(tab => {
-                const onclick = tab.getAttribute('onclick');
-                if (onclick && onclick.includes('switchLeaderboardMode')) {
-                    tab.classList.remove('active');
-                    if (onclick.includes(`'${mode}'`)) {
-                        tab.classList.add('active');
-                    }
-                }
-            });
-
-            document.querySelectorAll('#vc-filters .filter-tab, #founder-filters .filter-tab').forEach(tab => {
-                tab.classList.remove('active');
+            document.querySelectorAll('#mode-filters .filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.mode === mode);
             });
 
             const vcFilters = document.getElementById('vc-filters');
             const founderFilters = document.getElementById('founder-filters');
 
             if (mode === 'vc') {
-                vcFilters.style.display = 'flex';
+                vcFilters.style.display = '';
                 founderFilters.style.display = 'none';
                 loadVCLeaderboard('all', 'net_worth', null);
             } else {
                 vcFilters.style.display = 'none';
-                founderFilters.style.display = 'flex';
+                founderFilters.style.display = '';
                 loadFounderLeaderboard('', 'payout', null);
             }
+        }
+
+        function syncVCFilterTabs() {
+            document.querySelectorAll('#vc-sort-filters .filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.sort === currentSort);
+            });
+            document.querySelectorAll('#vc-diff-filters .filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.diff === currentFilter);
+            });
+        }
+
+        function syncFounderFilterTabs() {
+            document.querySelectorAll('#founder-sort-filters .filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.sort === founderSort);
+            });
         }
 
         function refreshLeaderboard() {
@@ -814,20 +912,7 @@
 
             const content = document.getElementById('leaderboard-content');
             content.innerHTML = '<div class="loading">Loading...</div>';
-
-            document.querySelectorAll('#vc-filters .filter-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            if (event && event.target) {
-                event.target.classList.add('active');
-            } else {
-                document.querySelectorAll('#vc-filters .filter-tab').forEach(tab => {
-                    const onclick = tab.getAttribute('onclick');
-                    if (onclick && onclick.includes(`'${difficulty}'`) && onclick.includes(`'${sortBy}'`)) {
-                        tab.classList.add('active');
-                    }
-                });
-            }
+            syncVCFilterTabs();
 
             try {
                 let url = VC_LEADERBOARD_URL + '?_size=10&_sort_desc=' + (sortBy === 'roi' ? 'roi' : 'final_net_worth');
@@ -869,7 +954,7 @@
                     html += `<td class="${rankClass}">${index + 1}</td>`;
                     html += `<td>${playerName}</td>`;
                     html += `<td>${formatMoney(netWorth)}</td>`;
-                    html += `<td class="${roiClass}">${roi.toFixed(1)}%</td>`;
+                    html += `<td class="${roiClass}">${Number(roi).toLocaleString('en-US', { maximumFractionDigits: 1 })}%</td>`;
                     html += `<td>${exits}</td>`;
                     html += `<td>${difficultyLabel}</td>`;
                     html += `<td>${formatDate(playedAt)}</td>`;
@@ -894,19 +979,7 @@
 
             const content = document.getElementById('leaderboard-content');
             content.innerHTML = '<div class="loading">Loading...</div>';
-
-            const founderTabs = document.querySelectorAll('#founder-filters .filter-tab');
-            founderTabs.forEach(tab => tab.classList.remove('active'));
-            if (event && event.target) {
-                event.target.classList.add('active');
-            } else {
-                founderTabs.forEach(tab => {
-                    const onclick = tab.getAttribute('onclick');
-                    if (onclick && onclick.includes(`'${sortBy}'`)) {
-                        tab.classList.add('active');
-                    }
-                });
-            }
+            syncFounderFilterTabs();
 
             try {
                 let url = FOUNDER_LEADERBOARD_URL + '?limit=10&sort_by=' + sortBy;

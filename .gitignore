@@ -33,6 +33,9 @@ unicorn_scores.db
 .DS_Store
 Thumbs.db
 
+# Local critique screenshots
+assets/readme/critique/
+
 # IDE
 .cursor/
 .vscode/
