@@ -3,632 +3,686 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🦄 Unicorn - VC Investment Game</title>
-    <meta name="description" content="Play as a VC and make bets on startups. Can you find the next unicorn?">
-    <!-- Favicon -->
+    <title>UNICORN — Text-based VC & Founder Simulation</title>
+    <meta name="description" content="A terminal startup simulation. Play as a VC investor or build your own company. 45 startups, 10 founder templates, global leaderboards.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦄</text></svg>">
-    <!-- Open Graph / Social -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="🦄 Unicorn - VC Investment Game">
-    <meta property="og:description" content="A text-based startup simulation game. Play as a VC investor or build your own startup. 45 startups, 10 templates, 50 levels, global leaderboards.">
+    <meta property="og:title" content="UNICORN — Text-based VC & Founder Simulation">
+    <meta property="og:description" content="Play as a VC investor or build your own startup. 45 startups, 10 templates, 50 levels, global leaderboards.">
     <meta property="og:image" content="https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196">
     <meta property="og:url" content="https://james-see.github.io/unicorn/">
-    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="🦄 Unicorn - VC Investment Game">
-    <meta name="twitter:description" content="A text-based startup simulation game. Play as a VC investor or build your own startup.">
+    <meta name="twitter:title" content="UNICORN — Text-based VC & Founder Simulation">
+    <meta name="twitter:description" content="A text-based startup simulation. Play as a VC investor or build your own startup.">
     <meta name="twitter:image" content="https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196">
-    <!-- Theme Color -->
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#07111F">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --ink: #07111F;
+            --ink-elevated: #0D1A2D;
+            --ink-line: #1A2B42;
+            --phosphor: #3DDC97;
+            --phosphor-dim: rgba(61, 220, 151, 0.14);
+            --paper: #F3EDE2;
+            --paper-ink: #1A1520;
+            --amber: #E8A838;
+            --muted: #8A9BB0;
+            --white: #F7F4EE;
+            --danger: #E25C5C;
+            --font-display: "Syne", system-ui, sans-serif;
+            --font-body: "Source Serif 4", Georgia, serif;
+            --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+            --max: 1120px;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
         }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { scroll-behavior: smooth; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #fff;
+            font-family: var(--font-body);
+            background: var(--ink);
+            color: var(--white);
+            line-height: 1.6;
             min-height: 100vh;
             overflow-x: hidden;
-            position: relative;
         }
 
-        /* Flying Unicorns */
-        .unicorn {
-            position: fixed;
-            font-size: 2rem;
-            z-index: 1;
-            animation: float 20s infinite linear;
-            opacity: 0.7;
+        a { color: var(--phosphor); text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+        a:hover { color: var(--white); }
+
+        :focus-visible {
+            outline: 2px solid var(--phosphor);
+            outline-offset: 3px;
         }
 
-        .unicorn:nth-child(1) { top: 10%; animation-duration: 15s; animation-delay: 0s; }
-        .unicorn:nth-child(2) { top: 30%; animation-duration: 20s; animation-delay: 2s; }
-        .unicorn:nth-child(3) { top: 50%; animation-duration: 18s; animation-delay: 4s; }
-        .unicorn:nth-child(4) { top: 70%; animation-duration: 22s; animation-delay: 1s; }
-        .unicorn:nth-child(5) { top: 20%; animation-duration: 25s; animation-delay: 3s; }
-        .unicorn:nth-child(6) { top: 60%; animation-duration: 16s; animation-delay: 5s; }
-
-        @keyframes float {
-            0% {
-                left: -100px;
-                transform: translateY(0) rotate(0deg);
-            }
-            50% {
-                transform: translateY(-30px) rotate(5deg);
-            }
-            100% {
-                left: calc(100% + 100px);
-                transform: translateY(0) rotate(0deg);
-            }
-        }
-
-        /* Sparkles */
-        .sparkle {
-            position: fixed;
-            width: 4px;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 50%;
-            animation: sparkle 3s infinite;
-            z-index: 1;
-        }
-
-        @keyframes sparkle {
-            0%, 100% { 
-                opacity: 0;
-                transform: scale(0) rotate(0deg);
-            }
-            50% { 
-                opacity: 1;
-                transform: scale(1) rotate(180deg);
-            }
-        }
-
-        .sparkle:nth-child(7) { top: 15%; left: 20%; animation-delay: 0s; }
-        .sparkle:nth-child(8) { top: 35%; left: 40%; animation-delay: 1s; }
-        .sparkle:nth-child(9) { top: 55%; left: 60%; animation-delay: 2s; }
-        .sparkle:nth-child(10) { top: 75%; left: 80%; animation-delay: 1.5s; }
-        .sparkle:nth-child(11) { top: 25%; left: 70%; animation-delay: 0.5s; }
-        .sparkle:nth-child(12) { top: 65%; left: 30%; animation-delay: 2.5s; }
-
-        /* Content Container */
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-            position: relative;
-            z-index: 10;
-        }
-
-        /* Header */
-        header {
-            text-align: center;
-            padding: 3rem 0;
-            animation: fadeInDown 1s ease-out;
-        }
-
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .logo {
-            font-size: 5rem;
-            line-height: 1;
-            margin-bottom: 1rem;
-            animation: bounce 2s infinite;
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-20px); }
-        }
-
-        h1 {
-            font-size: 3.5rem;
-            font-weight: 900;
-            margin-bottom: 1rem;
-            text-shadow: 3px 3px 6px rgba(0,0,0,0.3);
-            background: linear-gradient(45deg, #fff, #ffd700);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .tagline {
-            font-size: 1.5rem;
-            margin-bottom: 2rem;
-            opacity: 0.95;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        /* Stats Bar */
-        .stats {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            margin-bottom: 3rem;
-            flex-wrap: wrap;
-        }
-
-        .stat-badge {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            padding: 0.75rem 1.5rem;
-            border-radius: 50px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            transition: transform 0.3s ease, background 0.3s ease;
-            animation: fadeIn 1s ease-out;
-        }
-
-        .stat-badge:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        /* Main Content Card */
-        .card {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            padding: 3rem;
-            margin-bottom: 2rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            animation: fadeInUp 1s ease-out;
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .card h2 {
-            font-size: 2rem;
-            margin-bottom: 1.5rem;
+        .site-nav {
+            position: sticky;
+            top: 0;
+            z-index: 40;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.85rem 1.5rem;
+            background: rgba(7, 17, 31, 0.88);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--ink-line);
         }
 
-        .card p {
-            font-size: 1.1rem;
-            line-height: 1.8;
-            margin-bottom: 1rem;
-            opacity: 0.95;
-        }
-
-        /* Download Section */
-        .download-section {
-            text-align: center;
-            margin: 3rem 0;
-        }
-
-        .download-btn {
-            display: inline-block;
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #333;
-            padding: 1.5rem 3rem;
-            border-radius: 50px;
+        .site-nav .brand {
+            font-family: var(--font-display);
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            font-size: 0.95rem;
+            color: var(--white);
             text-decoration: none;
-            font-size: 1.3rem;
-            font-weight: 700;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.4);
-            border: none;
+        }
+
+        .site-nav .nav-links {
+            display: flex;
+            gap: 1.25rem;
+            align-items: center;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .site-nav .nav-links a {
+            color: var(--muted);
+            text-decoration: none;
+        }
+
+        .site-nav .nav-links a:hover { color: var(--phosphor); }
+
+        .nav-cta {
+            color: var(--ink) !important;
+            background: var(--phosphor);
+            padding: 0.45rem 0.85rem;
+            text-decoration: none !important;
+        }
+
+        .nav-cta:hover { filter: brightness(1.08); color: var(--ink) !important; }
+
+        /* —— Hero —— */
+        .hero {
+            position: relative;
+            min-height: min(92vh, 860px);
+            display: grid;
+            align-items: end;
+            isolation: isolate;
+            overflow: hidden;
+            border-bottom: 1px solid var(--ink-line);
+        }
+
+        .hero-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background:
+                linear-gradient(105deg, rgba(7, 17, 31, 0.96) 0%, rgba(7, 17, 31, 0.78) 42%, rgba(7, 17, 31, 0.45) 100%),
+                url("https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196") center / cover no-repeat;
+        }
+
+        .hero-bg::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(0, 0, 0, 0.08) 2px,
+                    rgba(0, 0, 0, 0.08) 3px
+                );
+            pointer-events: none;
+            opacity: 0.45;
+        }
+
+        .hero-inner {
+            position: relative;
+            z-index: 1;
+            width: min(100% - 2.5rem, var(--max));
+            margin: 0 auto;
+            padding: 5.5rem 0 4rem;
+            animation: heroIn 0.9s var(--ease) both;
+        }
+
+        @keyframes heroIn {
+            from { opacity: 0; transform: translateY(18px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hero-kicker {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--phosphor);
+            margin-bottom: 1.1rem;
+        }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: clamp(3.4rem, 12vw, 7.5rem);
+            line-height: 0.9;
+            letter-spacing: -0.03em;
+            color: var(--white);
+            margin-bottom: 1.25rem;
+        }
+
+        .hero-lead {
+            max-width: 32rem;
+            font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+            color: rgba(247, 244, 238, 0.88);
+            margin-bottom: 2rem;
+        }
+
+        .hero-cta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            text-decoration: none;
+            border: 1px solid transparent;
+            padding: 0.85rem 1.2rem;
             cursor: pointer;
-            animation: pulse 2s infinite;
+            transition: transform 0.2s var(--ease), background 0.2s, border-color 0.2s, color 0.2s;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+        .btn:hover { transform: translateY(-2px); }
+
+        .btn-primary {
+            background: var(--phosphor);
+            color: var(--ink);
         }
 
-        .download-btn:hover {
-            transform: translateY(-5px) scale(1.05);
-            box-shadow: 0 15px 40px rgba(255, 215, 0, 0.6);
-            animation: none;
+        .btn-primary:hover { color: var(--ink); filter: brightness(1.06); }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--white);
+            border-color: rgba(247, 244, 238, 0.28);
+        }
+
+        .btn-ghost:hover {
+            border-color: var(--phosphor);
+            color: var(--phosphor);
+        }
+
+        /* —— Sections —— */
+        .section {
+            width: min(100% - 2.5rem, var(--max));
+            margin: 0 auto;
+            padding: 5rem 0;
+        }
+
+        .section-label {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--phosphor);
+            margin-bottom: 0.75rem;
+        }
+
+        .section h2 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: clamp(1.8rem, 4vw, 2.6rem);
+            letter-spacing: -0.02em;
+            line-height: 1.15;
+            margin-bottom: 0.75rem;
+        }
+
+        .section-lead {
+            max-width: 36rem;
+            color: var(--muted);
+            margin-bottom: 2.5rem;
+            font-size: 1.1rem;
+        }
+
+        /* —— Modes —— */
+        .modes {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            border: 1px solid var(--ink-line);
+        }
+
+        .mode {
+            padding: 2rem 1.75rem;
+            background: var(--ink-elevated);
+        }
+
+        .mode + .mode { border-left: 1px solid var(--ink-line); }
+
+        .mode-tag {
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--amber);
+            margin-bottom: 0.85rem;
+        }
+
+        .mode h3 {
+            font-family: var(--font-display);
+            font-size: 1.55rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .mode p {
+            color: rgba(247, 244, 238, 0.82);
+            margin-bottom: 1.25rem;
+        }
+
+        .mode ul {
+            list-style: none;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--muted);
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .mode ul li::before {
+            content: "› ";
+            color: var(--phosphor);
+        }
+
+        /* —— Install —— */
+        .install-block {
+            background: var(--ink-elevated);
+            border: 1px solid var(--ink-line);
+            padding: 2rem;
+        }
+
+        .brew-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 0.5rem;
+            margin: 1.5rem 0 1.25rem;
+        }
+
+        .brew-cmd {
+            flex: 1 1 18rem;
+            font-family: var(--font-mono);
+            font-size: clamp(0.85rem, 2.2vw, 1.15rem);
+            color: var(--phosphor);
+            background: var(--ink);
+            border: 1px solid var(--ink-line);
+            padding: 1rem 1.15rem;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .copy-btn {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            background: var(--phosphor-dim);
+            color: var(--phosphor);
+            border: 1px solid rgba(61, 220, 151, 0.35);
+            padding: 0 1.1rem;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .copy-btn:hover,
+        .copy-btn.copied {
+            background: var(--phosphor);
+            color: var(--ink);
+        }
+
+        .install-note {
+            color: var(--muted);
+            font-size: 0.95rem;
+            margin-bottom: 1.75rem;
+        }
+
+        .install-note code {
+            font-family: var(--font-mono);
+            font-size: 0.85em;
+            color: var(--white);
+            background: rgba(255, 255, 255, 0.06);
+            padding: 0.1em 0.35em;
         }
 
         .platform-links {
             display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin-top: 1.5rem;
             flex-wrap: wrap;
-        }
-
-        .platform-btn {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            padding: 0.75rem 1.5rem;
-            border-radius: 30px;
-            text-decoration: none;
-            color: #fff;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            transition: all 0.3s ease;
-            font-weight: 600;
-        }
-
-        .platform-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-3px);
-            border-color: rgba(255, 255, 255, 0.5);
-        }
-
-        /* Features Grid */
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
-            margin: 2rem 0;
-        }
-
-        .feature {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 1.5rem;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: transform 0.3s ease, background 0.3s ease;
-        }
-
-        .feature:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .feature h3 {
-            font-size: 1.3rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .feature p {
-            font-size: 0.95rem;
-            opacity: 0.9;
-        }
-
-        /* GitHub Link */
-        .github-link {
-            display: inline-flex;
-            align-items: center;
             gap: 0.5rem;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 0.75rem 1.5rem;
-            border-radius: 30px;
-            color: #fff;
+        }
+
+        .platform-links a {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.04em;
             text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: var(--muted);
+            border: 1px solid var(--ink-line);
+            padding: 0.55rem 0.85rem;
+            transition: border-color 0.2s, color 0.2s;
         }
 
-        .github-link:hover {
-            background: rgba(0, 0, 0, 0.5);
-            transform: translateY(-3px);
+        .platform-links a:hover {
+            border-color: var(--phosphor);
+            color: var(--phosphor);
         }
 
-        /* Footer */
-        footer {
-            text-align: center;
-            padding: 2rem;
-            opacity: 0.8;
+        /* —— Leaderboard (interactive panel) —— */
+        .leaderboard-panel {
+            background: var(--paper);
+            color: var(--paper-ink);
+            border: 1px solid #ddd4c4;
+            padding: 2rem 1.5rem;
         }
 
-        /* ASCII Art */
-        .ascii-art {
-            font-family: monospace;
-            font-size: 0.7rem;
-            line-height: 1.1;
-            white-space: pre;
-            color: #ffd700;
-            text-align: center;
-            margin: 2rem 0;
-            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
-            overflow-x: auto;
-        }
-
-        /* Leaderboard Styles */
-        .leaderboard-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1.5rem 0;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            overflow: hidden;
-            overflow-x: auto;
-            display: block;
-        }
-
-        .leaderboard-table table {
-            width: 100%;
-            min-width: 600px;
-        }
-
-        .leaderboard-table th {
-            background: rgba(255, 215, 0, 0.2);
-            padding: 1rem;
-            text-align: left;
-            font-weight: 700;
-            border-bottom: 2px solid rgba(255, 215, 0, 0.3);
-            white-space: nowrap;
-        }
-
-        .leaderboard-table td {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .leaderboard-table tr:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .rank-1 { color: #ffd700; font-weight: 900; }
-        .rank-2 { color: #c0c0c0; font-weight: 700; }
-        .rank-3 { color: #cd7f32; font-weight: 700; }
-
-        .positive-roi { color: #4ade80; }
-        .negative-roi { color: #f87171; }
-
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            font-size: 1.2rem;
-            opacity: 0.8;
-        }
-
-        .error-message {
-            background: rgba(248, 113, 113, 0.2);
-            border: 2px solid rgba(248, 113, 113, 0.5);
-            padding: 1rem;
-            border-radius: 10px;
-            margin: 1rem 0;
-        }
+        .leaderboard-panel .section-label { color: #2A7A58; }
+        .leaderboard-panel h2 { color: var(--paper-ink); }
+        .leaderboard-panel .section-lead { color: #5A5348; margin-bottom: 1.5rem; }
 
         .filter-tabs {
             display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
             flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-bottom: 0.85rem;
         }
 
         .filter-tab {
-            padding: 0.5rem 1rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 20px;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            background: transparent;
+            color: #5A5348;
+            border: 1px solid #cfc5b4;
+            padding: 0.5rem 0.75rem;
             cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 600;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
         }
 
         .filter-tab:hover {
-            background: rgba(255, 255, 255, 0.2);
+            border-color: #2A7A58;
+            color: #1A1520;
         }
 
         .filter-tab.active {
-            background: rgba(255, 215, 0, 0.3);
-            border-color: rgba(255, 215, 0, 0.6);
+            background: var(--ink);
+            color: var(--phosphor);
+            border-color: var(--ink);
         }
 
         .refresh-btn {
-            display: inline-block;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: transparent;
+            color: #5A5348;
+            border: 1px dashed #cfc5b4;
+            padding: 0.45rem 0.75rem;
             cursor: pointer;
-            transition: all 0.3s ease;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            margin-bottom: 1rem;
+            margin: 0.5rem 0 1.25rem;
         }
 
-        .refresh-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
+        .refresh-btn:hover { color: var(--paper-ink); border-color: var(--paper-ink); }
+
+        .leaderboard-table { overflow-x: auto; }
+
+        .leaderboard-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
         }
 
-        @media (max-width: 768px) {
-            h1 { font-size: 2.5rem; }
-            .tagline { font-size: 1.2rem; }
-            .card { padding: 1.5rem; }
-            .logo { font-size: 3rem; }
-            .stats { gap: 1rem; }
-            .download-btn { padding: 1rem 2rem; font-size: 1.1rem; }
-            
-            /* Mobile-friendly leaderboard */
-            .leaderboard-table {
-                font-size: 0.85rem;
-            }
-            
-            .leaderboard-table th,
-            .leaderboard-table td {
-                padding: 0.5rem;
-            }
-            
-            /* Hide less important columns on mobile */
+        .leaderboard-table th {
+            text-align: left;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-size: 0.65rem;
+            color: #7A7164;
+            padding: 0.65rem 0.5rem;
+            border-bottom: 1px solid #ddd4c4;
+        }
+
+        .leaderboard-table td {
+            padding: 0.7rem 0.5rem;
+            border-bottom: 1px solid #ebe4d6;
+            color: var(--paper-ink);
+            transition: background 0.15s;
+        }
+
+        .leaderboard-table tbody tr:hover td {
+            background: rgba(61, 220, 151, 0.1);
+        }
+
+        .rank-1 { color: #B8860B; font-weight: 600; }
+        .rank-2 { color: #6B7280; font-weight: 600; }
+        .rank-3 { color: #A0522D; font-weight: 600; }
+        .positive-roi { color: #1F7A4D; font-weight: 600; }
+        .negative-roi { color: var(--danger); font-weight: 600; }
+
+        .loading, .error-message {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: #5A5348;
+            padding: 1.5rem 0;
+            text-align: center;
+        }
+
+        .error-message { color: #8B3A3A; text-align: left; }
+        .error-message ol { margin: 0.5rem 0 0 1.25rem; }
+        .error-message code {
+            font-family: var(--font-mono);
+            background: #ebe4d6;
+            padding: 0.1em 0.3em;
+        }
+
+        .lb-footer {
+            margin-top: 1.25rem;
+            text-align: center;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: #7A7164;
+        }
+
+        .lb-footer a { color: #2A7A58; }
+
+        /* —— Proof —— */
+        .proof-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .proof-item h3 {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .proof-item p { color: var(--muted); font-size: 1rem; }
+
+        .proof-item ol {
+            margin-top: 0.85rem;
+            padding-left: 1.1rem;
+            color: rgba(247, 244, 238, 0.8);
+            font-size: 0.98rem;
+        }
+
+        .proof-item ol li + li { margin-top: 0.35rem; }
+
+        .more-link {
+            display: inline-block;
+            margin-top: 2rem;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            text-decoration: none;
+            color: var(--phosphor);
+            border-bottom: 1px solid rgba(61, 220, 151, 0.4);
+            padding-bottom: 0.15rem;
+        }
+
+        /* —— Footer —— */
+        footer {
+            border-top: 1px solid var(--ink-line);
+            padding: 2.5rem 1.25rem;
+            text-align: center;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+        }
+
+        footer p + p { margin-top: 0.5rem; }
+        footer a { color: var(--muted); text-decoration: none; }
+        footer a:hover { color: var(--phosphor); }
+
+        @media (max-width: 800px) {
+            .site-nav .nav-links a:not(.nav-cta) { display: none; }
+            .modes { grid-template-columns: 1fr; }
+            .mode + .mode { border-left: none; border-top: 1px solid var(--ink-line); }
+            .proof-grid { grid-template-columns: 1fr; }
+            .hero-inner { padding: 4rem 0 3rem; }
             .leaderboard-table th:nth-child(5),
             .leaderboard-table td:nth-child(5),
             .leaderboard-table th:nth-child(6),
             .leaderboard-table td:nth-child(6),
             .leaderboard-table th:nth-child(7),
-            .leaderboard-table td:nth-child(7) {
+            .leaderboard-table td:nth-child(7),
+            .leaderboard-table th:nth-child(8),
+            .leaderboard-table td:nth-child(8) {
                 display: none;
             }
-            
-            .filter-tabs {
-                font-size: 0.85rem;
-            }
-            
-            .filter-tab {
-                padding: 0.4rem 0.8rem;
+        }
+
+        @media (max-width: 480px) {
+            .leaderboard-table th:nth-child(4),
+            .leaderboard-table td:nth-child(4) {
+                display: none;
             }
         }
-        
-        @media (max-width: 480px) {
-            h1 { font-size: 2rem; }
-            .tagline { font-size: 1rem; }
-            .card { padding: 1rem; }
-            .card h2 { font-size: 1.5rem; }
-            
-            /* Even more compact on very small screens */
-            .leaderboard-table {
-                font-size: 0.75rem;
-            }
-            
-            .leaderboard-table th,
-            .leaderboard-table td {
-                padding: 0.4rem;
-            }
+
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            .hero-inner { animation: none; }
+            .btn:hover { transform: none; }
         }
     </style>
 </head>
 <body>
-    <!-- Flying Unicorns -->
-    <div class="unicorn">🦄</div>
-    <div class="unicorn">🦄</div>
-    <div class="unicorn">🦄</div>
-    <div class="unicorn">🦄</div>
-    <div class="unicorn">🦄</div>
-    <div class="unicorn">🦄</div>
-    
-    <!-- Sparkles -->
-    <div class="sparkle"></div>
-    <div class="sparkle"></div>
-    <div class="sparkle"></div>
-    <div class="sparkle"></div>
-    <div class="sparkle"></div>
-    <div class="sparkle"></div>
+    <nav class="site-nav" aria-label="Primary">
+        <a class="brand" href="#">UNICORN</a>
+        <div class="nav-links">
+            <a href="#modes">Modes</a>
+            <a href="#install">Install</a>
+            <a href="#global-leaderboard">Leaderboard</a>
+            <a class="nav-cta" href="#install">Get the game</a>
+        </div>
+    </nav>
 
-    <div class="container">
-        <header>
-            <div class="logo">🦄</div>
+    <header class="hero">
+        <div class="hero-bg" aria-hidden="true"></div>
+        <div class="hero-inner">
+            <p class="hero-kicker">Terminal startup simulation · v3.36</p>
             <h1>UNICORN</h1>
-            <p class="tagline">Build or Invest in the Next Unicorn</p>
-            <p style="font-size: 1.1rem; opacity: 0.9; margin-top: 0.5rem; margin-bottom: 1.5rem;">Two Game Modes: Play as a VC Investor or as a Startup Founder • v3.36.0</p>
-            
-            <div class="stats">
-                <a href="https://github.com/james-see/unicorn" target="_blank" class="stat-badge">
-                    ⭐ <strong>Star on GitHub</strong>
-                </a>
-                <div class="stat-badge">
-                    🎮 <strong>2 Game Modes</strong>
-                </div>
-                <div class="stat-badge">
-                    💎 <strong>50 Levels</strong>
-                </div>
-                <div class="stat-badge">
-                    🏆 <strong>45+ Achievements</strong>
-                </div>
-                <div class="stat-badge">
-                    🏢 <strong>45 Startups</strong>
-                </div>
-                <div class="stat-badge">
-                    🎯 <strong>60+ Events</strong>
-                </div>
+            <p class="hero-lead">Deploy a fund or found a company. Sixty turns. One shot at the exit that makes the letterhead.</p>
+            <div class="hero-cta">
+                <a class="btn btn-primary" href="#install">Install with Homebrew</a>
+                <a class="btn btn-ghost" href="https://github.com/james-see/unicorn/releases/latest">Download binary</a>
             </div>
-        </header>
-
-        <div class="card">
-            <h2>📈 What is Unicorn?</h2>
-            <p>
-                <strong>Unicorn</strong> is a text-based startup simulation game with two distinct modes:
-            </p>
-            <p>
-                <strong>💼 VC Mode:</strong> Start as a venture capitalist with a $1M-$2.5M fund and invest in 45 different startups over 5 years (60 turns). 
-                Diversify your portfolio, manage risk, and try to find the next unicorn! Will you become a Legendary Investor?
-            </p>
-            <p>
-                <strong>🚀 Founder Mode (NEW!):</strong> Build your own startup from the ground up! Choose from 10 templates (SaaS, DeepTech, GovTech), 
-                hire your team, raise funding rounds, manage churn, and navigate strategic decisions over 60 months (5 years). 
-                Can you reach an IPO or get acquired?
-            </p>
-
-            <div class="ascii-art">               \
-                \\
-                 \%,     ,'     , ,.
-                  \%\,';/J,";";";;,,.
-     ~.------------\%;((`);)));`;;,.,-----------,~
-    ~~:           ,`;@)((;`,`((;(;;);;,`         :~~
-   ~~ :           ;`(@```))`~ ``; );(;));;,      : ~~
-  ~~  :            `X `(( `),    (;;);;;;`       :  ~~
- ~~~~ :            / `) `` /;~   `;;;;;;;);,     :  ~~~~
-~~~~  :           / , ` ,/` /     (`;;(;;;;,     : ~~~~
-  ~~~ :          (o  /]_/` /     ,);;;`;;;;;`,,  : ~~~
-   ~~ :           `~` `~`  `      ``;,  ``;" ';, : ~~
-    ~~:                             `'   `'  `'  :~~
-     ~`-----------------------------------------`~</div>
-
-            <img src="https://github.com/user-attachments/assets/99a8342a-98bf-44e6-b0db-399c2758a196" alt="Unicorn game splash screen showing the VC investment interface" style="width: 100%; max-width: 674px; border-radius: 12px; margin: 2rem auto; display: block; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.2);">
         </div>
+    </header>
 
-        <div class="card download-section">
-            <h2>🚀 Install with Homebrew</h2>
-            <p style="margin-bottom: 1.5rem;">The fastest way to get started on macOS or Linux:</p>
-            
-            <div style="background: rgba(0,0,0,0.4); border-radius: 12px; padding: 1.5rem 2rem; display: inline-block; margin-bottom: 1.5rem; border: 2px solid rgba(255,215,0,0.3);">
-                <code style="font-size: 1.3rem; color: #ffd700; font-weight: 700;">brew install james-see/tap/unicorn</code>
+    <section class="section" id="modes">
+        <p class="section-label">Two paths</p>
+        <h2>Pick a side of the term sheet</h2>
+        <p class="section-lead">Same five-year clock. Opposite pressures. Shared progression across fifty levels.</p>
+        <div class="modes">
+            <article class="mode">
+                <p class="mode-tag">VC Mode</p>
+                <h3>Write the checks</h3>
+                <p>Start with a $1M–$2.5M fund. Bet across 45 startups, defend ownership with pro-rata, and unlock an Opportunity Fund when a breakout hits 3×.</p>
+                <ul>
+                    <li>Compete against AI VCs with distinct strategies</li>
+                    <li>Follow-ons, syndicates, management fees</li>
+                    <li>Climb global net-worth and ROI boards</li>
+                </ul>
+            </article>
+            <article class="mode">
+                <p class="mode-tag">Founder Mode</p>
+                <h3>Build the company</h3>
+                <p>Choose from 10 templates. Hire the team, raise Seed through Series C, ship the roadmap, and negotiate the exit before the board forces your hand.</p>
+                <ul>
+                    <li>SaaS metrics, churn, and tech debt</li>
+                    <li>Cap table, board seats, acquisition offers</li>
+                    <li>IPO, strategic sale, or secondary</li>
+                </ul>
+            </article>
+        </div>
+    </section>
+
+    <section class="section" id="install">
+        <p class="section-label">Install</p>
+        <h2>From brew to first turn</h2>
+        <p class="section-lead">macOS and Linux via Homebrew. Binaries for every major platform. Source if you want to hack.</p>
+        <div class="install-block">
+            <p class="section-label" style="margin-bottom: 0.25rem;">Homebrew</p>
+            <div class="brew-row">
+                <code class="brew-cmd" id="brew-cmd">brew install james-see/tap/unicorn</code>
+                <button type="button" class="copy-btn" id="copy-brew" aria-label="Copy install command">Copy</button>
             </div>
-
-            <p style="margin-bottom: 2rem; opacity: 0.9;">Then just run <code style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 5px;">unicorn</code> to start playing!</p>
-
-            <h3 style="font-size: 1.3rem; margin-bottom: 1rem; color: #ffd700;">Or Download a Binary</h3>
-            
-            <a href="https://github.com/james-see/unicorn/releases/latest" class="download-btn">
-                ⬇️ Download Latest Release
-            </a>
-
+            <p class="install-note">Then run <code>unicorn</code> in your terminal.</p>
+            <p class="section-label" style="margin-bottom: 0.75rem;">Binaries</p>
             <div class="platform-links">
-                <a href="https://github.com/james-see/unicorn/releases/latest/download/unicorn-darwin-amd64" class="platform-btn">
-                    🍎 macOS (Intel)
-                </a>
-                <a href="https://github.com/james-see/unicorn/releases/latest/download/unicorn-darwin-arm64" class="platform-btn">
-                    🍎 macOS (Apple Silicon)
-                </a>
-                <a href="https://github.com/james-see/unicorn/releases/latest/download/unicorn-linux-amd64" class="platform-btn">
-                    🐧 Linux
-                </a>
-                <a href="https://github.com/james-see/unicorn/releases/latest/download/unicorn-windows-amd64.exe" class="platform-btn">
-                    🪟 Windows
-                </a>
+                <a href="https://github.com/james-see/unicorn/releases/latest">Latest release</a>
+                <a href="https://github.com/james-see/unicorn/releases/latest/download/unicorn-darwin-arm64">macOS Apple Silicon</a>
+                <a href="https://github.com/james-see/unicorn/releases/latest/download/unicorn-darwin-amd64">macOS Intel</a>
+                <a href="https://github.com/james-see/unicorn/releases/latest/download/unicorn-linux-amd64">Linux</a>
+                <a href="https://github.com/james-see/unicorn/releases/latest/download/unicorn-windows-amd64.exe">Windows</a>
             </div>
-
-            <p style="margin-top: 2rem; opacity: 0.8;">
-                Or build from source (requires <a href="https://go.dev/dl/" style="color: #ffd700; text-decoration: none; font-weight: 600;">Go 1.24+</a>): <code style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 5px;">go install github.com/jamesacampbell/unicorn@latest</code>
-            </p>
+            <p class="install-note" style="margin: 1.5rem 0 0;">From source (Go 1.24+): <code>go install github.com/jamesacampbell/unicorn@latest</code></p>
         </div>
+    </section>
 
-        <div class="card" id="global-leaderboard">
-            <h2>🏆 Global Leaderboards</h2>
-            <p style="margin-bottom: 1rem;">Compete with players worldwide! Top scores updated in real-time.</p>
-            
-            <!-- Mode Selection -->
-            <div class="filter-tabs" style="margin-bottom: 2rem;">
-                <button class="filter-tab active" onclick="switchLeaderboardMode('vc')">💼 VC Mode</button>
-                <button class="filter-tab" onclick="switchLeaderboardMode('founder')">🚀 Founder Mode</button>
+    <section class="section" id="global-leaderboard" style="padding-top: 0;">
+        <div class="leaderboard-panel">
+            <p class="section-label">Live scores</p>
+            <h2>Global leaderboards</h2>
+            <p class="section-lead">Top runs worldwide. Filter by mode, difficulty, and ranking metric.</p>
+
+            <div class="filter-tabs">
+                <button class="filter-tab active" onclick="switchLeaderboardMode('vc')">VC Mode</button>
+                <button class="filter-tab" onclick="switchLeaderboardMode('founder')">Founder Mode</button>
             </div>
-            
-            <!-- VC Mode Filters -->
+
             <div id="vc-filters" class="filter-tabs">
                 <button class="filter-tab active" onclick="loadVCLeaderboard('all', 'net_worth', event)">Top by Net Worth</button>
                 <button class="filter-tab" onclick="loadVCLeaderboard('all', 'roi', event)">Top by ROI</button>
@@ -638,7 +692,6 @@
                 <button class="filter-tab" onclick="loadVCLeaderboard('Expert', 'net_worth', event)">Expert</button>
             </div>
 
-            <!-- Founder Mode Filters -->
             <div id="founder-filters" class="filter-tabs" style="display: none;">
                 <button class="filter-tab active" onclick="loadFounderLeaderboard('', 'payout', event)">Top by Payout</button>
                 <button class="filter-tab" onclick="loadFounderLeaderboard('', 'valuation', event)">Top by Valuation</button>
@@ -646,220 +699,79 @@
                 <button class="filter-tab" onclick="loadFounderLeaderboard('', 'equity', event)">Best Equity %</button>
             </div>
 
-            <button class="refresh-btn" onclick="refreshLeaderboard()">🔄 Refresh</button>
+            <button class="refresh-btn" onclick="refreshLeaderboard()">Refresh</button>
 
             <div id="leaderboard-content">
                 <div class="loading">Loading global leaderboard...</div>
             </div>
 
-            <p style="margin-top: 2rem; opacity: 0.8; text-align: center;">
-                Powered by <a href="https://datasette.io" target="_blank" style="color: #ffd700; text-decoration: none; font-weight: 600;">Datasette</a>
-            </p>
+            <p class="lb-footer">Powered by <a href="https://datasette.io" target="_blank" rel="noopener">Datasette</a></p>
         </div>
+    </section>
 
-        <div class="card">
-            <h2>💎 Player Progression System</h2>
-            <div class="features">
-                <div class="feature">
-                    <h3>🌟 50 Levels</h3>
-                    <p>Progress from "Novice Investor" to "Titan of Industry" with exponential XP requirements</p>
-                </div>
-                <div class="feature">
-                    <h3>📊 Experience Points</h3>
-                    <p>Earn XP after every game: +100 base, +50 for ROI, +200 per exit, difficulty bonuses, achievement XP</p>
-                </div>
-                <div class="feature">
-                    <h3>🔓 Level Unlocks</h3>
-                    <p>Unlock Hard (L5), Expert (L10), Nightmare Mode (L15), and special features as you progress</p>
-                </div>
-                <div class="feature">
-                    <h3>🎉 Visual Celebrations</h3>
-                    <p>Level-up screens with XP breakdowns, progress bars, and unlock previews after every game</p>
-                </div>
-                <div class="feature">
-                    <h3>📈 Achievement Chains</h3>
-                    <p>Connected achievements with prerequisites, progressive tracking, and hidden challenges</p>
-                </div>
-                <div class="feature">
-                    <h3>📊 Analytics Dashboard</h3>
-                    <p>Trend analysis, difficulty breakdowns, AI insights, and global performance comparisons</p>
-                </div>
+    <section class="section" id="play">
+        <p class="section-label">How it plays</p>
+        <h2>Sixty months on the clock</h2>
+        <p class="section-lead">Short loops. Hard choices. Achievements and permanent upgrades carry across runs.</p>
+        <div class="proof-grid">
+            <div class="proof-item">
+                <h3>VC loop</h3>
+                <p>Pick difficulty, scan the market, place bets, then press on when the round is done.</p>
+                <ol>
+                    <li>Choose Easy through Expert (Hard/Expert unlock with level)</li>
+                    <li>Invest across sectors; watch dilution and fees</li>
+                    <li>Follow on when portfolio companies raise</li>
+                    <li>Submit your fund return to the global board</li>
+                </ol>
+            </div>
+            <div class="proof-item">
+                <h3>Founder loop</h3>
+                <p>Template in, team hired, customers acquired — then fundraising and exit math.</p>
+                <ol>
+                    <li>Pick SaaS, DeepTech, GovTech, or Hardware</li>
+                    <li>Ship features, manage burn and churn</li>
+                    <li>Raise rounds without giving away the company</li>
+                    <li>Exit via IPO, acquisition, or secondary</li>
+                </ol>
             </div>
         </div>
+        <a class="more-link" href="https://github.com/james-see/unicorn#nutshell">Full guide on GitHub</a>
+    </section>
 
-        <div class="card">
-            <h2>✨ VC Mode Features</h2>
-            <div class="features">
-                <div class="feature">
-                    <h3>💰 Portfolio Management</h3>
-                    <p>Invest in 45 startups across 12+ sectors: FinTech, BioTech, CleanTech, Gaming, and more</p>
-                </div>
-                <div class="feature">
-                    <h3>🏆 Difficulty Levels</h3>
-                    <p>Choose from Easy, Medium, Hard, or Expert mode. Unlock higher difficulties by leveling up</p>
-                </div>
-                <div class="feature">
-                    <h3>📊 Global Leaderboards</h3>
-                    <p>Compete worldwide! Track top 10 scores by net worth or ROI with difficulty filters</p>
-                </div>
-                <div class="feature">
-                    <h3>🎯 45+ Achievements</h3>
-                    <p>Unlock achievements across 6 categories from Common to Legendary rarity. Progress tracking!</p>
-                </div>
-                <div class="feature">
-                    <h3>🎮 Upgrades & Perks</h3>
-                    <p>Spend achievement points on permanent upgrades: better terms, more intel, special abilities</p>
-                </div>
-                <div class="feature">
-                    <h3>🎲 60+ Random Events</h3>
-                    <p>Dynamic market cycles, economic events, IPOs, acquisitions, and more over 60 turns</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>🚀 Founder Mode Features</h2>
-            <div class="features">
-                <div class="feature">
-                    <h3>👥 Team Building</h3>
-                    <p>Hire engineers, sales, CS, marketing, and C-suite. Manage equity, vesting, cliffs, and performance</p>
-                </div>
-                <div class="feature">
-                    <h3>💵 Fundraising</h3>
-                    <p>Raise Seed, Series A, B, C rounds. Review term sheets, manage dilution, and track your cap table</p>
-                </div>
-                <div class="feature">
-                    <h3>📊 SaaS Metrics Dashboard</h3>
-                    <p>Real-time LTV:CAC, CAC Payback, Rule of 40, Burn Multiple, Magic Number with color-coded health</p>
-                </div>
-                <div class="feature">
-                    <h3>🗺️ Product Roadmap</h3>
-                    <p>Build 18 features (10 core + 8 advanced). Allocate engineers, track progress, and reallocate resources</p>
-                </div>
-                <div class="feature">
-                    <h3>👔 Board & Advisors</h3>
-                    <p>Hire advisors (sales, product, fundraising, ops, strategy), set chairman with 2x impact, manage board equity</p>
-                </div>
-                <div class="feature">
-                    <h3>🎯 Customer Segmentation</h3>
-                    <p>Select ICP focus (SMB, Mid-Market, Enterprise, Strategic) for targeted growth with deal size and CAC benefits</p>
-                </div>
-                <div class="feature">
-                    <h3>💲 Pricing Strategy</h3>
-                    <p>Switch between 5 pricing models: freemium, trial, annual upfront, usage-based, and tiered pricing</p>
-                </div>
-                <div class="feature">
-                    <h3>🤝 Strategic Decisions</h3>
-                    <p>Launch partnerships, affiliate programs, expand to global markets, competitive intel, and pivot strategies</p>
-                </div>
-                <div class="feature">
-                    <h3>🏛️ Acquisition Offers</h3>
-                    <p>Receive acquisition offers with cap table payout breakdowns. Board may force exit if you lose majority control</p>
-                </div>
-                <div class="feature">
-                    <h3>🎯 Exit Options</h3>
-                    <p>Go public via IPO, get acquired by strategic buyers, or take a secondary sale</p>
-                </div>
-                <div class="feature">
-                    <h3>📈 Customer Tracking</h3>
-                    <p>Individual customer records, deal sizes, contract terms, churn tracking, and health scores</p>
-                </div>
-                <div class="feature">
-                    <h3>🔧 Technical Debt</h3>
-                    <p>Manage tech debt accumulation, schedule refactors, and balance velocity vs quality</p>
-                </div>
-                <div class="feature">
-                    <h3>🌐 Platform Strategy</h3>
-                    <p>Launch marketplace, social, data, or infrastructure platforms with network effects once at scale</p>
-                </div>
-                <div class="feature">
-                    <h3>🏆 Results Ceremony</h3>
-                    <p>End-game ceremony with XP awards, level-ups, achievements, and global leaderboard submission</p>
-                </div>
-                <div class="feature">
-                    <h3>🏢 10 Startup Templates</h3>
-                    <p>Choose from SaaS, DeepTech, GovTech templates with 4 difficulty levels (Easy to Expert)</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>🎯 How to Play</h2>
-            <p style="margin-bottom: 1.5rem;"><strong>Choose your path: VC Investor or Startup Founder!</strong></p>
-            
-            <h3 style="font-size: 1.3rem; margin: 1.5rem 0 0.5rem; color: #ffd700;">💼 VC Mode</h3>
-            <p><strong>1.</strong> Choose your difficulty level (Easy, Medium, Hard, Expert)</p>
-            <p><strong>2.</strong> Review 45 startup options with risk and growth indicators</p>
-            <p><strong>3.</strong> Make strategic investments across different sectors</p>
-            <p><strong>4.</strong> Watch your portfolio grow (or shrink!) over 60 turns (5 years)</p>
-            <p><strong>5.</strong> Unlock achievements and climb the global leaderboards</p>
-            <p style="margin-bottom: 2rem;"><strong>6.</strong> Aim for 1000%+ ROI to earn the "Unicorn Hunter" title!</p>
-
-            <h3 style="font-size: 1.3rem; margin: 1.5rem 0 0.5rem; color: #ffd700;">🚀 Founder Mode</h3>
-            <p><strong>1.</strong> Choose your startup template (SaaS, DeepTech, GovTech) and difficulty level</p>
-            <p><strong>2.</strong> Build your founding team and manage equity allocation</p>
-            <p><strong>3.</strong> Acquire customers through marketing, partnerships, affiliates, and sales</p>
-            <p><strong>4.</strong> Build your product roadmap — 10 core features + 8 advanced features to develop</p>
-            <p><strong>5.</strong> Hire advisors, set a chairman, and manage board dynamics</p>
-            <p><strong>6.</strong> Raise funding rounds, manage dilution, and watch your cap table</p>
-            <p><strong>7.</strong> Track SaaS metrics: MRR, churn, LTV:CAC, Rule of 40, burn multiple</p>
-            <p><strong>8.</strong> Navigate competitors, acquisition offers, and strategic opportunities</p>
-            <p><strong>9.</strong> Press <strong>N</strong> to advance months quickly, or dive into the action menu</p>
-            <p><strong>10.</strong> Exit via IPO, acquisition, or secondary sale — earn XP and unlock achievements!</p>
-        </div>
-
-        <div class="card" style="text-align: center;">
-            <h2>💻 Open Source</h2>
-            <p style="margin-bottom: 2rem;">Unicorn is open source and built with Go. Contributions welcome!</p>
-            
-            <a href="https://github.com/james-see/unicorn" target="_blank" class="github-link">
-                <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                </svg>
-                View on GitHub
-            </a>
-
-            <p style="margin-top: 2rem; opacity: 0.8;">
-                Made with ❤️ by <a href="https://github.com/james-see" style="color: #ffd700; text-decoration: none; font-weight: 600;" target="_blank">@james-see</a>
-            </p>
-        </div>
-
-        <footer>
-            <p>© 2019-2026 Unicorn Game • Licensed under AGPL-3.0</p>
-            <p style="margin-top: 1rem;">Play • Invest • Build Your Empire 🚀</p>
-        </footer>
-    </div>
+    <footer>
+        <p>© 2019–2026 Unicorn · <a href="https://github.com/james-see/unicorn/blob/main/LICENSE">AGPL-3.0</a></p>
+        <p>
+            <a href="https://github.com/james-see/unicorn">github.com/james-see/unicorn</a>
+            ·
+            <a href="https://github.com/james-see">@james-see</a>
+        </p>
+    </footer>
 
     <script>
-        // Leaderboard API endpoints - reads from Postgres
         const VC_LEADERBOARD_URL = 'https://unicorn-green.vercel.app/leaderboard/game_scores.json';
         const FOUNDER_LEADERBOARD_URL = 'https://unicorn-green.vercel.app/api/get-founder-leaderboard';
-        
-        let currentMode = 'vc'; // 'vc' or 'founder'
+
+        let currentMode = 'vc';
         let currentFilter = 'all';
         let currentSort = 'net_worth';
-        let founderSort = 'payout'; // separate sort key for founder mode
+        let founderSort = 'payout';
 
-        // Format money with commas
         function formatMoney(amount) {
             return '$' + amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         }
 
-        // Format date
         function formatDate(dateStr) {
             const date = new Date(dateStr);
-            return date.toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
             });
         }
 
-        // Switch between VC and Founder leaderboards
         function switchLeaderboardMode(mode) {
             currentMode = mode;
-            
-            // Update mode tabs
+
             document.querySelectorAll('.filter-tab').forEach(tab => {
                 const onclick = tab.getAttribute('onclick');
                 if (onclick && onclick.includes('switchLeaderboardMode')) {
@@ -869,16 +781,14 @@
                     }
                 }
             });
-            
-            // Clear active state on ALL filter tabs before switching
+
             document.querySelectorAll('#vc-filters .filter-tab, #founder-filters .filter-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
-            
-            // Show/hide appropriate filters
+
             const vcFilters = document.getElementById('vc-filters');
             const founderFilters = document.getElementById('founder-filters');
-            
+
             if (mode === 'vc') {
                 vcFilters.style.display = 'flex';
                 founderFilters.style.display = 'none';
@@ -889,8 +799,7 @@
                 loadFounderLeaderboard('', 'payout', null);
             }
         }
-        
-        // Refresh current leaderboard (mode-aware)
+
         function refreshLeaderboard() {
             if (currentMode === 'vc') {
                 loadVCLeaderboard(currentFilter, currentSort, null);
@@ -899,23 +808,20 @@
             }
         }
 
-        // Load VC leaderboard data
         async function loadVCLeaderboard(difficulty = currentFilter, sortBy = currentSort, event = null) {
             currentFilter = difficulty;
             currentSort = sortBy;
-            
+
             const content = document.getElementById('leaderboard-content');
             content.innerHTML = '<div class="loading">Loading...</div>';
 
-            // Update active tab
-            document.querySelectorAll('.filter-tab').forEach(tab => {
+            document.querySelectorAll('#vc-filters .filter-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
             if (event && event.target) {
                 event.target.classList.add('active');
             } else {
-                // Find and activate the matching tab
-                document.querySelectorAll('.filter-tab').forEach(tab => {
+                document.querySelectorAll('#vc-filters .filter-tab').forEach(tab => {
                     const onclick = tab.getAttribute('onclick');
                     if (onclick && onclick.includes(`'${difficulty}'`) && onclick.includes(`'${sortBy}'`)) {
                         tab.classList.add('active');
@@ -924,27 +830,25 @@
             }
 
             try {
-                // Build query parameters
                 let url = VC_LEADERBOARD_URL + '?_size=10&_sort_desc=' + (sortBy === 'roi' ? 'roi' : 'final_net_worth');
-                
+
                 if (difficulty !== 'all') {
                     url += '&difficulty=' + encodeURIComponent(difficulty);
                 }
 
                 const response = await fetch(url);
-                
+
                 if (!response.ok) {
                     throw new Error('Failed to fetch leaderboard data');
                 }
 
                 const data = await response.json();
-                
+
                 if (!data.rows || data.rows.length === 0) {
-                    content.innerHTML = '<p style="text-align: center; padding: 2rem;">No scores yet. Be the first!</p>';
+                    content.innerHTML = '<p class="loading">No scores yet. Be the first.</p>';
                     return;
                 }
 
-                // Build table with responsive wrapper
                 let html = '<div class="leaderboard-table"><table>';
                 html += '<thead><tr>';
                 html += '<th>Rank</th>';
@@ -954,59 +858,48 @@
                 html += '<th>Exits</th>';
                 html += '<th>Difficulty</th>';
                 html += '<th>Date</th>';
-                html += '</tr></thead>';
-                html += '<tbody>';
+                html += '</tr></thead><tbody>';
 
                 data.rows.forEach((row, index) => {
-                    const [id, playerName, netWorth, roi, exits, turns, difficulty, playedAt] = row;
+                    const [id, playerName, netWorth, roi, exits, turns, difficultyLabel, playedAt] = row;
                     const rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : '';
                     const roiClass = roi >= 0 ? 'positive-roi' : 'negative-roi';
-                    
+
                     html += '<tr>';
                     html += `<td class="${rankClass}">${index + 1}</td>`;
                     html += `<td>${playerName}</td>`;
                     html += `<td>${formatMoney(netWorth)}</td>`;
                     html += `<td class="${roiClass}">${roi.toFixed(1)}%</td>`;
                     html += `<td>${exits}</td>`;
-                    html += `<td>${difficulty}</td>`;
+                    html += `<td>${difficultyLabel}</td>`;
                     html += `<td>${formatDate(playedAt)}</td>`;
                     html += '</tr>';
                 });
 
                 html += '</tbody></table></div>';
                 content.innerHTML = html;
-
             } catch (error) {
                 console.error('Error loading leaderboard:', error);
                 content.innerHTML = `
                     <div class="error-message">
-                        <p><strong>⚠️ Could not load global leaderboard</strong></p>
-                        <p>The leaderboard service may not be deployed yet.</p>
-                        <p style="margin-top: 1rem; font-size: 0.9rem;">To enable the global leaderboard:</p>
-                        <ol style="margin-left: 1.5rem; margin-top: 0.5rem; font-size: 0.9rem;">
-                            <li>Install Vercel CLI: <code>npm i -g vercel</code></li>
-                            <li>Deploy the API: <code>vercel deploy --prod</code></li>
-                            <li>Update the Datasette URL in this page</li>
-                        </ol>
+                        <p><strong>Could not load global leaderboard</strong></p>
+                        <p>The leaderboard service may be unavailable.</p>
                     </div>
                 `;
             }
         }
 
-        // Load Founder leaderboard data
         async function loadFounderLeaderboard(template = '', sortBy = 'payout', event = null) {
             founderSort = sortBy;
 
             const content = document.getElementById('leaderboard-content');
             content.innerHTML = '<div class="loading">Loading...</div>';
 
-            // Update active tab — only among founder filter tabs
             const founderTabs = document.querySelectorAll('#founder-filters .filter-tab');
             founderTabs.forEach(tab => tab.classList.remove('active'));
             if (event && event.target) {
                 event.target.classList.add('active');
             } else {
-                // Find and activate the matching tab
                 founderTabs.forEach(tab => {
                     const onclick = tab.getAttribute('onclick');
                     if (onclick && onclick.includes(`'${sortBy}'`)) {
@@ -1016,27 +909,25 @@
             }
 
             try {
-                // Build query parameters
                 let url = FOUNDER_LEADERBOARD_URL + '?limit=10&sort_by=' + sortBy;
-                
+
                 if (template) {
                     url += '&template=' + encodeURIComponent(template);
                 }
 
                 const response = await fetch(url);
-                
+
                 if (!response.ok) {
                     throw new Error('Failed to fetch founder leaderboard data');
                 }
 
                 const data = await response.json();
-                
+
                 if (!data.success || !data.scores || data.scores.length === 0) {
-                    content.innerHTML = '<p style="text-align: center; padding: 2rem;">No scores yet. Be the first!</p>';
+                    content.innerHTML = '<p class="loading">No scores yet. Be the first.</p>';
                     return;
                 }
 
-                // Build table with responsive wrapper
                 let html = '<div class="leaderboard-table"><table>';
                 html += '<thead><tr>';
                 html += '<th>Rank</th>';
@@ -1047,18 +938,21 @@
                 html += '<th>Equity %</th>';
                 html += '<th>ARR</th>';
                 html += '<th>Template</th>';
-                html += '</tr></thead>';
-                html += '<tbody>';
+                html += '</tr></thead><tbody>';
 
                 data.scores.forEach((score, index) => {
                     const rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : '';
-                    
+                    const exitLabel =
+                        score.exit_type === 'ipo' ? 'IPO' :
+                        score.exit_type === 'acquisition' ? 'Acquired' :
+                        score.exit_type === 'secondary' ? 'Secondary' : 'Time';
+
                     html += '<tr>';
                     html += `<td class="${rankClass}">${index + 1}</td>`;
                     html += `<td>${score.player_name}</td>`;
                     html += `<td>${formatMoney(score.final_valuation)}</td>`;
                     html += `<td class="positive-roi">${formatMoney(score.founder_payout)}</td>`;
-                    html += `<td>${score.exit_type === 'ipo' ? '🏛️  IPO' : score.exit_type === 'acquisition' ? '🤝 Acquired' : score.exit_type === 'secondary' ? '💼 Secondary' : '⏱️ Time'}</td>`;
+                    html += `<td>${exitLabel}</td>`;
                     html += `<td>${score.founder_equity.toFixed(1)}%</td>`;
                     html += `<td>${formatMoney(score.max_arr)}</td>`;
                     html += `<td>${score.startup_template}</td>`;
@@ -1067,38 +961,51 @@
 
                 html += '</tbody></table></div>';
                 content.innerHTML = html;
-
             } catch (error) {
                 console.error('Error loading founder leaderboard:', error);
                 content.innerHTML = `
                     <div class="error-message">
-                        <p><strong>⚠️ Could not load founder leaderboard</strong></p>
-                        <p>The leaderboard service may not be deployed yet.</p>
+                        <p><strong>Could not load founder leaderboard</strong></p>
+                        <p>The leaderboard service may be unavailable.</p>
                     </div>
                 `;
             }
         }
 
-        // Load leaderboard on page load
         function initLeaderboard() {
             loadVCLeaderboard('all', 'net_worth');
         }
 
-        // Try multiple initialization methods to ensure it loads
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initLeaderboard);
         } else {
-            // DOMContentLoaded has already fired
             initLeaderboard();
         }
 
-        // Smooth scroll to leaderboard
-        if (window.location.hash === '#leaderboard') {
+        if (window.location.hash === '#leaderboard' || window.location.hash === '#global-leaderboard') {
             setTimeout(() => {
                 document.getElementById('global-leaderboard')?.scrollIntoView({ behavior: 'smooth' });
-            }, 500);
+            }, 400);
+        }
+
+        const copyBtn = document.getElementById('copy-brew');
+        const brewCmd = document.getElementById('brew-cmd');
+        if (copyBtn && brewCmd) {
+            copyBtn.addEventListener('click', async () => {
+                const text = brewCmd.textContent.trim();
+                try {
+                    await navigator.clipboard.writeText(text);
+                    copyBtn.textContent = 'Copied';
+                    copyBtn.classList.add('copied');
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                        copyBtn.classList.remove('copied');
+                    }, 1600);
+                } catch (err) {
+                    copyBtn.textContent = 'Select & copy';
+                }
+            });
         }
     </script>
 </body>
 </html>
-

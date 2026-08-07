@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img">
+  <title>UNICORN</title>
+  <desc>Text-based VC and founder simulation  deploy a fund or found a company.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#07111F"/>
+      <stop offset="100%" stop-color="#0D1A2D"/>
+    </linearGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1" fill="#000000" opacity="0.18"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="360" fill="url(#bg)"/>
+  <rect width="1200" height="360" fill="url(#scan)" opacity="0.35"/>
+  <rect x="0" y="0" width="6" height="360" fill="#3DDC97"/>
+  <text x="56" y="72" fill="#3DDC97" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" letter-spacing="4">TERMINAL STARTUP SIMULATION</text>
+  <text x="52" y="175" fill="#F7F4EE" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="96" font-weight="800" letter-spacing="-2">UNICORN</text>
+  <text x="56" y="230" fill="#8A9BB0" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="26">Deploy a fund or found a company. Sixty turns. One exit.</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18">
+    <rect x="56" y="268" width="118" height="36" fill="none" stroke="#1A2B42" stroke-width="1"/>
+    <text x="70" y="292" fill="#E8A838">VC MODE</text>
+    <rect x="186" y="268" width="168" height="36" fill="none" stroke="#1A2B42" stroke-width="1"/>
+    <text x="200" y="292" fill="#E8A838">FOUNDER MODE</text>
+    <rect x="366" y="268" width="210" height="36" fill="#3DDC97"/>
+    <text x="380" y="292" fill="#07111F" font-weight="600">brew install unicorn</text>
+  </g>
+</svg>
