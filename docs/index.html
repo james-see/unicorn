@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UNICORN — Text-based VC & Founder Simulation</title>
-    <meta name="description" content="A terminal startup simulation. Play as a VC investor or build your own company. 45 startups, 10 founder templates, global leaderboards.">
+    <meta name="description" content="A terminal startup simulation. Play as a VC investor or build your own company. 45 startups, 10 founder companies, global leaderboards.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦄</text></svg>">
     <meta property="og:type" content="website">
     <meta property="og:title" content="UNICORN — Text-based VC & Founder Simulation">
@@ -718,7 +718,7 @@
             <article class="mode">
                 <p class="mode-tag">Founder Mode</p>
                 <h3>Build the company</h3>
-                <p>Choose from 10 templates. Hire the team, raise Seed through Series C, ship the roadmap, and negotiate the exit before the board forces your hand.</p>
+                <p>Pick one of 10 starting companies (SaaS, DeepTech, GovTech, and more). Hire the team, raise Seed through Series C, ship the roadmap, and negotiate the exit before the board forces your hand.</p>
                 <ul>
                     <li>SaaS metrics, churn, and tech debt</li>
                     <li>Cap table, board seats, acquisition offers</li>
@@ -824,9 +824,9 @@
             </div>
             <div class="proof-item">
                 <h3>Founder loop</h3>
-                <p>Template in, team hired, customers acquired — then fundraising and exit math.</p>
+                <p>Pick a company to build, hire the team, win customers — then fundraising and exit math.</p>
                 <ol>
-                    <li>Pick SaaS, DeepTech, GovTech, or Hardware</li>
+                    <li>Choose a starting company (SaaS, DeepTech, GovTech, Hardware…)</li>
                     <li>Ship features, manage burn and churn</li>
                     <li>Raise rounds without giving away the company</li>
                     <li>Exit via IPO, acquisition, or secondary</li>
@@ -1015,7 +1015,7 @@
                 html += '<th>Exit</th>';
                 html += '<th>Equity %</th>';
                 html += '<th>ARR</th>';
-                html += '<th>Template</th>';
+                html += '<th>Company</th>';
                 html += '</tr></thead><tbody>';
 
                 data.scores.forEach((score, index) => {

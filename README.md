@@ -49,7 +49,7 @@ You manage a realistic VC fund against AI investors. Deploy capital across start
 
 ### Startup Founder Mode
 
-Build from a template (SaaS, DeepTech, GovTech, Hardware). Hire the team, acquire customers, raise Seed → Series C, ship the roadmap, and navigate board pressure. Grow toward IPO, acquisition, or secondary sale.
+Pick a starting company (SaaS, DeepTech, GovTech, Hardware). Hire the team, acquire customers, raise Seed → Series C, ship the roadmap, and navigate board pressure. Grow toward IPO, acquisition, or secondary sale.
 
 ## Modes at a glance
 
@@ -57,7 +57,7 @@ Build from a template (SaaS, DeepTech, GovTech, Hardware). Hire the team, acquir
 |---|---|---|
 | **Goal** | Maximize fund ROI | Build & exit your startup |
 | **Turns** | 60 (5 years) | 60 (5 years) |
-| **Startups** | 45 to invest in | 10 templates to build |
+| **Startups** | 45 to invest in | 10 companies to build |
 | **AI competition** | 7 AI VCs with strategies | Silicon Valley–style rivals |
 | **Funding** | Follow-ons, syndicates, opportunity fund | Seed → Series A → Series B → C |
 | **Exits** | Fund returns | IPO, acquisition, secondary |
@@ -86,7 +86,7 @@ unicorn
 
 **VC quick start:** Select difficulty → browse 45 startups → invest → press `d` when done → watch the portfolio over 60 turns. Follow-ons appear when portfolio companies raise.
 
-**Founder quick start:** Choose a template → hire → acquire customers → raise → build MRR → exit via IPO ($20M ARR), acquisition ($5M ARR), or secondary ($10M ARR).
+**Founder quick start:** Choose a starting company → hire → acquire customers → raise → build MRR → exit via IPO ($20M ARR), acquisition ($5M ARR), or secondary ($10M ARR).
 
 ## What's new
 
